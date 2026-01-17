@@ -1,11 +1,12 @@
 @extends('admin_panel.layout.app')
 @section('content')
     <style>
-         .custom-table th {
+        .custom-table th {
             padding: 8px 6px !important;
             font-weight: 600;
             font-size: 14px;
-            background: #212529; /* dark header (bootstrap table-dark) */
+            background: #212529;
+            /* dark header (bootstrap table-dark) */
             color: #fff;
             /* sticky header */
             position: sticky;
@@ -27,16 +28,18 @@
 
         /* Wrapper that controls scroll inside table only */
         .table-wrapper {
-            height: 400px;    /* set jo height chahte ho (changeable) */
+            height: 400px;
+            /* set jo height chahte ho (changeable) */
             overflow-y: auto;
-            border: 1px solid rgba(0,0,0,0.08);
+            border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 6px;
         }
 
         /* Keep header and body columns aligned */
         .custom-table {
             width: 100%;
-            table-layout: fixed; /* helps alignment when header is sticky */
+            table-layout: fixed;
+            /* helps alignment when header is sticky */
             border-collapse: collapse;
         }
 
@@ -47,7 +50,7 @@
 
         /* Optional: add subtle shadow to sticky header so it looks separated */
         .custom-table thead th {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
         }
 
         /* Responsive: allow horizontal scroll on small screens */
@@ -60,12 +63,14 @@
         <div class="main-content-inner">
             <div class="container mt-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">➕ Add New
-                        Account</button>
-                    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addHeadModal">➕ Add Chart
-                        Of Accounts</button>
+                    @can('chart.of.accounts.create')
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">➕ Add New
+                            Account</button>
+                        <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addHeadModal">➕ Add Chart
+                            Of Accounts</button>
+                    @endcan
                 </div>
-               <div class="table-responsive-fixed">
+                <div class="table-responsive-fixed">
                     <div class="table-wrapper">
                         <table class="table table-bordered custom-table table-striped">
                             <thead class="table-dark">
@@ -92,7 +97,7 @@
                                     <td>0</td>
                                     <td><span class="badge bg-success">Active</span></td>
                                 </tr>
-                              
+
                                 <!-- (rest of rows) -->
                             </tbody>
                         </table>

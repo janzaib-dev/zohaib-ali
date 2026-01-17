@@ -9,17 +9,17 @@ use Spatie\Permission\Models\Permission;
 
 class PermissionController extends Controller
 {
-         public function index()
+    public function index()
     {
-        $permissions = Permission::all();
-        return view('admin_panel.permissions.permission', compact('permissions')); 
+        $permissions = Permission::orderBy('name',"ASC")->get();
+        return view('admin_panel.permissions.permission', compact('permissions'));
     }
 
     public function store(Request $request)
     {
         $editId = $request->edit_id ?? null;
-         $validator = Validator::make($request->all(), [
-            'name' => 'required|unique:permissions,name,'.$request->edit_id,
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|unique:permissions,name,' . $request->edit_id,
         ]);
 
         if ($validator->fails()) {
@@ -27,7 +27,6 @@ class PermissionController extends Controller
         }
 
 
-      
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()]);
         }
@@ -47,7 +46,8 @@ class PermissionController extends Controller
 
         // Step 3: Save or update logic
         if (!empty($editId)) {
-            $permission = Permission::find($editId);
+//            $permission = Permission::find($editId);
+            $permission = Permission::findOrFail($editId);
             $msg = [
                 'success' => 'Permission Updated Successfully',
                 'reload' => true
@@ -64,13 +64,13 @@ class PermissionController extends Controller
         $permission->save();
 
         return response()->json($msg);
-        
+
     }
 
     /**
      * Display the specified resource.
      */
-  
+
     /**
      * Remove the specified resource from storage.
      */

@@ -13,9 +13,9 @@ class RoleController extends Controller
 {
      public function index()
     {
-        $roles = Role::all();
+        $roles = Role::orderBy('name',"ASC")->get();
         $allPermissions  = Permission::all();
-        return view('admin_panel.roles.role', compact(['roles', 'allPermissions'])); 
+        return view('admin_panel.roles.role', compact(['roles', 'allPermissions']));
     }
 
     public function store(Request $request)
@@ -30,7 +30,7 @@ class RoleController extends Controller
         }
 
 
-      
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()]);
         }
@@ -67,13 +67,13 @@ class RoleController extends Controller
         $role->save();
 
         return response()->json($msg);
-        
+
     }
 
     /**
      * Display the specified resource.
      */
-  
+
     /**
      * Remove the specified resource from storage.
      */

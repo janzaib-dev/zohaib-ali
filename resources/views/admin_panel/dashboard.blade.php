@@ -1,373 +1,855 @@
 @extends('admin_panel.layout.app')
 
 @section('content')
-<div class="main-content">
-    <div class="main-content-inner">
-        <div class="container">
+    <style>
+        :root {
+            --dash-primary: #6366f1;
+            --dash-success: #22c55e;
+            --dash-warning: #f59e0b;
+            --dash-danger: #ef4444;
+            --dash-info: #0ea5e9;
+            --dash-purple: #8b5cf6;
+            --dash-bg: #f8fafc;
+            --dash-card: #ffffff;
+            --dash-border: #e2e8f0;
+            --dash-text: #1e293b;
+            --dash-muted: #64748b;
+        }
 
-            <div class="row g-3">
-                <!-- Categories -->
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-body d-flex align-items-center justify-content-between">
-                            <div>
-                                <h6 class="mb-1 text-muted">Categories</h6>
-                                <h3 class="mb-0 fw-bold">{{ $categoryCount }}</h3>
-                            </div>
-                            <div class="icon text-primary">
-                                <i class="fas fa-layer-group fa-2x"></i>
-                            </div>
+        .dashboard-container {
+            padding: 0;
+        }
+
+        /* Welcome Section */
+        .welcome-section {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+            border-radius: 20px;
+            padding: 32px 40px;
+            color: white;
+            margin-bottom: 28px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .welcome-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 400px;
+            height: 400px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+        .welcome-section::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            right: 10%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+        }
+
+        .welcome-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .welcome-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .welcome-subtitle {
+            font-size: 1rem;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .welcome-date {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: var(--dash-card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--dash-border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .stat-card.primary::before {
+            background: linear-gradient(180deg, #6366f1, #8b5cf6);
+        }
+
+        .stat-card.success::before {
+            background: linear-gradient(180deg, #22c55e, #16a34a);
+        }
+
+        .stat-card.warning::before {
+            background: linear-gradient(180deg, #f59e0b, #d97706);
+        }
+
+        .stat-card.danger::before {
+            background: linear-gradient(180deg, #ef4444, #dc2626);
+        }
+
+        .stat-card.info::before {
+            background: linear-gradient(180deg, #0ea5e9, #0284c7);
+        }
+
+        .stat-card.purple::before {
+            background: linear-gradient(180deg, #8b5cf6, #7c3aed);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .stat-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+        }
+
+        .stat-card.primary .stat-icon {
+            background: #eef2ff;
+            color: #6366f1;
+        }
+
+        .stat-card.success .stat-icon {
+            background: #dcfce7;
+            color: #22c55e;
+        }
+
+        .stat-card.warning .stat-icon {
+            background: #fef3c7;
+            color: #f59e0b;
+        }
+
+        .stat-card.danger .stat-icon {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+
+        .stat-card.info .stat-icon {
+            background: #e0f2fe;
+            color: #0ea5e9;
+        }
+
+        .stat-card.purple .stat-icon {
+            background: #f3e8ff;
+            color: #8b5cf6;
+        }
+
+        .stat-trend {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.8rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        .stat-trend.up {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .stat-trend.down {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--dash-text);
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--dash-muted);
+            margin-top: 4px;
+        }
+
+        /* Chart Cards */
+        .chart-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+
+        .chart-card {
+            background: var(--dash-card);
+            border-radius: 16px;
+            border: 1px solid var(--dash-border);
+            overflow: hidden;
+        }
+
+        .chart-card.full-width {
+            grid-column: span 2;
+        }
+
+        .chart-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--dash-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--dash-text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chart-title i {
+            color: var(--dash-primary);
+        }
+
+        .chart-filter {
+            display: flex;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: 1px solid var(--dash-border);
+            background: white;
+            color: var(--dash-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover,
+        .filter-btn.active {
+            background: var(--dash-primary);
+            color: white;
+            border-color: var(--dash-primary);
+        }
+
+        .chart-body {
+            padding: 24px;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .action-card {
+            background: var(--dash-card);
+            border: 1px solid var(--dash-border);
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.15);
+            border-color: var(--dash-primary);
+        }
+
+        .action-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 1.2rem;
+        }
+
+        .action-card.sales .action-icon {
+            background: #dcfce7;
+            color: #22c55e;
+        }
+
+        .action-card.purchase .action-icon {
+            background: #e0f2fe;
+            color: #0ea5e9;
+        }
+
+        .action-card.products .action-icon {
+            background: #fef3c7;
+            color: #f59e0b;
+        }
+
+        .action-card.hr .action-icon {
+            background: #f3e8ff;
+            color: #8b5cf6;
+        }
+
+        .action-title {
+            font-weight: 600;
+            color: var(--dash-text);
+            font-size: 0.95rem;
+        }
+
+        .action-desc {
+            font-size: 0.8rem;
+            color: var(--dash-muted);
+            margin-top: 4px;
+        }
+
+        /* Summary Cards Row */
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .summary-card {
+            background: var(--dash-card);
+            border: 1px solid var(--dash-border);
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .summary-title {
+            font-size: 0.85rem;
+            color: var(--dash-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .summary-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--dash-text);
+        }
+
+        .summary-change {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            margin-top: 6px;
+        }
+
+        .summary-change.positive {
+            color: #22c55e;
+        }
+
+        .summary-change.negative {
+            color: #ef4444;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .chart-section {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-card.full-width {
+                grid-column: span 1;
+            }
+
+            .quick-actions {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .summary-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .summary-row {
+                grid-template-columns: 1fr;
+            }
+
+            .welcome-section {
+                padding: 24px;
+            }
+        }
+    </style>
+
+    <div class="main-content">
+        <div class="main-content-inner">
+            <div class="container dashboard-container">
+
+                <!-- Welcome Section -->
+                <div class="welcome-section">
+                    <div class="welcome-content">
+                        <h1 class="welcome-title">Welcome back, {{ auth()->user()->name ?? 'Admin' }}! 👋</h1>
+                        <p class="welcome-subtitle">Here's what's happening with your business today.</p>
+                        <div class="welcome-date">
+                            <i class="fa fa-calendar-alt"></i>
+                            {{ now()->format('l, F d, Y') }}
                         </div>
                     </div>
                 </div>
 
-                <!-- Subcategories -->
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-body d-flex align-items-center justify-content-between">
-                            <div>
-                                <h6 class="mb-1 text-muted">Subcategories</h6>
-                                <h3 class="mb-0 fw-bold">{{ $subcategoryCount }}</h3>
-                            </div>
-                            <div class="icon text-success">
-                                <i class="fas fa-sitemap fa-2x"></i>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    @can('sales.create')
+                        <a href="{{ route('sale.index') }}" class="action-card sales">
+                            <div class="action-icon"><i class="fa fa-shopping-cart"></i></div>
+                            <div class="action-title">New Sale</div>
+                            <div class="action-desc">Create invoice</div>
+                        </a>
+                    @endcan
+
+                    @can('purchases.create')
+                        <a href="{{ route('Purchase.home') }}" class="action-card purchase">
+                            <div class="action-icon"><i class="fa fa-truck"></i></div>
+                            <div class="action-title">New Purchase</div>
+                            <div class="action-desc">Add stock</div>
+                        </a>
+                    @endcan
+
+                    @can('products.view')
+                        <a href="{{ route('product') }}" class="action-card products">
+                            <div class="action-icon"><i class="fa fa-box"></i></div>
+                            <div class="action-title">Products</div>
+                            <div class="action-desc">Manage inventory</div>
+                        </a>
+                    @endcan
+
+                    @can('hr.employees.view')
+                        <a href="{{ route('hr.employees.index') }}" class="action-card hr">
+                            <div class="action-icon"><i class="fa fa-users"></i></div>
+                            <div class="action-title">HR Module</div>
+                            <div class="action-desc">Manage employees</div>
+                        </a>
+                    @endcan
                 </div>
 
-                <!-- Products -->
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-body d-flex align-items-center justify-content-between">
-                            <div>
-                                <h6 class="mb-1 text-muted">Products</h6>
-                                <h3 class="mb-0 fw-bold">{{ $productCount }}</h3>
+                <!-- Main Stats -->
+                <div class="stats-grid">
+                    @can('sales.view')
+                        <div class="stat-card success">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-shopping-cart"></i></div>
+                                <div class="stat-trend up"><i class="fa fa-arrow-up"></i> Sales</div>
                             </div>
-                            <div class="icon text-danger">
-                                <i class="fas fa-box-open fa-2x"></i>
-                            </div>
+                            <div class="stat-value">Rs {{ number_format($totalSales, 0) }}</div>
+                            <div class="stat-label">Total Sales</div>
                         </div>
-                    </div>
+                    @endcan
+
+                    @can('purchases.view')
+                        <div class="stat-card primary">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-file-invoice-dollar"></i></div>
+                                <div class="stat-trend up"><i class="fa fa-arrow-up"></i> Purchases</div>
+                            </div>
+                            <div class="stat-value">Rs {{ number_format($totalPurchases, 0) }}</div>
+                            <div class="stat-label">Total Purchases</div>
+                        </div>
+                    @endcan
+
+                    @can('sales.returns.view')
+                        <div class="stat-card danger">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-undo-alt"></i></div>
+                                <div class="stat-trend down"><i class="fa fa-arrow-down"></i> Returns</div>
+                            </div>
+                            <div class="stat-value">Rs {{ number_format($totalSalesReturns, 0) }}</div>
+                            <div class="stat-label">Sales Returns</div>
+                        </div>
+                    @endcan
+
+                    @can('purchase.returns.view')
+                        <div class="stat-card warning">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-undo"></i></div>
+                                <div class="stat-trend down"><i class="fa fa-arrow-down"></i> Returns</div>
+                            </div>
+                            <div class="stat-value">Rs {{ number_format($totalPurchaseReturns, 0) }}</div>
+                            <div class="stat-label">Purchase Returns</div>
+                        </div>
+                    @endcan
                 </div>
 
-                <!-- Example for future (e.g. Orders) -->
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-body d-flex align-items-center justify-content-between">
-                            <div>
-                                <h6 class="mb-1 text-muted">Customers</h6>
-                                <h3 class="mb-0 fw-bold">{{ $customerscount }}</h3>
+                <!-- Inventory Summary -->
+                <div class="summary-row">
+                    @can('categories.view')
+                        <div class="summary-card">
+                            <div class="summary-header">
+                                <span class="summary-title">Categories</span>
+                                <div class="summary-icon" style="background: #eef2ff; color: #6366f1;"><i
+                                        class="fa fa-layer-group"></i></div>
                             </div>
-                            <div class="icon text-warning">
-                                <i class="fas fa-shopping-cart fa-2x"></i>
-                            </div>
+                            <div class="summary-value">{{ $categoryCount }}</div>
+                            <div class="summary-change positive"><i class="fa fa-folder"></i> Product groups</div>
                         </div>
-                    </div>
+                    @endcan
+
+                    @can('subcategories.view')
+                        <div class="summary-card">
+                            <div class="summary-header">
+                                <span class="summary-title">Subcategories</span>
+                                <div class="summary-icon" style="background: #dcfce7; color: #22c55e;"><i
+                                        class="fa fa-sitemap"></i></div>
+                            </div>
+                            <div class="summary-value">{{ $subcategoryCount }}</div>
+                            <div class="summary-change positive"><i class="fa fa-tags"></i> Sub-groups</div>
+                        </div>
+                    @endcan
+
+                    @can('products.view')
+                        <div class="summary-card">
+                            <div class="summary-header">
+                                <span class="summary-title">Products</span>
+                                <div class="summary-icon" style="background: #fef3c7; color: #f59e0b;"><i
+                                        class="fa fa-box-open"></i></div>
+                            </div>
+                            <div class="summary-value">{{ $productCount }}</div>
+                            <div class="summary-change positive"><i class="fa fa-cubes"></i> In inventory</div>
+                        </div>
+                    @endcan
+
+                    @can('customers.view')
+                        <div class="summary-card">
+                            <div class="summary-header">
+                                <span class="summary-title">Customers</span>
+                                <div class="summary-icon" style="background: #e0f2fe; color: #0ea5e9;"><i
+                                        class="fa fa-users"></i></div>
+                            </div>
+                            <div class="summary-value">{{ $customerscount }}</div>
+                            <div class="summary-change positive"><i class="fa fa-user-plus"></i> Registered</div>
+                        </div>
+                    @endcan
                 </div>
 
-
-                <!-- Total Purchases -->
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-body d-flex align-items-center justify-content-between">
-                            <div>
-                                <h6 class="mb-1 text-muted">Total Purchases</h6>
-                                <h5 class="mb-0 fw-bold">Rs {{ number_format($totalPurchases, 2) }}</h5>
+                <!-- Charts Section -->
+                <div class="chart-section">
+                    @can('sales.view')
+                        <div class="chart-card full-width">
+                            <div class="chart-header">
+                                <div class="chart-title">
+                                    <i class="fa fa-chart-line"></i> Sales Analytics
+                                </div>
+                                <div class="chart-filter" id="salesFilterBtns">
+                                    <button class="filter-btn active" data-filter="daily">Daily</button>
+                                    <button class="filter-btn" data-filter="weekly">Weekly</button>
+                                    <button class="filter-btn" data-filter="monthly">Monthly</button>
+                                </div>
                             </div>
-                            <div class="icon text-primary">
-                                <i class="fas fa-file-invoice-dollar fa-2x"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Purchase Returns -->
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-body d-flex align-items-center justify-content-between">
-                            <div>
-                                <h6 class="mb-1 text-muted">Purchase Returns</h6>
-                                <h5 class="mb-0 fw-bold">Rs {{ number_format($totalPurchaseReturns, 2) }}</h5>
-                            </div>
-                            <div class="icon text-danger">
-                                <i class="fas fa-undo-alt fa-2x"></i>
+                            <div class="chart-body">
+                                <div id="salesReportChart" style="height: 350px;"></div>
                             </div>
                         </div>
-                    </div>
-                </div>
+                    @endcan
 
-                <!-- Total Sales -->
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-body d-flex align-items-center justify-content-between">
-                            <div>
-                                <h6 class="mb-1 text-muted">Total Sales</h6>
-                                <h5 class="mb-0 fw-bold">Rs {{ number_format($totalSales, 2) }}</h5>
+                    @can('purchases.view')
+                        <div class="chart-card full-width">
+                            <div class="chart-header">
+                                <div class="chart-title">
+                                    <i class="fa fa-chart-area"></i> Purchase Analytics
+                                </div>
+                                <div class="chart-filter" id="purchaseFilterBtns">
+                                    <button class="filter-btn active" data-filter="daily">Daily</button>
+                                    <button class="filter-btn" data-filter="weekly">Weekly</button>
+                                    <button class="filter-btn" data-filter="monthly">Monthly</button>
+                                </div>
                             </div>
-                            <div class="icon text-success">
-                                <i class="fas fa-shopping-cart fa-2x"></i>
+                            <div class="chart-body">
+                                <div id="purchaseReportChart" style="height: 350px;"></div>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Sales Returns -->
-                <div class="col-md-3">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-body d-flex align-items-center justify-content-between">
-                            <div>
-                                <h6 class="mb-1 text-muted">Sales Returns</h6>
-                                <h5 class="mb-0 fw-bold">Rs {{ number_format($totalSalesReturns, 2) }}</h5>
-                            </div>
-                            <div class="icon text-warning">
-                                <i class="fas fa-undo fa-2x"></i>
-                            </div>
-                        </div>
-                    </div>
+                    @endcan
                 </div>
 
             </div>
-
-            <div class="row mt-4">
-                <!-- Sales Chart -->
-                <div class="col-md-12 mb-4">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">Sales Report</h6>
-                            <label for="salesFilter" class="form-label fw-bold">Sales Report Filter:</label>
-                            <select id="salesFilter" class="form-select w-auto">
-                                <option value="daily" selected>Daily</option>
-                                <option value="weekly">Weekly</option>
-                                <option value="monthly">Monthly</option>
-                            </select>
-                        </div>
-                        <div class="card-body">
-                            <div id="salesReportChart" style="height: 400px;" class="bg-white rounded shadow-sm">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Purchase Chart -->
-                <div class="col-md-12">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">Purchase Report</h6>
-                            <label for="purchaseFilter" class="form-label fw-bold">Purchase Report Filter:</label>
-                            <select id="purchaseFilter" class="form-select w-auto">
-                                <option value="daily" selected>Daily</option>
-                                <option value="weekly">Weekly</option>
-                                <option value="monthly">Monthly</option>
-                            </select>
-
-                        </div>
-                        <div class="card-body">
-                            <div id="purchaseReportChart" style="height: 400px;" class="bg-white rounded shadow-sm"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-
         </div>
     </div>
-</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const salesStats = @json($salesChartStats);
+            const purchaseStats = @json($purchaseChartStats);
+
+            // Sales Chart
+            const salesOptions = {
+                chart: {
+                    type: 'area',
+                    height: 350,
+                    toolbar: {
+                        show: false
+                    },
+                    fontFamily: 'inherit',
+                    dropShadow: {
+                        enabled: true,
+                        top: 3,
+                        left: 2,
+                        blur: 4,
+                        opacity: 0.1
+                    }
+                },
+                stroke: {
+                    curve: 'smooth',
+                    width: 3
+                },
+                colors: ['#22c55e'],
+                series: salesStats.daily.series,
+                xaxis: {
+                    categories: salesStats.daily.categories,
+                    labels: {
+                        style: {
+                            colors: '#64748b',
+                            fontSize: '12px'
+                        }
+                    },
+                    axisBorder: {
+                        show: false
+                    },
+                    axisTicks: {
+                        show: false
+                    }
+                },
+                yaxis: {
+                    labels: {
+                        style: {
+                            colors: '#64748b',
+                            fontSize: '12px'
+                        },
+                        formatter: val => 'Rs ' + val.toLocaleString()
+                    }
+                },
+                dataLabels: {
+                    enabled: false
+                },
+                markers: {
+                    size: 5,
+                    colors: ['#fff'],
+                    strokeColors: '#22c55e',
+                    strokeWidth: 2,
+                    hover: {
+                        size: 7
+                    }
+                },
+                fill: {
+                    type: "gradient",
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.4,
+                        opacityTo: 0.05,
+                        stops: [0, 90, 100]
+                    }
+                },
+                grid: {
+                    borderColor: '#e2e8f0',
+                    strokeDashArray: 4
+                },
+                tooltip: {
+                    theme: "light",
+                    y: {
+                        formatter: val => "Rs " + val.toLocaleString()
+                    }
+                }
+            };
+
+            const salesChart = new ApexCharts(document.querySelector("#salesReportChart"), salesOptions);
+            salesChart.render();
+
+            // Sales Filter
+            document.querySelectorAll('#salesFilterBtns .filter-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('#salesFilterBtns .filter-btn').forEach(b => b
+                        .classList.remove('active'));
+                    this.classList.add('active');
+                    const selected = this.dataset.filter;
+                    salesChart.updateOptions({
+                        series: salesStats[selected].series,
+                        xaxis: {
+                            categories: salesStats[selected].categories
+                        }
+                    });
+                });
+            });
+
+            // Purchase Chart
+            const purchaseOptions = {
+                chart: {
+                    type: 'area',
+                    height: 350,
+                    toolbar: {
+                        show: false
+                    },
+                    fontFamily: 'inherit',
+                    dropShadow: {
+                        enabled: true,
+                        top: 3,
+                        left: 2,
+                        blur: 4,
+                        opacity: 0.1
+                    }
+                },
+                stroke: {
+                    curve: 'smooth',
+                    width: 3
+                },
+                colors: ['#6366f1'],
+                series: purchaseStats.daily.series,
+                xaxis: {
+                    categories: purchaseStats.daily.categories,
+                    labels: {
+                        style: {
+                            colors: '#64748b',
+                            fontSize: '12px'
+                        }
+                    },
+                    axisBorder: {
+                        show: false
+                    },
+                    axisTicks: {
+                        show: false
+                    }
+                },
+                yaxis: {
+                    labels: {
+                        style: {
+                            colors: '#64748b',
+                            fontSize: '12px'
+                        },
+                        formatter: val => 'Rs ' + val.toLocaleString()
+                    }
+                },
+                dataLabels: {
+                    enabled: false
+                },
+                markers: {
+                    size: 5,
+                    colors: ['#fff'],
+                    strokeColors: '#6366f1',
+                    strokeWidth: 2,
+                    hover: {
+                        size: 7
+                    }
+                },
+                fill: {
+                    type: "gradient",
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.4,
+                        opacityTo: 0.05,
+                        stops: [0, 90, 100]
+                    }
+                },
+                grid: {
+                    borderColor: '#e2e8f0',
+                    strokeDashArray: 4
+                },
+                tooltip: {
+                    theme: "light",
+                    y: {
+                        formatter: val => "Rs " + val.toLocaleString()
+                    }
+                }
+            };
+
+            const purchaseChart = new ApexCharts(document.querySelector("#purchaseReportChart"), purchaseOptions);
+            purchaseChart.render();
+
+            // Purchase Filter
+            document.querySelectorAll('#purchaseFilterBtns .filter-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('#purchaseFilterBtns .filter-btn').forEach(b => b
+                        .classList.remove('active'));
+                    this.classList.add('active');
+                    const selected = this.dataset.filter;
+                    purchaseChart.updateOptions({
+                        series: purchaseStats[selected].series,
+                        xaxis: {
+                            categories: purchaseStats[selected].categories
+                        }
+                    });
+                });
+            });
+        });
+    </script>
 @endsection
-
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const salesStats = @json($salesChartStats);
-
-        const salesOptions = {
-            chart: {
-                type: 'area',
-                height: 400,
-                toolbar: {
-                    show: false
-                },
-                dropShadow: {
-                    enabled: true,
-                    top: 5,
-                    left: 2,
-                    blur: 4,
-                    opacity: 0.2
-                }
-            },
-            stroke: {
-                curve: 'smooth',
-                width: 3
-            },
-            colors: ['#4ba064'],
-            series: salesStats.daily.series,
-            xaxis: {
-                categories: salesStats.daily.categories,
-                labels: {
-                    style: {
-                        colors: '#6c757d',
-                        fontSize: '12px'
-                    }
-                },
-                axisBorder: {
-                    show: false
-                },
-                axisTicks: {
-                    show: false
-                }
-            },
-            yaxis: {
-                labels: {
-                    style: {
-                        colors: '#6c757d',
-                        fontSize: '12px'
-                    }
-                }
-            },
-            dataLabels: {
-                enabled: false
-            },
-            markers: {
-                size: 5,
-                colors: ['#fff'],
-                strokeColors: '#4ba064',
-                strokeWidth: 2,
-                hover: {
-                    size: 7
-                }
-            },
-            fill: {
-                type: "gradient",
-                gradient: {
-                    shadeIntensity: 1,
-                    opacityFrom: 0.3,
-                    opacityTo: 0.05,
-                    stops: [0, 90, 100]
-                }
-            },
-            grid: {
-                borderColor: '#e9ecef',
-                strokeDashArray: 4
-            },
-            tooltip: {
-                theme: "light",
-                y: {
-                    formatter: val => "Rs " + val.toLocaleString()
-                }
-            },
-            legend: {
-                position: 'top',
-                labels: {
-                    colors: '#495057'
-                }
-            }
-        };
-
-        const salesChart = new ApexCharts(document.querySelector("#salesReportChart"), salesOptions);
-        salesChart.render();
-
-        document.getElementById('salesFilter').addEventListener('change', function() {
-            const selected = this.value;
-            salesChart.updateOptions({
-                series: salesStats[selected].series,
-                xaxis: {
-                    categories: salesStats[selected].categories
-                }
-            });
-        });
-    });
-</script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const purchaseStats = @json($purchaseChartStats);
-
-        const purchaseOptions = {
-            chart: {
-                type: 'line',
-                height: 400,
-                toolbar: {
-                    show: false
-                },
-                dropShadow: {
-                    enabled: true,
-                    top: 5,
-                    left: 2,
-                    blur: 4,
-                    opacity: 0.15
-                }
-            },
-            stroke: {
-                curve: 'smooth',
-                width: 3
-            },
-            colors: ['#007bff'],
-            fill: {
-                type: 'gradient',
-                gradient: {
-                    shade: 'light',
-                    type: "vertical",
-                    shadeIntensity: 0.3,
-                    gradientToColors: ['#66b2ff'],
-                    inverseColors: false,
-                    opacityFrom: 0.6,
-                    opacityTo: 0.5,
-                    stops: [0, 80, 100]
-                }
-            },
-            series: purchaseStats.daily.series,
-            xaxis: {
-                categories: purchaseStats.daily.categories,
-                labels: {
-                    style: {
-                        fontSize: '12px'
-                    }
-                }
-            },
-            yaxis: {
-                labels: {
-                    style: {
-                        fontSize: '12px'
-                    }
-                }
-            },
-            markers: {
-                size: 4,
-                colors: ['#fff'],
-                strokeColors: '#007bff',
-                strokeWidth: 2,
-                hover: {
-                    size: 6
-                }
-            },
-            dataLabels: {
-                enabled: false
-            },
-            grid: {
-                borderColor: '#f1f1f1'
-            },
-            legend: {
-                position: 'top'
-            },
-            tooltip: {
-                theme: 'light',
-                style: {
-                    fontSize: '13px'
-                }
-            }
-        };
-
-        const purchaseChart = new ApexCharts(document.querySelector("#purchaseReportChart"), purchaseOptions);
-        purchaseChart.render();
-
-        document.getElementById('purchaseFilter').addEventListener('change', function() {
-            const selected = this.value;
-            purchaseChart.updateOptions({
-                series: purchaseStats[selected].series,
-                xaxis: {
-                    categories: purchaseStats[selected].categories
-                }
-            });
-        });
-    });
-</script>

@@ -1,6 +1,5 @@
 @extends('admin_panel.layout.app')
 @section('content')
-
     <div class="main-content">
         <div class="main-content-inner">
             <div class="container">
@@ -8,10 +7,12 @@
                     <div class="col-lg-12">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h3>Sales Officers</h3>
-                            <button type="button" class="btn btn-primary" data-bs-toggle="modal"
-                                data-bs-target="#createModal" id="reset">
-                                Create
-                            </button>
+                            @can('sales.officers.create')
+                                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal"
+                                    id="reset">
+                                    Create
+                                </button>
+                            @endcan
                         </div>
 
                         <div class="border mt-1 shadow rounded" style="background-color: white;">
@@ -35,10 +36,16 @@
                                                     <td>{{ $officer->name_urdu }}</td>
                                                     <td>{{ $officer->mobile }}</td>
                                                     <td>
-                                                        <button class="btn btn-primary btn-sm edit-btn"
-                                                            data-id="{{ $officer->id }}">Edit</button>
-                                                        <button class="btn btn-danger btn-sm delete-btn"
-                                                            data-id="{{ $officer->id }}">Delete</button>
+                                                        @include('admin_panel.partials.action_buttons', [
+                                                            'editRoute' => 'javascript:void(0)',
+                                                            'deleteRoute' => '/sales-officers/' . $officer->id,
+                                                            'editIsLink' => false,
+                                                            'permissions' => [
+                                                                'edit' => 'sales.officers.edit',
+                                                                'delete' => 'sales.officers.delete',
+                                                            ],
+                                                            'dataId' => $officer->id,
+                                                        ])
                                                     </td>
                                                 </tr>
                                             @endforeach
@@ -79,7 +86,9 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <input type="submit" class="btn btn-primary" value="Save">
+                        @can('sales.officers.create')
+                            <input type="submit" class="btn btn-primary" value="Save">
+                        @endcan
                     </div>
                 </div>
             </form>
@@ -103,7 +112,8 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">نام</label>
-                            <input type="text" name="name_urdu" id="edit_name_urdu" class="form-control text-end" dir="rtl" required />
+                            <input type="text" name="name_urdu" id="edit_name_urdu" class="form-control text-end"
+                                dir="rtl" required />
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Mobile</label>
@@ -112,7 +122,9 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <input type="submit" class="btn btn-primary" value="Update">
+                        @can('sales.officers.edit')
+                            <input type="submit" class="btn btn-primary" value="Update">
+                        @endcan
                     </div>
                 </div>
             </form>
@@ -128,14 +140,16 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
-        $(document).ready(function () {
+        $(document).ready(function() {
             $('#default-datatable').DataTable({
                 pageLength: 10,
-                order: [[0, 'desc']]
+                order: [
+                    [0, 'desc']
+                ]
             });
 
             // CREATE
-            $('.create-form').submit(function (e) {
+            $('.create-form').submit(function(e) {
                 e.preventDefault();
                 let formData = new FormData(this);
                 $.ajax({
@@ -144,17 +158,18 @@
                     data: formData,
                     contentType: false,
                     processData: false,
-                    success: function () {
+                    success: function() {
                         $('#createModal').modal('hide');
-                        Swal.fire('Success', 'Sales Officer Created', 'success').then(() => location.reload());
+                        Swal.fire('Success', 'Sales Officer Created', 'success').then(() =>
+                            location.reload());
                     }
                 });
             });
 
             // LOAD EDIT DATA
-            $('.edit-btn').click(function () {
+            $('.edit-btn').click(function() {
                 let id = $(this).data('id');
-                $.get("{{ url('sales-officers/edit') }}/" + id, function (data) {
+                $.get("{{ url('sales-officers/edit') }}/" + id, function(data) {
                     $('#edit_id').val(data.id);
                     $('#edit_name').val(data.name);
                     $('#edit_name_urdu').val(data.name_urdu);
@@ -164,7 +179,7 @@
             });
 
             // UPDATE
-            $('.edit-form').submit(function (e) {
+            $('.edit-form').submit(function(e) {
                 e.preventDefault();
                 let formData = new FormData(this);
                 $.ajax({
@@ -173,15 +188,16 @@
                     data: formData,
                     contentType: false,
                     processData: false,
-                    success: function () {
+                    success: function() {
                         $('#editModal').modal('hide');
-                        Swal.fire('Updated', 'Sales Officer Updated', 'success').then(() => location.reload());
+                        Swal.fire('Updated', 'Sales Officer Updated', 'success').then(() =>
+                            location.reload());
                     }
                 });
             });
 
             // DELETE
-            $('.delete-btn').click(function () {
+            $('.delete-btn').click(function() {
                 let id = $(this).data('id');
                 let url = `/sales-officers/${id}`; // dynamically build route
                 Swal.fire({
@@ -198,12 +214,14 @@
                             data: {
                                 _token: '{{ csrf_token() }}'
                             },
-                            success: function (response) {
+                            success: function(response) {
                                 $('#row-' + id).remove();
-                                Swal.fire('Deleted!', 'Sales Officer has been deleted.', 'success');
+                                Swal.fire('Deleted!', 'Sales Officer has been deleted.',
+                                    'success');
                             },
-                            error: function (xhr) {
-                                Swal.fire('Error', 'Delete failed. Please try again.', 'error');
+                            error: function(xhr) {
+                                Swal.fire('Error', 'Delete failed. Please try again.',
+                                    'error');
                                 console.error(xhr.responseText);
                             }
                         });
@@ -213,5 +231,4 @@
 
         });
     </script>
-
 @endsection

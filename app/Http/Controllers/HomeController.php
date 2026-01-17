@@ -22,119 +22,120 @@ class HomeController extends Controller
         if ($usertype == 'user') {
             return view('user_panel.dashboard', compact('userId'));
         } elseif ($usertype == 'admin') {
-            $categoryCount = DB::table('categories')->count();
-            $subcategoryCount = DB::table('subcategories')->count();
-            $productCount = DB::table('products')->count();
-            $customerscount = DB::table('customers')->count();
+            // Counts
+            $categoryCount = Auth::user()->can('categories.view') ? DB::table('categories')->count() : 0;
+            $subcategoryCount = Auth::user()->can('subcategories.view') ? DB::table('subcategories')->count() : 0;
+            $productCount = Auth::user()->can('products.view') ? DB::table('products')->count() : 0;
+            $customerscount = Auth::user()->can('customers.view') ? DB::table('customers')->count() : 0;
 
-            $totalPurchases = DB::table('purchases')->sum('net_amount');
-            $totalPurchaseReturns = DB::table('purchase_returns')->sum('net_amount');
-            $totalSales = DB::table('sales')->sum('total_net');
-            $totalSalesReturns = DB::table('sales_returns')->sum('total_net');
+            // Stats
+            $totalPurchases = Auth::user()->can('purchases.view') ? DB::table('purchases')->sum('net_amount') : 0;
+            $totalPurchaseReturns = Auth::user()->can('purchase.returns.view') ? DB::table('purchase_returns')->sum('net_amount') : 0;
+            $totalSales = Auth::user()->can('sales.view') ? DB::table('sales')->sum('total_net') : 0;
+            $totalSalesReturns = Auth::user()->can('sales.returns.view') ? DB::table('sales_returns')->sum('total_net') : 0;
 
             // ===== SALES REPORT CHARTS =====
-            // DAILY (last 7 days)
-            $dailyLabels = collect(range(6, 0))->map(fn($i) => \Carbon\Carbon::today()->subDays($i)->format('Y-m-d'));
-            $dailyData = $dailyLabels->map(function ($date) {
-                return DB::table('sales')
-                    ->whereDate('created_at', $date)
-                    ->sum('total_net');
-            });
+            $salesChartStats = ['daily' => ['series' => [], 'categories' => []]];
+            if (Auth::user()->can('sales.view')) {
+                // DAILY (last 7 days)
+                $dailyLabels = collect(range(6, 0))->map(fn($i) => \Carbon\Carbon::today()->subDays($i)->format('Y-m-d'));
+                $dailyData = $dailyLabels->map(function ($date) {
+                    return DB::table('sales')
+                        ->whereDate('created_at', $date)
+                        ->sum('total_net');
+                });
 
-            // WEEKLY (This + Last 2 weeks)
-            $weeklyLabels = ['This Week', 'Last Week', '2 Weeks Ago'];
-            $weeklyData = collect([0, 1, 2])->map(function ($i) {
-                $start = \Carbon\Carbon::now()->startOfWeek()->subWeeks($i);
-                $end = $start->copy()->endOfWeek();
-                return DB::table('sales')
-                    ->whereBetween('created_at', [$start, $end])
-                    ->sum('total_net');
-            })->reverse()->values();
+                // WEEKLY (This + Last 2 weeks)
+                $weeklyLabels = ['This Week', 'Last Week', '2 Weeks Ago'];
+                $weeklyData = collect([0, 1, 2])->map(function ($i) {
+                    $start = \Carbon\Carbon::now()->startOfWeek()->subWeeks($i);
+                    $end = $start->copy()->endOfWeek();
+                    return DB::table('sales')
+                        ->whereBetween('created_at', [$start, $end])
+                        ->sum('total_net');
+                })->reverse()->values();
 
-            // MONTHLY (Jan → Current month)
-            $months = range(1, \Carbon\Carbon::now()->month);
-            $monthLabels = collect($months)->map(fn($m) => \Carbon\Carbon::create()->month($m)->format('F'));
-            $monthlyData = collect($months)->map(function ($month) {
-                return DB::table('sales')
-                    ->whereMonth('created_at', $month)
-                    ->whereYear('created_at', \Carbon\Carbon::now()->year)
-                    ->sum('total_net');
-            });
+                // MONTHLY (Jan → Current month)
+                $months = range(1, \Carbon\Carbon::now()->month);
+                $monthLabels = collect($months)->map(fn($m) => \Carbon\Carbon::create()->month($m)->format('F'));
+                $monthlyData = collect($months)->map(function ($month) {
+                    return DB::table('sales')
+                        ->whereMonth('created_at', $month)
+                        ->whereYear('created_at', \Carbon\Carbon::now()->year)
+                        ->sum('total_net');
+                });
 
-            $salesChartStats = [
-                'daily' => [
-                    'categories' => $dailyLabels,
-                    'series' => [
-                        ['name' => 'Sales', 'data' => $dailyData]
+                $salesChartStats = [
+                    'daily' => [
+                        'categories' => $dailyLabels,
+                        'series' => [['name' => 'Sales', 'data' => $dailyData]]
+                    ],
+                    'weekly' => [
+                        'categories' => $weeklyLabels,
+                        'series' => [['name' => 'Sales', 'data' => $weeklyData]]
+                    ],
+                    'monthly' => [
+                        'categories' => $monthLabels,
+                        'series' => [['name' => 'Sales', 'data' => $monthlyData]]
                     ]
-                ],
-                'weekly' => [
-                    'categories' => $weeklyLabels,
-                    'series' => [
-                        ['name' => 'Sales', 'data' => $weeklyData]
-                    ]
-                ],
-                'monthly' => [
-                    'categories' => $monthLabels,
-                    'series' => [
-                        ['name' => 'Sales', 'data' => $monthlyData]
-                    ]
-                ]
-            ];
+                ];
+            }
 
             // ===== PURCHASE CHARTS =====
-            // DAILY
-            $purchaseDailyLabels = collect(range(6, 0))->map(fn($i) => Carbon::today()->subDays($i)->format('Y-m-d'));
-            $purchaseDailySeries = [[
-                'name' => 'Purchases',
-                'data' => $purchaseDailyLabels->map(function ($date) {
-                    return DB::table('purchases')
-                        ->whereDate('created_at', $date)
-                        ->sum('net_amount');
-                })
-            ]];
+            $purchaseChartStats = ['daily' => ['series' => [], 'categories' => []]];
+            if (Auth::user()->can('purchases.view')) {
+                // DAILY
+                $purchaseDailyLabels = collect(range(6, 0))->map(fn($i) => Carbon::today()->subDays($i)->format('Y-m-d'));
+                $purchaseDailySeries = [[
+                    'name' => 'Purchases',
+                    'data' => $purchaseDailyLabels->map(function ($date) {
+                        return DB::table('purchases')
+                            ->whereDate('created_at', $date)
+                            ->sum('net_amount');
+                    })
+                ]];
 
-            // WEEKLY
-            $purchaseWeeklyLabels = ['This Week', 'Last Week', '2 Weeks Ago'];
-            $purchaseWeeklySeries = [[
-                'name' => 'Purchases',
-                'data' => collect([0, 1, 2])->map(function ($i) {
-                    $start = Carbon::now()->startOfWeek()->subWeeks($i);
-                    $end = $start->copy()->endOfWeek();
-                    return DB::table('purchases')
-                        ->whereBetween('created_at', [$start, $end])
-                        ->sum('net_amount');
-                })->reverse()->values()
-            ]];
+                // WEEKLY
+                $purchaseWeeklyLabels = ['This Week', 'Last Week', '2 Weeks Ago'];
+                $purchaseWeeklySeries = [[
+                    'name' => 'Purchases',
+                    'data' => collect([0, 1, 2])->map(function ($i) {
+                        $start = Carbon::now()->startOfWeek()->subWeeks($i);
+                        $end = $start->copy()->endOfWeek();
+                        return DB::table('purchases')
+                            ->whereBetween('created_at', [$start, $end])
+                            ->sum('net_amount');
+                    })->reverse()->values()
+                ]];
 
-            // MONTHLY
-            $months = range(1, Carbon::now()->month);
-            $purchaseMonthLabels = collect($months)->map(fn($m) => Carbon::create()->month($m)->format('F'));
-            $purchaseMonthlySeries = [[
-                'name' => 'Purchases',
-                'data' => collect($months)->map(function ($month) {
-                    return DB::table('purchases')
-                        ->whereMonth('created_at', $month)
-                        ->whereYear('created_at', Carbon::now()->year)
-                        ->sum('net_amount');
-                })
-            ]];
+                // MONTHLY
+                $months = range(1, Carbon::now()->month);
+                $purchaseMonthLabels = collect($months)->map(fn($m) => Carbon::create()->month($m)->format('F'));
+                $purchaseMonthlySeries = [[
+                    'name' => 'Purchases',
+                    'data' => collect($months)->map(function ($month) {
+                        return DB::table('purchases')
+                            ->whereMonth('created_at', $month)
+                            ->whereYear('created_at', Carbon::now()->year)
+                            ->sum('net_amount');
+                    })
+                ]];
 
-            $purchaseChartStats = [
-                'daily' => [
-                    'categories' => $purchaseDailyLabels,
-                    'series' => $purchaseDailySeries
-                ],
-                'weekly' => [
-                    'categories' => $purchaseWeeklyLabels,
-                    'series' => $purchaseWeeklySeries
-                ],
-                'monthly' => [
-                    'categories' => $purchaseMonthLabels,
-                    'series' => $purchaseMonthlySeries
-                ]
-            ];
-
+                $purchaseChartStats = [
+                    'daily' => [
+                        'categories' => $purchaseDailyLabels,
+                        'series' => $purchaseDailySeries
+                    ],
+                    'weekly' => [
+                        'categories' => $purchaseWeeklyLabels,
+                        'series' => $purchaseWeeklySeries
+                    ],
+                    'monthly' => [
+                        'categories' => $purchaseMonthLabels,
+                        'series' => $purchaseMonthlySeries
+                    ]
+                ];
+            }
 
             return view('admin_panel.dashboard', compact(
                 'categoryCount',

@@ -1,0 +1,1 @@
+{"version":2,"defects":{"Tests\\Feature\\PermissionRouteTest::test_super_user_with_all_permissions_can_access_routes":5},"times":{"Tests\\Feature\\PermissionRouteTest::test_limited_user_permissions_block_and_allow_routes":0.27,"Tests\\Feature\\PermissionRouteTest::test_super_user_with_all_permissions_can_access_routes":0.088}}

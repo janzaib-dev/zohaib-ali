@@ -7,8 +7,10 @@
                      <div class="col-lg-12">
                          <div class="d-flex justify-content-between align-items-center mb-3">
                              <h3>Units</h3>
-                             <button type="button" class="btn btn-primary" data-bs-toggle="modal"
-                                 data-bs-target="#exampleModal" id="reset">Create</button>
+                             @can('units.create')
+                                 <button type="button" class="btn btn-primary" data-bs-toggle="modal"
+                                     data-bs-target="#exampleModal" id="reset">Create</button>
+                             @endcan
                          </div>
                          <div class="border mt-1 shadow rounded " style="background-color: white;">
                              <div class="col-lg-12 m-auto">
@@ -27,16 +29,16 @@
                                                      <td class="id">{{ $company->id }}</td>
                                                      <td class="name">{{ $company->name }}</td>
                                                      <td>
-                                                         <button class="btn btn-primary btn-sm edit-btn"
-                                                             data-url="{{ route('store.Unit') }}">
-                                                             Edit
-                                                         </button>
-                                                         <button class="btn btn-danger btn-sm delete-btn"
-                                                             data-url="{{ route('delete.Unit', $company->id) }}"
-                                                             data-msg="Are you sure you want to delete this title"
-                                                             data-method="get" onclick="logoutAndDeleteFunction(this)">
-                                                             Delete
-                                                         </button>
+                                                         @include('admin_panel.partials.action_buttons', [
+                                                             'editRoute' => route('store.Unit'),
+                                                             'deleteRoute' => route('delete.Unit', $company->id),
+                                                             'editIsLink' => false,
+                                                             'permissions' => [
+                                                                 'edit' => 'units.edit',
+                                                                 'delete' => 'units.delete',
+                                                             ],
+                                                             'dataId' => $company->id,
+                                                         ])
                                                      </td>
                                                  </tr>
                                              @endforeach
@@ -73,7 +75,9 @@
                  </div>
                  <div class="modal-footer">
                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                     <input type="submit" class="btn btn-primary save-btn">
+                     @can('units.create')
+                         <input type="submit" class="btn btn-primary save-btn">
+                     @endcan
                  </div>
                  </form>
              </div>

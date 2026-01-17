@@ -19,51 +19,52 @@ use Milon\Barcode\DNS1D;
 class ProductController extends Controller
 {
 
+
     public function getPrice(Request $request)
-{
-    $product = Product::find($request->product_id);
+    {
+        $product = Product::find($request->product_id);
 
-    return response()->json([
-        'retail_price' => $product?->price ?? 0
-    ]);
-    
-}
+        return response()->json([
+            'retail_price' => $product?->price ?? 0
+        ]);
 
-    public function productget(){
-        $products=Product::all();
+    }
+
+    public function productget()
+    {
+        $products = Product::all();
         return response()->json($products);
     }
 
     private function upsertStocks(int $productId, float $qtyDelta, int $branchId = 1, int $warehouseId = 1): void
     {
         $updated = Stock::where([
-            'branch_id'    => $branchId,
+            'branch_id' => $branchId,
             'warehouse_id' => $warehouseId,
-            'product_id'   => $productId,
+            'product_id' => $productId,
         ])->update([
-            'qty'        => DB::raw('qty + ' . ($qtyDelta + 0)),
+            'qty' => DB::raw('qty + ' . ($qtyDelta + 0)),
             'updated_at' => now(),
         ]);
 
         if (!$updated) {
             Stock::create([
-                'branch_id'    => $branchId,
+                'branch_id' => $branchId,
                 'warehouse_id' => $warehouseId,
-                'product_id'   => $productId,
-                'qty'          => $qtyDelta,
+                'product_id' => $productId,
+                'qty' => $qtyDelta,
                 'reserved_qty' => 0,
-                'created_at'   => now(),
-                'updated_at'   => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
     }
 
 
-
     public function assemblyReport(Request $request, $id)
     {
         // optional: user ne target units pass kiye (e.g. kitne banana chahte ho)
-        $targetUnits = (float) $request->get('target', 0);
+        $targetUnits = (float)$request->get('target', 0);
 
         // product + BOM rows
         $product = Product::findOrFail($id);
@@ -95,30 +96,31 @@ class ProductController extends Controller
         // per-part breakdown
         $parts = $bomRows->map(function ($r) use ($avail, $target) {
             $available = (float)($avail[$r->part_id] ?? 0);
-            $needed    = (float)$r->qty_per_unit * (float)$target;
-            $shortage  = max(0, $needed - $available);
+            $needed = (float)$r->qty_per_unit * (float)$target;
+            $shortage = max(0, $needed - $available);
             return [
-                'part_id'        => $r->part_id,
-                'part_name'      => $r->part->item_name ?? 'N/A',
-                'qty_per_unit'   => (float)$r->qty_per_unit,
-                'available'      => $available,
-                'needed'         => $needed,
-                'shortage'       => $shortage,
+                'part_id' => $r->part_id,
+                'part_name' => $r->part->item_name ?? 'N/A',
+                'qty_per_unit' => (float)$r->qty_per_unit,
+                'available' => $available,
+                'needed' => $needed,
+                'shortage' => $shortage,
             ];
         });
 
         // response
         return response()->json([
-            'product_id'      => $product->id,
-            'product_name'    => $product->item_name,
-            'ready_stock'     => $readyStock,
+            'product_id' => $product->id,
+            'product_name' => $product->item_name,
+            'ready_stock' => $readyStock,
             'assemble_possible' => (float)$assemblePossible,
-            'total_sellable'  => (float)($readyStock + $assemblePossible),
-            'target_used'     => (float)$target,
-            'parts'           => $parts,
-            'short_parts'     => $parts->filter(fn($p) => $p['shortage'] > 0)->values(),
+            'total_sellable' => (float)($readyStock + $assemblePossible),
+            'target_used' => (float)$target,
+            'parts' => $parts,
+            'short_parts' => $parts->filter(fn($p) => $p['shortage'] > 0)->values(),
         ]);
     }
+
     public function assemblySummary()
     {
         // sirf wo products jinke BOM rows hain (assembled)
@@ -126,7 +128,7 @@ class ProductController extends Controller
 
         // sab related product_ids (finished + unke parts)
         $partIds = ProductBom::whereIn('product_id', $assembledIds)->pluck('part_id');
-        $allIds  = $assembledIds->merge($partIds)->unique()->values();
+        $allIds = $assembledIds->merge($partIds)->unique()->values();
 
         // available map
         $avail = StockMovement::whereIn('product_id', $allIds)
@@ -142,26 +144,23 @@ class ProductController extends Controller
                 return null;
             }
             $assemblePossible = $bom->map(function ($r) use ($avail) {
-                $a   = (float)($avail[$r->part_id] ?? 0);
+                $a = (float)($avail[$r->part_id] ?? 0);
                 $rpu = (float)$r->qty_per_unit;
                 return $rpu > 0 ? floor($a / $rpu) : INF;
             })->min();
             $ready = (float)($avail[$pid] ?? 0);
 
             return [
-                'product_id'        => $pid,
-                'product_name'      => $p->item_name,
-                'ready_stock'       => $ready,
+                'product_id' => $pid,
+                'product_name' => $p->item_name,
+                'ready_stock' => $ready,
                 'assemble_possible' => (float)$assemblePossible,
-                'total_sellable'    => (float)($ready + $assemblePossible),
+                'total_sellable' => (float)($ready + $assemblePossible),
             ];
         })->filter()->values();
 
         return view('admin_panel.product.assembly_summary', compact('rows'));
     }
-
-
-
 
 
     // ===== Product search (general) =====
@@ -192,20 +191,19 @@ class ProductController extends Controller
         return view('admin_panel.product.index', compact('products', 'categories'));
     }
 
- public function productview($id)
-{
-    $product = Product::with([
-        'category_relation',
-        'sub_category_relation',
-        'brand',
-        'stock'
-    ])->find($id);
+    public function productview($id)
+    {
+        $product = Product::with([
+            'category_relation',
+            'sub_category_relation',
+            'brand',
+            'stock'
+        ])->find($id);
 
-    return response()->json($product);
-}
+        return response()->json($product);
+    }
 
 ////////////////////////
-
 
 
 ///////////////////////////
@@ -215,8 +213,8 @@ class ProductController extends Controller
     public function view_store()
     {
         $categories = Category::select('id', 'name')->get();
-        $units      = Unit::select('id', 'name')->get();
-        $brands     = Brand::select('id', 'name')->get();
+        $units = Unit::select('id', 'name')->get();
+        $brands = Brand::select('id', 'name')->get();
         return view('admin_panel.product.create', compact('categories', 'units', 'brands'));
     }
 
@@ -231,12 +229,12 @@ class ProductController extends Controller
     public function generateBarcode(Request $request)
     {
         $barcodeNumber = $request->filled('code') ? $request->code : rand(100000000000, 999999999999);
-        $barcodePNG    = (new DNS1D)->getBarcodePNG($barcodeNumber, 'C39', 3, 50);
-        $barcodeImage  = "data:image/png;base64," . $barcodePNG;
+        $barcodePNG = (new DNS1D)->getBarcodePNG($barcodeNumber, 'C39', 3, 50);
+        $barcodeImage = "data:image/png;base64," . $barcodePNG;
 
         return response()->json([
             'barcode_number' => $barcodeNumber,
-            'barcode_image'  => $barcodeImage
+            'barcode_image' => $barcodeImage
         ]);
     }
 
@@ -264,42 +262,42 @@ class ProductController extends Controller
 
             // Create product
             $product = Product::create([
-                'creater_id'      => $userId,
-                'category_id'     => $request->category_id,
+                'creater_id' => $userId,
+                'category_id' => $request->category_id,
                 'sub_category_id' => $request->sub_category_id,
-                'item_code'       => $nextCode,
-                'item_name'       => $request->product_name,
-                'barcode_path'    => $request->barcode_path ?? rand(100000000000, 999999999999),
-                'unit_id'         => $request->unit,
-                'brand_id'        => $request->brand_id,
+                'item_code' => $nextCode,
+                'item_name' => $request->product_name,
+                'barcode_path' => $request->barcode_path ?? rand(100000000000, 999999999999),
+                'unit_id' => $request->unit,
+                'brand_id' => $request->brand_id,
                 'wholesale_price' => $request->wholesale_price,
-                'price'           => $request->retail_price,
-                'alert_quantity'  => $request->alert_quantity,
-                'model'  => $request->model,
-                'hs_code'  => $request->hs_code,
-                'pack_type'       =>  $request->packing_type,
-                'pack_qty'       =>  $request->packing_qty,
-                'piece_per_pack'   =>  $request->piece_per_pack,
-                'loose_piece'   =>  $request->loose_piece,
-                'image'           => $imagePath,
-                'color'           => $request->color ? json_encode($request->color) : null,
-                'is_part'         => $request->has('is_part') ? 1 : 0,
-                'is_assembled'    => $request->has('is_assembled') ? 1 : 0,
-                'created_at'      => now(),
-                'updated_at'      => now(),
+                'price' => $request->retail_price,
+                'alert_quantity' => $request->alert_quantity,
+                'model' => $request->model,
+                'hs_code' => $request->hs_code,
+                'pack_type' => $request->packing_type,
+                'pack_qty' => $request->packing_qty,
+                'piece_per_pack' => $request->piece_per_pack,
+                'loose_piece' => $request->loose_piece,
+                'image' => $imagePath,
+                'color' => $request->color ? json_encode($request->color) : null,
+                'is_part' => $request->has('is_part') ? 1 : 0,
+                'is_assembled' => $request->has('is_assembled') ? 1 : 0,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
             // Opening stock → single movement + stocks upsert
-            $opening = (float) ($request->Stock ?? 0);
+            $opening = (float)($request->Stock ?? 0);
             if ($opening > 0) {
                 // movement
                 StockMovement::create([
                     'product_id' => $product->id,
-                    'type'       => 'in',
-                    'qty'        => $opening,
-                    'ref_type'   => 'OPENING',
-                    'ref_id'     => null,
-                    'note'       => 'Opening stock',
+                    'type' => 'in',
+                    'qty' => $opening,
+                    'ref_type' => 'OPENING',
+                    'ref_id' => null,
+                    'note' => 'Opening stock',
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -317,11 +315,11 @@ class ProductController extends Controller
                 $rows = collect(json_decode($request->bom_json, true))
                     ->filter(fn($r) => !empty($r['part_id']) && (float)($r['required_per_unit'] ?? 0) > 0)
                     ->map(fn($r) => [
-                        'product_id'   => $product->id,
-                        'part_id'      => $r['part_id'],
+                        'product_id' => $product->id,
+                        'part_id' => $r['part_id'],
                         'qty_per_unit' => (float)$r['required_per_unit'],
-                        'created_at'   => now(),
-                        'updated_at'   => now(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ])->values();
 
                 if ($rows->count()) {
@@ -383,15 +381,14 @@ class ProductController extends Controller
 
         return response()->json($parts->map(function ($p) {
             return [
-                'id'            => $p->id,
-                'item_name'     => $p->item_name,
-                'item_code'     => $p->item_code,
-                'unit'          => optional(Unit::find($p->unit_id))->name ?? '',
+                'id' => $p->id,
+                'item_name' => $p->item_name,
+                'item_code' => $p->item_code,
+                'unit' => optional(Unit::find($p->unit_id))->name ?? '',
                 'available_qty' => (float)$p->available_qty,
             ];
         }));
     }
-
 
 
     // ===== Update product =====
@@ -410,27 +407,27 @@ class ProductController extends Controller
         DB::transaction(function () use ($request, $id, $userId, $imagePath) {
 
             Product::where('id', $id)->update([
-                'creater_id'      => $userId,
-                'category_id'     => $request->category_id,
+                'creater_id' => $userId,
+                'category_id' => $request->category_id,
                 'sub_category_id' => $request->sub_category_id,
-                'item_code'       => $request->item_code,
-                'item_name'       => $request->product_name,
-                'barcode_path'    => $request->barcode_path ?? rand(100000000000, 999999999999),
-                'unit_id'         => $request->unit,
-                'brand_id'        => $request->brand_id,
+                'item_code' => $request->item_code,
+                'item_name' => $request->product_name,
+                'barcode_path' => $request->barcode_path ?? rand(100000000000, 999999999999),
+                'unit_id' => $request->unit,
+                'brand_id' => $request->brand_id,
                 'wholesale_price' => $request->wholesale_price,
-                'price'           => $request->retail_price,
-                'alert_quantity'  => $request->alert_quantity,
-                'model'  => $request->model,
-                'hs_code'  => $request->hs_code,
-                'pack_type'       =>  $request->packing_type,
-                'pack_qty'       =>  $request->packing_qty,
-                'piece_per_pack'   =>  $request->piece_per_pack,
-                'loose_piece'   =>  $request->loose_piece,
-                'image'           => $imagePath,
-                'is_part'         => $request->has('is_part') ? 1 : 0,
-                'is_assembled'    => $request->has('is_assembled') ? 1 : 0,
-                'updated_at'      => now(),
+                'price' => $request->retail_price,
+                'alert_quantity' => $request->alert_quantity,
+                'model' => $request->model,
+                'hs_code' => $request->hs_code,
+                'pack_type' => $request->packing_type,
+                'pack_qty' => $request->packing_qty,
+                'piece_per_pack' => $request->piece_per_pack,
+                'loose_piece' => $request->loose_piece,
+                'image' => $imagePath,
+                'is_part' => $request->has('is_part') ? 1 : 0,
+                'is_assembled' => $request->has('is_assembled') ? 1 : 0,
+                'updated_at' => now(),
             ]);
 
             // BOM re-save (replace all for this product)
@@ -440,11 +437,11 @@ class ProductController extends Controller
                 $rows = collect(json_decode($request->bom_json, true))
                     ->filter(fn($r) => !empty($r['part_id']) && (float)($r['required_per_unit'] ?? 0) > 0)
                     ->map(fn($r) => [
-                        'product_id'   => $id,
-                        'part_id'      => $r['part_id'],
+                        'product_id' => $id,
+                        'part_id' => $r['part_id'],
                         'qty_per_unit' => (float)$r['required_per_unit'],
-                        'created_at'   => now(),
-                        'updated_at'   => now(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ])->values();
 
                 if ($rows->count()) {
@@ -456,10 +453,10 @@ class ProductController extends Controller
             if ($request->filled('stock_adjust') && (float)$request->stock_adjust != 0) {
                 StockMovement::create([
                     'product_id' => $id,
-                    'type'       => 'adjustment',
-                    'qty'        => (float)$request->stock_adjust, // can be negative
-                    'ref_type'   => 'ADJ',
-                    'note'       => 'Manual stock adjustment',
+                    'type' => 'adjustment',
+                    'qty' => (float)$request->stock_adjust, // can be negative
+                    'ref_type' => 'ADJ',
+                    'note' => 'Manual stock adjustment',
                 ]);
             }
         });
@@ -471,9 +468,9 @@ class ProductController extends Controller
     public function edit($id)
     {
         $product = Product::with('category_relation', 'sub_category_relation', 'unit', 'brand')->findOrFail($id);
-        $categories    = Category::all();
+        $categories = Category::all();
         $subcategories = SubCategory::all();
-        $brands        = Brand::all();
+        $brands = Brand::all();
         return view('admin_panel.product.edit', compact('product', 'categories', 'subcategories', 'brands'));
     }
 

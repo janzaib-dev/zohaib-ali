@@ -10,9 +10,11 @@
         <div class="card shadow-sm">
             <div class="card-header d-flex justify-content-between align-items-center text-white">
                 <h6 class="mb-0">Voucher List</h6>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#voucherModal">
-                    <i class="bi bi-plus-circle"></i> Add Voucher
-                </button>
+                @can('expense.voucher.create')
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#voucherModal">
+                        <i class="bi bi-plus-circle"></i> Add Voucher
+                    </button>
+                @endcan
             </div>
 
             <div class="card-body">
@@ -43,14 +45,16 @@
                                 <td>{{ number_format($voucher->amount, 2) }}</td>
                                 <td>{{ $voucher->date }}</td>
                                 <td>
-                                    <button class="btn btn-warning btn-sm edit-btn" data-id="{{ $voucher->id }}"
-                                        data-sales_officer="{{ $voucher->sales_officer }}" data-date="{{ $voucher->date }}"
-                                        data-type="{{ $voucher->type }}" data-person="{{ $voucher->person }}"
-                                        data-sub_head="{{ $voucher->sub_head }}"
-                                        data-narration="{{ $voucher->narration }}" data-amount="{{ $voucher->amount }}"
-                                        data-bs-toggle="modal" data-bs-target="#voucherModal">
-                                        Edit
-                                    </button>
+                                    @can('expense.voucher.edit')
+                                        <button class="btn btn-warning btn-sm edit-btn" data-id="{{ $voucher->id }}"
+                                            data-sales_officer="{{ $voucher->sales_officer }}" data-date="{{ $voucher->date }}"
+                                            data-type="{{ $voucher->type }}" data-person="{{ $voucher->person }}"
+                                            data-sub_head="{{ $voucher->sub_head }}"
+                                            data-narration="{{ $voucher->narration }}" data-amount="{{ $voucher->amount }}"
+                                            data-bs-toggle="modal" data-bs-target="#voucherModal">
+                                            Edit
+                                        </button>
+                                    @endcan
                                 </td>
                             </tr>
                         @endforeach
@@ -114,8 +118,8 @@
                                             <label class="form-label">Sub-Head</label>
                                             <select name="sub_head" class="form-select">
                                                 @foreach ($narration as $item)
-                                   <option value="{{ $item->expense_head }}">{{ $item->expense_head }}</option>
-
+                                                    <option value="{{ $item->expense_head }}">{{ $item->expense_head }}
+                                                    </option>
                                                 @endforeach
                                             </select>
                                         </div>

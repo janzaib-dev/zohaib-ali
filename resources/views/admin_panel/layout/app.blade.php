@@ -63,6 +63,44 @@
             color: #2980b9;
             font-weight: 500;
         }
+
+        /* Dynamic Mega Menu Styling */
+        .mega-menu {
+            position: relative;
+        }
+
+        .mega-menu .submenu {
+            width: max-content !important;
+            max-width: 95vw;
+            min-width: 220px;
+            left: 0;
+            right: auto;
+        }
+
+        .mega-menu .col-group-wrapper {
+            display: flex;
+            flex-wrap: nowrap;
+            margin: 0 -8px;
+            /* Offset padding */
+        }
+
+        .mega-menu .col-group {
+            width: 240px;
+            /* Consistent column width */
+            flex: 0 0 auto;
+            border-right: 1px solid #f0f0f0;
+            padding: 0 16px;
+        }
+
+        .mega-menu .col-group:last-child {
+            border-right: none;
+        }
+
+        /* Override Bootstrap col widths inside mega menu */
+        .mega-menu .col-md-3 {
+            flex: none;
+            max-width: none;
+        }
     </style>
     <!--=========================*
                 Met Data
@@ -102,14 +140,21 @@
     <link rel="stylesheet" href="{{ asset('assets/vendors/data-table/css/jquery.dataTables.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendors/data-table/css/dataTables.bootstrap4.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendors/data-table/css/responsive.bootstrap.min.css') }}">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ asset('assets/vendors/data-table/css/responsive.jqueryui.min.css') }}">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     {{-- Online Links --}}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/brands.min.css" integrity="sha512-58P9Hy7II0YeXLv+iFiLCv1rtLW47xmiRpC1oFafeKNShp8V5bKV/ciVtYqbk2YfxXQMt58DjNfkXFOn62xE+g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/brands.min.css" integrity="sha512-58P9Hy7II0YeXLv+iFiLCv1rtLW47xmiRpC1oFafeKNShp8V5bKV/ciVtYqbk2YfxXQMt58DjNfkXFOn62xE+g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/brands.min.css"
+        integrity="sha512-58P9Hy7II0YeXLv+iFiLCv1rtLW47xmiRpC1oFafeKNShp8V5bKV/ciVtYqbk2YfxXQMt58DjNfkXFOn62xE+g=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+        integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/brands.min.css"
+        integrity="sha512-58P9Hy7II0YeXLv+iFiLCv1rtLW47xmiRpC1oFafeKNShp8V5bKV/ciVtYqbk2YfxXQMt58DjNfkXFOn62xE+g=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Select2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
@@ -135,7 +180,7 @@
                 *===========================-->
                     <div class="text-center rt_nav_wrapper d-flex align-items-center">
                         {{-- <a class="nav_logo rt_logo" href="index.html"><img  src="{{asset('assets/images/WIJDAN-removebg-preview.png')}}" alt="logo" /></a> --}}
-                        <a class="nav_logo rt_logo text-success" href="index.html">Ameen And Son's</a>
+                        <a class="nav_logo rt_logo text-success" href="index.html">Prowaves</a>
                         {{-- <a class="nav_logo nav_logo_mob" href="index.html"><img src="{{asset('assets/images/WIJDAN-removebg-preview.png')}}" alt="logo"/></a> --}}
                     </div>
                     <!--=========================*
@@ -143,11 +188,21 @@
                *===========================-->
                     <div class="nav_wrapper_main d-flex align-items-center justify-content-between flex-grow-1">
                         <ul class="navbar-nav navbar-nav-right mr-0 ml-auto">
-                            <li class="nav-item nav-profile dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown" id="profileDropdown">
-                                    <span class="profile_name">{{ Auth::user()->name }} <i class="feather ft-chevron-down"></i></span>
+                            <!-- My Attendance Quick Access -->
+                            <li class="nav-item mr-3">
+                                <a href="{{ route('my-attendance') }}" class="nav-link"
+                                    style="background: linear-gradient(135deg, #22c55e, #16a34a); color: white; border-radius: 8px; padding: 8px 16px;">
+                                    <i class="fa fa-fingerprint"></i> My Attendance
                                 </a>
-                                <div class="dropdown-menu dropdown-menu-right navbar-dropdown pt-2" aria-labelledby="profileDropdown">
+                            </li>
+                            <li class="nav-item nav-profile dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown"
+                                    id="profileDropdown">
+                                    <span class="profile_name">{{ Auth::user()->name }} <i
+                                            class="feather ft-chevron-down"></i></span>
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-right navbar-dropdown pt-2"
+                                    aria-labelledby="profileDropdown">
                                     <span role="separator" class="divider"></span>
                                     <form method="POST" action="{{ route('logout') }}">
                                         @csrf
@@ -181,144 +236,295 @@
                               Home
                     *===========================-->
                         <li class="nav-item">
-                            <a href="{{ url("/home")}}" class="nav-link"><i class="menu_icon feather ft-home"></i><span class="menu-title">Dashboard</span></a>
+                            <a href="{{ url('/home') }}" class="nav-link"><i
+                                    class="menu_icon feather ft-home"></i><span
+                                    class="menu-title">Dashboard</span></a>
 
                         </li>
                         <!--=========================*
                               UI Features
                     *===========================-->
                         <li class="nav-item mega-menu">
-                            <a href="#" class="nav-link">
-                                <i class="menu_icon fas fa-cogs"></i>
-                                <span class="menu-title">Management</span>
-                                <i class="menu-arrow"></i>
-                            </a>
-                            <div class="submenu">
-                                <div class="col-group-wrapper row">
+                            @canany(['products.view', 'discount.products.view', 'categories.view', 'subcategories.view',
+                                'brands.view', 'units.view', 'vendors.view', 'warehouse.view', 'warehouse.stock.view',
+                                'stock.transfer.view', 'sales.view', 'customers.view', 'sales.officers.view'])
+                                <a href="#" class="nav-link">
+                                    <i class="menu_icon fas fa-cogs"></i>
+                                    <span class="menu-title">Management</span>
+                                    <i class="menu-arrow"></i>
+                                </a>
+                                <div class="submenu">
+                                    <div class="col-group-wrapper row">
+                                        <!-- Products & Categories -->
+                                        @canany(['products.view', 'discount.products.view', 'categories.view',
+                                            'subcategories.view', 'brands.view', 'units.view'])
+                                            <div class="col-group col-md-3">
+                                                <p class="category-heading">Products & Categories</p>
+                                                <ul class="submenu-item">
+                                                    @can('products.view')
+                                                        <li><a href="{{ route('product') }}"><i class="fas fa-box"></i>
+                                                                Products</a></li>
+                                                    @endcan
 
-                                    <!-- Products & Categories -->
-                                    <div class="col-group col-md-3">
-                                        <p class="category-heading">Products & Categories</p>
-                                        <ul class="submenu-item">
-                                            <li><a href="{{route('product')}}"><i class="fas fa-box"></i> Products</a></li>
-                                            <li><a href="{{route('discount.index')}}"><i class="fas fa-tags"></i> Discount Products</a></li>
-                                            <li><a href="{{route('Category.home')}}"><i class="fas fa-list"></i> Category</a></li>
-                                            <li><a href="{{route('subcategory.home')}}"><i class="fas fa-th-list"></i> Sub Category</a></li>
-                                            <li><a href="{{route('Brand.home')}}"><i class="fas fa-trademark"></i> Brands</a></li>
-                                            <li><a href="{{route('Unit.home')}}"><i class="fas fa-balance-scale"></i> Units</a></li>
-                 <li><a href="{{ route('stock.adjust.form') }}"><i class="fas fa-sliders-h"></i> Parts Adjust</a></li>
+                                                    @can('discount.products.view')
+                                                        <li><a href="{{ route('discount.index') }}"><i class="fas fa-tags"></i>
+                                                                Discount Products</a></li>
+                                                    @endcan
 
-                                        </ul>
+                                                    @can('categories.view')
+                                                        <li><a href="{{ route('Category.home') }}"><i class="fas fa-list"></i>
+                                                                Category</a></li>
+                                                    @endcan
+
+                                                    @can('subcategories.view')
+                                                        <li><a href="{{ route('subcategory.home') }}"><i
+                                                                    class="fas fa-th-list"></i> Sub Category</a></li>
+                                                    @endcan
+
+                                                    @can('brands.view')
+                                                        <li><a href="{{ route('Brand.home') }}"><i class="fas fa-trademark"></i>
+                                                                Brands</a></li>
+                                                    @endcan
+
+                                                    @can('units.view')
+                                                        <li><a href="{{ route('Unit.home') }}"><i
+                                                                    class="fas fa-balance-scale"></i> Units</a></li>
+                                                    @endcan
+
+                                                </ul>
+                                            </div>
+                                        @endcanany
+                                        <!-- Purchase & Inventory -->
+                                        @canany(['vendors.view'])
+                                            <div class="col-group col-md-3">
+                                                <p class="category-heading">Purchase & Inventory</p>
+                                                <ul class="submenu-item">
+                                                    @can('vendors.view')
+                                                        <li><a href="{{ url('vendor') }}"><i class="fas fa-truck"></i> Vendor</a>
+                                                        </li>
+                                                    @endcan
+                                                </ul>
+                                            </div>
+                                        @endcanany
+                                        <!-- Accounts -->
+                                        @canany(['warehouse.view', 'warehouse.stock.view', 'stock.transfer.view'])
+                                            <div class="col-group col-md-3">
+                                                <p class="category-heading">Accounts</p>
+                                                <ul class="submenu-item">
+                                                    @can('warehouse.view')
+                                                        <li><a href="{{ url('warehouse') }}"><i class="fas fa-warehouse"></i>
+                                                                Warehouse</a></li>
+                                                    @endcan
+                                                    @can('warehouse.stock.view')
+                                                        <li><a href="{{ url('warehouse_stocks') }}"><i class="fas fa-boxes"></i>
+                                                                Warehouse Stock</a></li>
+                                                    @endcan
+                                                    @can('stock.transfer.view')
+                                                        <li><a href="{{ url('stock_transfers') }}"><i
+                                                                    class="fas fa-exchange-alt"></i> Stock Transfer</a></li>
+                                                    @endcan
+                                                </ul>
+                                            </div>
+                                        @endcanany
+                                        <!-- Customers & Sales -->
+                                        @canany(['sales.view', 'customers.view', 'sales.officers.view'])
+                                            <div class="col-group col-md-3">
+                                                <p class="category-heading">Sales & Customers</p>
+                                                <ul class="submenu-item">
+                                                    @can('sales.view')
+                                                        <li><a href="{{ url('sale') }}"><i class="fas fa-receipt"></i>
+                                                                Sales</a></li>
+                                                    @endcan
+                                                    @can('customers.view')
+                                                        <li><a href="{{ url('customers') }}"><i class="fas fa-user"></i>
+                                                                Customer</a></li>
+                                                    @endcan
+                                                    @can('sales.officers.view')
+                                                        <li><a href="{{ url('sales-officers') }}"><i class="fas fa-user-tie"></i>
+                                                                Sales Officer</a></li>
+                                                    @endcan
+                                                </ul>
+                                            </div>
+                                        @endcanany
                                     </div>
+                                </div>
+                            @endcanany
+                        </li>
 
-                                    <!-- Purchase & Inventory -->
-                                    <div class="col-group col-md-3">
-                                        <p class="category-heading">Purchase & Inventory</p>
-                                        <ul class="submenu-item">
 
-                                            <li><a href="{{route('InwardGatepass.home')}}"><i class="fas fa-shopping-cart"></i> Inward Gatepass </a></li>
-                                            <li><a href="{{route('add_inwardgatepass')}}"><i class="fas fa-shopping-cart"></i> Add Inward Gatepass </a></li>
-                                            <li><a href="{{route('Purchase.home')}}"><i class="fas fa-shopping-cart"></i> Purchase</a></li>
-                                            <li><a href="{{url('vendor')}}"><i class="fas fa-truck"></i> Vendor</a></li>
+                        <!-- Vouchers Menu -->
+                        <li class="nav-item">
+                            @canany(['chart.of.accounts.view', 'expense.voucher.view', 'receipts.voucher.view',
+                                'journal.voucher.view', 'payment.voucher.view', 'income.voucher.view'])
+                                <a href="#" class="nav-link">
+                                    <i class="menu_icon feather ft-clipboard"></i>
+                                    <span class="menu-title">Vouchers</span>
+                                    <i class="menu-arrow"></i>
+                                </a>
+                                <div class="submenu">
+                                    <ul class="submenu-item">
+                                        @can('chart.of.accounts.view')
+                                            <li><a href="{{ route('view_all') }}"><i class="fa-solid fa-money-bill-wave"></i>
+                                                    Char Of Accounts</a></li>
+                                        @endcan
+                                        @can('expense.voucher.view')
+                                            <li><a href="{{ route('vouchers.index', 'expense voucher') }}"><i
+                                                        class="fa-solid fa-money-bill-wave"></i> Expense Voucher</a></li>
+                                        @endcan
+                                        @can('receipts.voucher.view')
+                                            <li><a href="{{ route('vouchers.index', 'receipt voucher') }}"><i
+                                                        class="fa-solid fa-wallet"></i> Receipts Voucher</a></li>
+                                        @endcan
+                                        @can('journal.voucher.view')
+                                            <li><a href="{{ route('vouchers.index', 'journal voucher') }}"><i
+                                                        class="fa-solid fa-wallet"></i> Journal Voucher</a></li>
+                                        @endcan
+                                        @can('payment.voucher.view')
+                                            <li><a href="{{ route('vouchers.index', 'payment voucher') }}"><i
+                                                        class="fa-solid fa-wallet"></i> Payment Voucher</a></li>
+                                        @endcan
+                                        @can('income.voucher.view')
+                                            <li><a href="{{ route('vouchers.index', 'income voucher') }}"><i
+                                                        class="fa-solid fa-wallet"></i> Income Voucher</a></li>
+                                        @endcan
+                                    </ul>
+                                </div>
+                            @endcanany
+                        </li>
+                        <li class="nav-item">
+                            @canany(['item.stock.report.view', 'purchase.report.view', 'sale.report.view',
+                                'customer.ledger.view', 'assembly.report.view', 'inventory.onhand.view'])
+                                <a href="#" class="nav-link">
+                                    <i class="menu_icon feather ft-clipboard"></i>
+                                    <span class="menu-title">Reports</span>
+                                    <i class="menu-arrow"></i>
+                                </a>
+                                <div class="submenu">
+                                    <ul class="submenu-item">
+                                        @can('item.stock.report.view')
+                                            <li><a href="{{ route('report.item_stock') }}"><i class="fa-solid fa-users"></i>
+                                                    Item Stock Report</a></li>
+                                        @endcan
+                                        @can('purchase.report.view')
+                                            <li><a href="{{ route('report.purchase') }}"><i class="fa-solid fa-users"></i>
+                                                    Purchase Report</a></li>
+                                        @endcan
+                                        @can('sale.report.view')
+                                            <li><a href="{{ route('report.sale') }}"><i class="fa-solid fa-users"></i> Sale
+                                                    Report</a></li>
+                                        @endcan
+                                        @can('customer.ledger.view')
+                                            <li><a href="{{ route('report.customer.ledger') }}"><i
+                                                        class="fa-solid fa-users"></i> Customer Ledger</a></li>
+                                        @endcan
 
-                                        </ul>
-                                    </div>
+                                        @can('assembly.report.view')
+                                            <li><a href="{{ route('assembly.report') }}"><i class="fas fa-cogs"></i> Assembly
+                                                    Report</a></li>
+                                        @endcan
+                                        @can('inventory.onhand.view')
+                                            <li><a href="{{ route('reports.onhand') }}"><i class="fas fa-warehouse"></i>
+                                                    Inventory On-Hand</a></li>
+                                        @endcan
+                                    </ul>
+                                </div>
+                            @endcanany
+                        </li>
+                        <!-- HR Management Menu -->
+                        <li class="nav-item">
+                            @canany(['hr.departments.view', 'hr.designations.view', 'hr.employees.view',
+                                'hr.attendance.view', 'hr.payroll.view', 'hr.leaves.view', 'hr.salary.structure.view',
+                                'hr.shifts.view', 'hr.holidays.view'])
+                                <a href="#" class="nav-link">
+                                    <i class="menu_icon feather ft-users"></i>
+                                    <span class="menu-title">HR Management</span>
+                                    <i class="menu-arrow"></i>
+                                </a>
+                                <div class="submenu">
+                                    <ul class="submenu-item">
+                                        @can('hr.departments.view')
+                                            <li><a href="{{ route('hr.departments.index') }}"><i
+                                                        class="fa-solid fa-building"></i> Departments</a></li>
+                                        @endcan
+                                        @can('hr.designations.view')
+                                            <li><a href="{{ route('hr.designations.index') }}"><i
+                                                        class="fa-solid fa-id-badge"></i> Designations</a></li>
+                                        @endcan
+                                        @can('hr.employees.view')
+                                            <li><a href="{{ route('hr.employees.index') }}"><i
+                                                        class="fa-solid fa-user-tie"></i> Employees</a></li>
+                                        @endcan
+                                        @can('hr.attendance.view')
+                                            <li><a href="{{ route('hr.attendance.index') }}"><i
+                                                        class="fa-solid fa-clock"></i> Attendance</a></li>
+                                        @endcan
+                                        @can('hr.payroll.view')
+                                            <li><a href="{{ route('hr.payroll.index') }}"><i
+                                                        class="fa-solid fa-money-check-alt"></i> Payroll</a></li>
+                                        @endcan
+                                        @can('hr.leaves.view')
+                                            <li><a href="{{ route('hr.leaves.index') }}"><i
+                                                        class="fa-solid fa-calendar-minus"></i> Leaves</a></li>
+                                        @endcan
+                                        @can('hr.salary.structure.view')
+                                            <li><a href="{{ route('hr.salary-structure.index') }}"><i
+                                                        class="fa-solid fa-coins"></i> Salary Structure</a></li>
+                                        @endcan
+                                        @can('hr.shifts.view')
+                                            <li><a href="{{ route('hr.shifts.index') }}"><i class="fa-solid fa-clock"></i>
+                                                    Shifts</a></li>
+                                        @endcan
+                                        @can('hr.holidays.view')
+                                            <li><a href="{{ route('hr.holidays.index') }}"><i
+                                                        class="fa-solid fa-calendar-alt"></i> Holidays</a></li>
+                                        @endcan
+                                    </ul>
+                                </div>
+                            @endcanany
+                        </li>
+                        <!-- User Management Menu -->
+                        <li class="nav-item">
+                            @canany(['users.view', 'roles.view', 'permissions.view', 'branches.view'])
+                                <a href="#" class="nav-link">
+                                    <i class="menu_icon feather ft-clipboard"></i>
+                                    <span class="menu-title">User Management</span>
+                                    <i class="menu-arrow"></i>
+                                </a>
+                                <div class="submenu">
+                                    <ul class="submenu-item">
+                                        @can('users.view')
+                                            <li><a href="{{ route('users.index') }}"><i class="fa-solid fa-users"></i>
+                                                    Users</a></li>
+                                        @endcan
+                                        @can('roles.view')
+                                            <li><a href="{{ route('roles.index') }}"><i class="fa-solid fa-user-lock"></i>
+                                                    Roles</a></li>
+                                        @endcan
+                                        @can('permissions.view')
+                                            <li><a href="{{ route('permissions.index') }}"><i
+                                                        class="fa-solid fa-user-lock"></i> Permissions</a></li>
+                                        @endcan
+                                        @can('branches.view')
+                                            <li><a href="{{ route('branch.index') }}"><i class="fa-solid fa-code-branch"></i>
+                                                    Branches</a></li>
+                                        @endcan
+                                    </ul>
+                                </div>
+                            @endcanany
+                        </li>
 
-                                    <!-- Accounts -->
-                                    <div class="col-group col-md-3">
-                                        <p class="category-heading">Accounts</p>
-                                        <ul class="submenu-item">
-                                            {{-- <li><a href="{{url('narrations')}}"><i class="fas fa-file-alt"></i> Narration</a>
-                        </li> --}}
-                        <li><a href="{{url('warehouse')}}"><i class="fas fa-warehouse"></i> Warehouse</a></li>
-                        <li><a href="{{url('warehouse_stocks')}}"><i class="fas fa-boxes"></i> Warehouse Stock</a></li>
-                        <li><a href="{{url('stock_transfers')}}"><i class="fas fa-exchange-alt"></i> Stock Transfer</a></li>
                     </ul>
                 </div>
-                <!-- Customers & Sales -->
-                <div class="col-group col-md-3">
-                    <p class="category-heading">Sales & Customers</p>
-                    <ul class="submenu-item">
-                        <li><a href="{{url('sale')}}"><i class="fas fa-receipt"></i> Sales</a></li>
-                        <li><a href="{{url('customers')}}"><i class="fas fa-user"></i> Customer</a></li>
-                        <li><a href="{{url('sales-officers')}}"><i class="fas fa-user-tie"></i> Sales Officer</a></li>
-                        <li><a href="{{url('zone')}}"><i class="fas fa-map-marker-alt"></i> Zone</a></li>
-                    </ul>
-                </div>
-
             </div>
-    </div>
-    </li>
+        </nav>
 
+        @yield('content')
 
-    <!-- Vouchers Menu -->
-    <li class="nav-item">
-        <a href="#" class="nav-link">
-            <i class="menu_icon feather ft-clipboard"></i>
-            <span class="menu-title">Vouchers</span>
-            <i class="menu-arrow"></i>
-        </a>
-        <div class="submenu">
-            <ul class="submenu-item">
-                <li><a href="{{ route('view_all') }}"><i class="fa-solid fa-money-bill-wave"></i> Char Of Accounts</a></li>
-                <li><a href="{{ route('vouchers.index', 'expense voucher') }}"><i class="fa-solid fa-money-bill-wave"></i> Expense Voucher</a></li>
-                <li><a href="{{ route('vouchers.index', 'receipt voucher') }}"><i class="fa-solid fa-wallet"></i> Receipts Voucher</a></li>
-                <li><a href="{{ route('vouchers.index', 'journal voucher') }}"><i class="fa-solid fa-wallet"></i> Journal Voucher</a></li>
-                <li><a href="{{ route('vouchers.index', 'payment voucher') }}"><i class="fa-solid fa-wallet"></i> Payment Voucher</a></li>
-                <li><a href="{{ route('vouchers.index', 'income voucher') }}"><i class="fa-solid fa-wallet"></i> Income Voucher</a></li>
-            </ul>
-        </div>
-    </li>
-    <li class="nav-item">
-        <a href="#" class="nav-link">
-            <i class="menu_icon feather ft-clipboard"></i>
-            <span class="menu-title">Reports</span>
-            <i class="menu-arrow"></i>
-        </a>
-        <div class="submenu">
-            <ul class="submenu-item">
-                <li><a href="{{ route('report.item_stock') }}"><i class="fa-solid fa-users"></i> Item Stock Report</a></li>
-                <li><a href="{{ route('report.purchase') }}"><i class="fa-solid fa-users"></i> Purchase Report</a></li>
-                <li><a href="{{ route('report.sale') }}"><i class="fa-solid fa-users"></i> Sale Report</a></li>
-                <li><a href="{{ route('report.customer.ledger') }}"><i class="fa-solid fa-users"></i> Customer Ledger</a></li>
-                 <li><a href="{{route('assembly.report')}}"><i class="fas fa-cogs"></i> Assembly Report</a></li>
-                 <li><a href="{{ route('reports.onhand') }}"><i class="fas fa-warehouse"></i> Inventory On-Hand</a></li>
-
-
-            </ul>
-        </div>
-    </li>
-    <!-- User Management Menu -->
-    @if(auth()->user()->email === 'admin@admin.com')
-    <li class="nav-item">
-        <a href="#" class="nav-link">
-            <i class="menu_icon feather ft-clipboard"></i>
-            <span class="menu-title">User Management</span>
-            <i class="menu-arrow"></i>
-        </a>
-        <div class="submenu">
-            <ul class="submenu-item">
-                <li><a href="{{ route('users.index') }}"><i class="fa-solid fa-users"></i> Users</a></li>
-                <li><a href="{{ route('roles.index') }}"><i class="fa-solid fa-user-lock"></i> Roles</a></li>
-                <li><a href="{{ route('permissions.index') }}"><i class="fa-solid fa-user-lock"></i> Permissions</a></li>
-                <li><a href="{{ route('branch.index') }}"><i class="fa-solid fa-code-branch"></i> Branches</a></li>
-            </ul>
-        </div>
-    </li>
-    @endif
-
-    </ul>
-    </div>
-    </div>
-    </nav>
-
-    @yield('content')
-
-    <footer>
-        <div class="footer-area">
-            <p>&copy; Copyright 2025. All right reserved. Ameen & Sons .</p>
-        </div>
-    </footer>
+        <footer>
+            <div class="footer-area">
+                <p>&copy; Copyright 2025. All right reserved. Ameen & Sons .</p>
+            </div>
+        </footer>
     </div>
     <!-- Jquery Js -->
     <script src="{{ asset('assets/js/jquery.min.js') }}"></script>

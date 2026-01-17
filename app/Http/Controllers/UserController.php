@@ -2,83 +2,72 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\User;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-        public function index()
+    public function index()
     {
         // dd("ok");
-        $users = User::where('email', '!=', 'admin@admin.com')->get();
-        $allRoles  = Role::all();
-        return view('admin_panel.users.users', compact(['users', 'allRoles'])); 
+        $users = User::where('email', '!=', 'superadmin@example.com')->whereDoesntHave('roles', function ($q) {
+            $q->where('name', 'superadmin');
+        })->get();
+        $allRoles = Role::all();
+
+        return view('admin_panel.users.users', compact(['users', 'allRoles']));
     }
 
     public function store(Request $request)
     {
-        // dd("sda");
         $editId = $request->edit_id ?? null;
-         $validator = Validator::make($request->all(), [
+        $passwordRule = $editId ? 'nullable' : 'required';
+
+        $validator = Validator::make($request->all(), [
             'name' => 'required',
             'email' => 'required|unique:users,email,'.$request->edit_id,
-            'password' => 'required'
+            'password' => $passwordRule,
         ]);
 
-        if ($validator->fails()) {
-            return ['errors' => $validator->errors()];
-        }
-
-
-      
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()]);
         }
 
-        // Step 2: Check for user_id uniqueness (exclude self in edit)
-        // $userExists = Branch::where('user_id', $request->user_id)
-        //     ->when($editId, fn($q) => $q->where('id', '!=', $editId))
-        //     ->exists();
-
-        // if ($userExists) {
-        //     return response()->json([
-        //         'errors' => [
-        //             'user_id' => ['This user is already assigned to another branch.']
-        //         ]
-        //     ]);
-        // }
-
-        // Step 3: Save or update logic
-        if (!empty($editId)) {
+        if (! empty($editId)) {
             $user = User::find($editId);
             $msg = [
                 'success' => 'User Updated Successfully',
-                'reload' => true
+                'reload' => true,
             ];
         } else {
-            $user = new User();
+            $user = new User;
             $msg = [
                 'success' => 'User Created Successfully',
-                'redirect' => route('users.index')
+                'redirect' => route('users.index'),
             ];
         }
 
         $user->name = $request->name;
         $user->email = $request->email;
-        $user->password = Hash::make($request->password);
+        if ($request->filled('password')) {
+            $user->password = Hash::make($request->password);
+        }
         $user->save();
 
+        // Always sync roles (empty array will remove all roles)
+        $user->syncRoles($request->roles ?? []);
+
         return response()->json($msg);
-        
+
     }
 
     /**
      * Display the specified resource.
      */
-  
+
     /**
      * Remove the specified resource from storage.
      */
@@ -91,13 +80,14 @@ class UserController extends Controller
 
     }
 
- public function updateRoles(Request $request)
-{
-    $user = User::findOrFail($request->edit_id);
+    public function updateRoles(Request $request)
+    {
+        $user = User::findOrFail($request->edit_id);
 
-    // Assign new roles (by name)
-    $user->syncRoles($request->roles ?? []);
+        // Assign new roles (by name)
+        $user->syncRoles($request->roles ?? []);
 
-    return back()->with('success', 'User roles updated successfully!');
-}
+        // Return JSON so AJAX handlers get a clear response
+        return response()->json(['success' => 'User roles updated successfully!', 'reload' => true]);
+    }
 }

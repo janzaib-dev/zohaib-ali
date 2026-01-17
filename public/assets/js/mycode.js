@@ -87,7 +87,7 @@ function yourFunction(url,method) {
         return;
     }
     //post
-    function myAjax(url, formData, method = 'post',callback) {
+    function myAjax(url, formData, method = 'post', callback, options = {}) {
         $.ajax({
             url: url,
             method: method,
@@ -98,7 +98,19 @@ function yourFunction(url,method) {
             contentType: false,
             processData: false,
             dataType: "json",
-            complete: function(data) {},
+            // Ensure submit buttons are re-enabled on completion to avoid stuck disabled state
+            complete: function(jqXHR, textStatus) {
+                try {
+                    // If a form element was provided in options, enable its submit buttons
+                    if (options.form) {
+                        $(options.form).find(':submit').prop('disabled', false);
+                        $(options.form).find('.save-btn').prop('disabled', false);
+                    }
+                    // Generic fallback: re-enable any save-btn or disabled submit buttons on the page
+                    $(':submit:disabled').prop('disabled', false);
+                    $('.save-btn:disabled').prop('disabled', false);
+                } catch (e) { console.warn('myAjax completion handler error', e); }
+            },
             success: function(data) {
                 if (data['reload'] != undefined) {
                     showAlert("Success", data.success, "success");
