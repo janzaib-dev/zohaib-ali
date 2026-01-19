@@ -19,9 +19,9 @@
 
                 <div class="card">
                     <div class="card-body">
-                        @if (session()->has('success'))
+                        {{-- @if (session()->has('success'))
                             <div class="alert alert-success"><strong>Success!</strong> {{ session('success') }}</div>
-                        @endif
+                        @endif --}}
 
                         <table class="table datanew">
                             <thead>
@@ -43,17 +43,22 @@
                                         <td>{{ $w->location }}</td>
                                         <td>{{ $w->remarks }}</td>
                                         <td>
-                                            @include('admin_panel.partials.action_buttons', [
-                                                'editRoute' => 'javascript:void(0)',
-                                                'deleteRoute' => url('warehouse/delete/' . $w->id),
-                                                'editIsLink' => false,
-                                                'permissions' => [
-                                                    'edit' => 'warehouse.edit',
-                                                    'delete' => 'warehouse.delete',
-                                                ],
-                                                'dataId' => $w->id,
-                                            ])
-                                            {{-- keep existing edit modal trigger script behavior for authorized users --}}
+                                            @can('warehouse.edit')
+                                                <button class="btn btn-primary btn-sm edit-warehouse-btn"
+                                                    data-id="{{ $w->id }}" data-name="{{ $w->warehouse_name }}"
+                                                    data-location="{{ $w->location }}" data-remarks="{{ $w->remarks }}"
+                                                    data-bs-toggle="modal" data-bs-target="#warehouseModal">
+                                                    Edit
+                                                </button>
+                                            @endcan
+                                            @can('warehouse.delete')
+                                                <button class="btn btn-danger btn-sm delete-btn"
+                                                    data-url="{{ url('warehouse/delete/' . $w->id) }}"
+                                                    data-msg="Are you sure you want to delete this warehouse?" data-method="get"
+                                                    onclick="logoutAndDeleteFunction(this)">
+                                                    Delete
+                                                </button>
+                                            @endcan
                                         </td>
                                     </tr>
                                 @endforeach
@@ -88,9 +93,9 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        @can('warehouse.create')
+                        @canany(['warehouse.create', 'warehouse.edit'])
                             <button class="btn btn-primary">Save</button>
-                        @endcan
+                        @endcanany
                     </div>
                 </div>
             </form>
@@ -100,6 +105,18 @@
 
 {{-- @push('scripts') --}}
 @section('js')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    @if (session('success'))
+        <script>
+            Swal.fire({
+                icon: 'success',
+                title: 'Success',
+                text: "{{ session('success') }}",
+                timer: 3000,
+                showConfirmButton: false
+            });
+        </script>
+    @endif
     <script>
         function clearWarehouse() {
             $('#warehouse_id').val('');
