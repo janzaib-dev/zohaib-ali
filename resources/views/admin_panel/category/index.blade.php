@@ -1,19 +1,17 @@
 @extends('admin_panel.layout.app')
 @section('content')
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    @php
-        $msg = 'Data saved successfully';
-
-        if ($msg) {
-            echo '<script>
+    @if (session('success'))
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
                 Swal.fire({
                     icon: 'success',
                     title: 'Success',
-                    text: '{$msg}'
+                    text: '{{ session('success') }}'
                 });
-            </script>';
-        }
-    @endphp
+            });
+        </script>
+    @endif
 
 
     <div class="main-content">

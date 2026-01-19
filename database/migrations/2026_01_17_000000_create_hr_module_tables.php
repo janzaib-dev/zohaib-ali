@@ -43,7 +43,7 @@ return new class extends Migration
             $table->string('designation');
 
             $table->decimal('basic_salary', 10, 2);
-            $table->enum('status', ['active', 'inactive', 'terminated'])->default('active');
+            $table->enum('status', ['active', 'non-active', 'terminated'])->default('active');
             $table->timestamps();
         });
 

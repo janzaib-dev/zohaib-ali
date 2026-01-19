@@ -116,6 +116,9 @@
                             </div>
                         @endforelse
                     </div>
+                    <div class="px-4 py-3 border-top">
+                        {{ $departments->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -132,7 +135,8 @@
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="departmentForm" action="{{ route('hr.departments.store') }}" method="POST">
+                <form id="departmentForm" action="{{ route('hr.departments.store') }}" method="POST"
+                    data-ajax-validate="true">
                     @csrf
                     <input type="hidden" name="edit_id" id="edit_id">
                     <div class="modal-body">
@@ -228,25 +232,7 @@
             // Refresh
             $('#refreshBtn').click(() => location.reload());
 
-            // Form Submit
-            $('#departmentForm').submit(function(e) {
-                e.preventDefault();
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: new FormData(this),
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire('Success', response.success, 'success').then(() =>
-                                location.reload());
-                        } else if (response.errors) {
-                            Swal.fire('Error', response.errors.join('<br>'), 'error');
-                        }
-                    }
-                });
-            });
+            // Manual Form Submit Removed - using data-ajax-validate
         });
     </script>
 @endsection

@@ -8,12 +8,12 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
-// use Spatie\Permission\Models\Role;
 
+// use Spatie\Permission\Models\Role;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable, HasRoles;
+    use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -46,10 +46,36 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-//    public function roles()
-//     {
-//         return $this->belongsToMany(Role::class, 'model_has_roles', 'model_id', 'role_id')
-//                     ->where('model_type', User::class);
-//     }
+    /**
+     * Get the employee profile associated with this user
+     */
+    public function employee()
+    {
+        return $this->hasOne(\App\Models\Hr\Employee::class);
+    }
+
+    /**
+     * Check if user's employee profile is active (can login)
+     * Returns true if user has no employee profile (admin/non-employee users)
+     * Returns false if employee status is non-active or terminated
+     */
+    public function isEmployeeActive()
+    {
+        $employee = $this->employee;
+
+        // If no employee profile, user can login (admin users, etc.)
+        if (! $employee) {
+            return true;
+        }
+
+        // Only active employees can login
+        return $employee->status === 'active';
+    }
+
+    //    public function roles()
+    //     {
+    //         return $this->belongsToMany(Role::class, 'model_has_roles', 'model_id', 'role_id')
+    //                     ->where('model_type', User::class);
+    //     }
 
 }

@@ -670,8 +670,14 @@
                                     <label class="form-label">
                                         <i class="fa fa-lock"></i> Password
                                     </label>
-                                    <input type="password" name="password" id="userPassword" class="form-control"
-                                        placeholder="Enter password (leave blank to keep existing)">
+                                    <div class="input-group">
+                                        <input type="password" name="password" id="userPassword" class="form-control"
+                                            placeholder="Enter password (leave blank to keep existing)">
+                                        <button class="btn btn-outline-secondary toggle-password" type="button"
+                                            data-target="userPassword">
+                                            <i class="fa fa-eye"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-md-12">
@@ -881,6 +887,21 @@
                 var url = $(this).attr('action');
                 $(this).find(':submit').prop('disabled', true);
                 myAjax(url, formdata, 'POST');
+            });
+
+            // Toggle Password Visibility
+            $(document).on('click', '.toggle-password', function() {
+                var targetId = $(this).data('target');
+                var input = $('#' + targetId);
+                var icon = $(this).find('i');
+
+                if (input.attr('type') === 'password') {
+                    input.attr('type', 'text');
+                    icon.removeClass('fa-eye').addClass('fa-eye-slash');
+                } else {
+                    input.attr('type', 'password');
+                    icon.removeClass('fa-eye-slash').addClass('fa-eye');
+                }
             });
         });
     </script>

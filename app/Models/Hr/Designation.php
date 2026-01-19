@@ -11,10 +11,15 @@ class Designation extends Model
 
     protected $table = 'hr_designations';
 
-    protected $fillable = ['name', 'description'];
+    protected $fillable = ['name', 'description', 'requires_location'];
+
+    protected $casts = [
+        'requires_location' => 'boolean',
+    ];
 
     public function employees()
     {
         return $this->hasMany(Employee::class);
     }
 }
+

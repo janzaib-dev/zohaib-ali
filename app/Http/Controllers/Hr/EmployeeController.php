@@ -16,7 +16,7 @@ class EmployeeController extends Controller
         if (! auth()->user()->can('hr.employees.view')) {
             abort(403, 'Unauthorized action.');
         }
-        $employees = Employee::with(['department', 'designation'])->get();
+        $employees = Employee::with(['department', 'designation'])->latest()->paginate(12);
         $departments = Department::all();
         $designations = Designation::all();
 
@@ -26,9 +26,10 @@ class EmployeeController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'first_name' => 'required|string',
-            'last_name' => 'required|string',
-            'email' => 'required|email|unique:hr_employees,email,'.$request->edit_id,
+            'first_name' => 'required|string|min:3',
+            'last_name' => 'required|string|min:3',
+            'phone' => 'required|string|min:11|max:11',
+            'email' => 'required|email|max:255|unique:hr_employees,email,'.$request->edit_id,
             'department_id' => 'required|exists:hr_departments,id',
             'designation_id' => 'required|exists:hr_designations,id',
             'joining_date' => 'required|date',
@@ -42,7 +43,7 @@ class EmployeeController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()->all()]);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
         $data = $request->except(['document_degree', 'document_certificate', 'document_hsc_marksheet', 'document_ssc_marksheet', 'document_cv', 'password']);

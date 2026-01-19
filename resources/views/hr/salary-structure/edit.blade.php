@@ -24,7 +24,7 @@
 
                         <div class="border mt-1 shadow rounded p-4" style="background-color: white;">
                             <form id="salaryForm" action="{{ route('hr.salary-structure.update', $employee->id) }}"
-                                method="POST">
+                                method="POST" data-ajax-validate="true">
                                 @csrf
                                 @method('PUT')
 
@@ -575,34 +575,15 @@
 
             // Form Submit with validation
             $('#salaryForm').submit(function(e) {
-                e.preventDefault();
-
                 // Validate tiers before submitting
                 if (!validateTiers()) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
                     Swal.fire('Validation Error', 'Please fix commission tier errors before saving.',
                         'error');
                     return;
                 }
-
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: $(this).serialize(),
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire('Success', response.success, 'success').then(() => {
-                                if (response.redirect) {
-                                    window.location.href = response.redirect;
-                                }
-                            });
-                        } else if (response.errors) {
-                            Swal.fire('Error', response.errors.join('<br>'), 'error');
-                        }
-                    },
-                    error: function(xhr) {
-                        Swal.fire('Error', 'Something went wrong', 'error');
-                    }
-                });
+                // Custom AJAX removed - global validation handles it
             });
         });
     </script>

@@ -79,14 +79,14 @@
 
                 <!-- Stats Row -->
                 @php
-                    $pendingCount = $leaves->where('status', 'pending')->count();
-                    $approvedCount = $leaves->where('status', 'approved')->count();
-                    $rejectedCount = $leaves->where('status', 'rejected')->count();
+                    $pendingCount = \App\Models\Hr\Leave::where('status', 'pending')->count();
+                    $approvedCount = \App\Models\Hr\Leave::where('status', 'approved')->count();
+                    $rejectedCount = \App\Models\Hr\Leave::where('status', 'rejected')->count();
                 @endphp
                 <div class="stats-row">
                     <div class="stat-card primary">
                         <div class="stat-icon"><i class="fa fa-calendar-minus"></i></div>
-                        <div class="stat-value">{{ $leaves->count() }}</div>
+                        <div class="stat-value">{{ $leaves->total() }}</div>
                         <div class="stat-label">Total Requests</div>
                     </div>
                     <div class="stat-card warning">
@@ -121,7 +121,7 @@
                                 <button class="btn btn-outline-danger btn-sm" data-filter="rejected">Rejected</button>
                             </div>
                         </div>
-                        <span class="text-muted small" id="leaveCount">{{ $leaves->count() }} requests</span>
+                        <span class="text-muted small" id="leaveCount">{{ $leaves->total() }} requests</span>
                     </div>
 
                     <div class="hr-grid" id="leaveGrid">
@@ -184,6 +184,9 @@
                             </div>
                         @endforelse
                     </div>
+                    <div class="px-4 py-3 border-top">
+                        {{ $leaves->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -200,7 +203,7 @@
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="leaveForm" action="{{ route('hr.leaves.store') }}" method="POST">
+                <form id="leaveForm" action="{{ route('hr.leaves.store') }}" method="POST" data-ajax-validate="true">
                     @csrf
                     <div class="modal-body">
                         <div class="form-group-modern">
@@ -323,24 +326,7 @@
                 });
             });
 
-            $('#leaveForm').submit(function(e) {
-                e.preventDefault();
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: new FormData(this),
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire('Success', response.success, 'success').then(() =>
-                                location.reload());
-                        } else if (response.errors) {
-                            Swal.fire('Error', response.errors.join('<br>'), 'error');
-                        }
-                    }
-                });
-            });
+            // Custom submit handler removed - using data-ajax-validate
         });
     </script>
 @endsection

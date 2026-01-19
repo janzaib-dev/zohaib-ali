@@ -72,15 +72,15 @@
 
                 <!-- Stats Row -->
                 @php
-                    $pendingCount = $payrolls->where('status', 'pending')->count();
-                    $paidCount = $payrolls->where('status', 'paid')->count();
-                    $totalNet = $payrolls->sum('net_salary');
-                    $totalPaid = $payrolls->where('status', 'paid')->sum('net_salary');
+                    $pendingCount = \App\Models\Hr\Payroll::where('status', 'pending')->count();
+                    $paidCount = \App\Models\Hr\Payroll::where('status', 'paid')->count();
+                    $totalNet = \App\Models\Hr\Payroll::sum('net_salary');
+                    $totalPaid = \App\Models\Hr\Payroll::where('status', 'paid')->sum('net_salary');
                 @endphp
                 <div class="stats-row">
                     <div class="stat-card primary">
                         <div class="stat-icon"><i class="fa fa-file-invoice-dollar"></i></div>
-                        <div class="stat-value">{{ $payrolls->count() }}</div>
+                        <div class="stat-value">{{ $payrolls->total() }}</div>
                         <div class="stat-label">Total Payrolls</div>
                     </div>
                     <div class="stat-card warning">
@@ -114,7 +114,7 @@
                                 <button class="btn btn-outline-success btn-sm" data-filter="paid">Paid</button>
                             </div>
                         </div>
-                        <span class="text-muted small" id="payrollCount">{{ $payrolls->count() }} payrolls</span>
+                        <span class="text-muted small" id="payrollCount">{{ $payrolls->total() }} payrolls</span>
                     </div>
 
                     <div class="hr-grid" id="payrollGrid">
@@ -185,6 +185,9 @@
                             </div>
                         @endforelse
                     </div>
+                    <div class="px-4 py-3 border-top">
+                        {{ $payrolls->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -202,7 +205,8 @@
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="payrollForm" action="{{ route('hr.payroll.generate') }}" method="POST">
+                <form id="payrollForm" action="{{ route('hr.payroll.generate') }}" method="POST"
+                    data-ajax-validate="true">
                     @csrf
                     <div class="modal-body">
                         <div class="form-group-modern">
@@ -238,45 +242,45 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-    <script>
-        $(document).ready(function() {
-            $('#createBtn').click(function() {
-                $('#payrollForm')[0].reset();
-                $('#payrollModal').modal('show');
+<script>
+    $(document).ready(function() {
+        $('#createBtn').click(function() {
+            $('#payrollForm')[0].reset();
+            $('#payrollModal').modal('show');
+        });
+
+        $('[data-filter]').click(function() {
+            $(this).addClass('active').siblings().removeClass('active');
+            var filter = $(this).data('filter');
+
+            $('.payroll-card').each(function() {
+                if (filter === 'all') {
+                    $(this).show();
+                } else {
+                    $(this).toggle($(this).data('status') === filter);
+                }
             });
+            updateCount();
+        });
 
-            $('[data-filter]').click(function() {
-                $(this).addClass('active').siblings().removeClass('active');
-                var filter = $(this).data('filter');
+        function updateCount() {
+            $('#payrollCount').text($('.payroll-card:visible').length + ' payrolls');
+        }
 
-                $('.payroll-card').each(function() {
-                    if (filter === 'all') {
-                        $(this).show();
-                    } else {
-                        $(this).toggle($(this).data('status') === filter);
-                    }
-                });
-                updateCount();
+        $('#payrollSearch').on('input', function() {
+            var q = $(this).val().toLowerCase();
+            $('.payroll-card').each(function() {
+                var name = $(this).data('name') || '';
+                $(this).toggle(name.indexOf(q) !== -1);
             });
+            updateCount();
+        });
 
-            function updateCount() {
-                $('#payrollCount').text($('.payroll-card:visible').length + ' payrolls');
-            }
-
-            $('#payrollSearch').on('input', function() {
-                var q = $(this).val().toLowerCase();
-                $('.payroll-card').each(function() {
-                    var name = $(this).data('name') || '';
-                    $(this).toggle(name.indexOf(q) !== -1);
-                });
-                updateCount();
-            });
-
-            $(document).on('click', '.view-btn', function() {
-                var data = $(this).data();
-                Swal.fire({
-                    title: 'Payroll Details',
-                    html: `
+        $(document).on('click', '.view-btn', function() {
+            var data = $(this).data();
+            Swal.fire({
+                title: 'Payroll Details',
+                html: `
                         <div class="text-start">
                             <p><strong>Employee:</strong> ${data.employee}</p>
                             <p><strong>Month:</strong> ${data.month}</p>
@@ -285,84 +289,66 @@
                             <p><strong>Status:</strong> <span class="badge bg-${data.status == 'paid' ? 'success' : 'warning'}">${data.status}</span></p>
                         </div>
                     `,
-                    confirmButtonText: 'Close'
-                });
-            });
-
-            $(document).on('click', '.mark-paid-btn', function() {
-                var id = $(this).data('id');
-                Swal.fire({
-                    title: 'Mark as Paid?',
-                    text: 'This will mark the payroll as paid.',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#22c55e',
-                    confirmButtonText: 'Yes, Mark Paid'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $.ajax({
-                            url: '/hr/payroll/' + id + '/mark-paid',
-                            type: 'PATCH',
-                            data: {
-                                _token: '{{ csrf_token() }}'
-                            },
-                            success: function(response) {
-                                if (response.success) {
-                                    Swal.fire('Success', response.success, 'success')
-                                        .then(() => location.reload());
-                                }
-                            }
-                        });
-                    }
-                });
-            });
-
-            $(document).on('click', '.delete-btn', function() {
-                var id = $(this).data('id');
-                Swal.fire({
-                    title: 'Delete Payroll?',
-                    text: 'This cannot be undone!',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#ef4444',
-                    confirmButtonText: 'Yes, delete!'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $.ajax({
-                            url: '/hr/payroll/' + id,
-                            type: 'DELETE',
-                            data: {
-                                _token: '{{ csrf_token() }}'
-                            },
-                            success: function(response) {
-                                if (response.success) {
-                                    Swal.fire('Deleted!', response.success, 'success')
-                                        .then(() => location.reload());
-                                }
-                            }
-                        });
-                    }
-                });
-            });
-
-            $('#payrollForm').submit(function(e) {
-                e.preventDefault();
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: new FormData(this),
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire('Success', response.success, 'success').then(() =>
-                                location.reload());
-                        } else if (response.errors) {
-                            Swal.fire('Error', response.errors.join('<br>'), 'error');
-                        }
-                    }
-                });
+                confirmButtonText: 'Close'
             });
         });
-    </script>
-@endsection
+
+        $(document).on('click', '.mark-paid-btn', function() {
+            var id = $(this).data('id');
+            Swal.fire({
+                title: 'Mark as Paid?',
+                text: 'This will mark the payroll as paid.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#22c55e',
+                confirmButtonText: 'Yes, Mark Paid'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/hr/payroll/' + id + '/mark-paid',
+                        type: 'PATCH',
+                        data: {
+                            _token: '{{ csrf_token() }}'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire('Success', response.success, 'success')
+                                    .then(() => location.reload());
+                            }
+                        }
+                    });
+                }
+            });
+        });
+
+        $(document).on('click', '.delete-btn', function() {
+            var id = $(this).data('id');
+            Swal.fire({
+                title: 'Delete Payroll?',
+                text: 'This cannot be undone!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'Yes, delete!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/hr/payroll/' + id,
+                        type: 'DELETE',
+                        data: {
+                            _token: '{{ csrf_token() }}'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire('Deleted!', response.success, 'success')
+                                    .then(() => location.reload());
+                            }
+                        }
+                    });
+                }
+            });
+        });
+
+        // Custom submit handler removed - using data-ajax-validate
+    });
+</script>@endsection

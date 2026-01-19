@@ -456,6 +456,9 @@
         setInterval(updateTime, 1000);
         updateTime();
 
+        // Location requirement from designation
+        const requiresLocation = {{ $requiresLocation ? 'true' : 'false' }};
+
         // Open Camera - Check permissions first
         $('#openCameraBtn').click(async function() {
             currentType = $(this).data('type');
@@ -464,14 +467,16 @@
             // Show checking permissions state
             btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Checking permissions...');
 
-            // Check location permission first
-            const locationPermission = await checkLocationPermission();
-            if (!locationPermission.granted) {
-                btn.prop('disabled', false).html(currentType === 'check_in' ?
-                    '<i class="fa fa-camera"></i> Check In with Camera' :
-                    '<i class="fa fa-camera"></i> Check Out with Camera');
-                showPermissionError('location', locationPermission.message);
-                return;
+            // Check location permission only if required by designation
+            if (requiresLocation) {
+                const locationPermission = await checkLocationPermission();
+                if (!locationPermission.granted) {
+                    btn.prop('disabled', false).html(currentType === 'check_in' ?
+                        '<i class="fa fa-camera"></i> Check In with Camera' :
+                        '<i class="fa fa-camera"></i> Check Out with Camera');
+                    showPermissionError('location', locationPermission.message);
+                    return;
+                }
             }
 
             // Check camera permission
@@ -691,7 +696,9 @@
 
         // Get location and submit attendance
         function getLocationAndSubmit(photo, btn) {
-            if (navigator.geolocation) {
+            // Only request location if designation requires it
+            if (requiresLocation && navigator.geolocation) {
+                btn.html('<i class="fa fa-map-marker-alt fa-pulse"></i> Getting Location...');
                 navigator.geolocation.getCurrentPosition(
                     function(position) {
                         console.log('Location captured:', position.coords.latitude, position.coords.longitude);
@@ -709,6 +716,7 @@
                     }
                 );
             } else {
+                // On-site worker - skip location request
                 btn.html('<i class="fa fa-cloud-upload-alt fa-pulse"></i> Uploading...');
                 submitAttendance(photo, btn, null, null);
             }

@@ -14,7 +14,7 @@ class DepartmentController extends Controller
         if (! auth()->user()->can('hr.departments.view')) {
             abort(403, 'Unauthorized action.');
         }
-        $departments = Department::all();
+        $departments = Department::latest()->paginate(12);
 
         return view('hr.departments.index', compact('departments'));
     }
@@ -22,11 +22,11 @@ class DepartmentController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|min:3|max:255',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()->all()]);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
         if ($request->filled('edit_id')) {

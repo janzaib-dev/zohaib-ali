@@ -18,7 +18,7 @@ class SalaryStructureController extends Controller
             ! auth()->user()->can('hr.salary.structure.edit')) {
             abort(403, 'Unauthorized action.');
         }
-        $employees = Employee::with(['department', 'designation', 'salaryStructure'])->get();
+        $employees = Employee::with(['department', 'designation', 'salaryStructure'])->paginate(12);
 
         // Pass permission flags to view
         $canView = auth()->user()->can('hr.salary.structure.view');
@@ -90,15 +90,15 @@ class SalaryStructureController extends Controller
             'commission_tiers.*.percentage' => 'nullable|numeric|min:0|max:100',
             'commission_tiers.*.upto_amount' => 'nullable|numeric|min:0',
             'allowances' => 'nullable|array',
-            'allowances.*.name' => 'required_with:allowances|string',
+            'allowances.*.name' => 'required_with:allowances|string|min:3',
             'allowances.*.amount' => 'required_with:allowances|numeric|min:0',
             'deductions' => 'nullable|array',
-            'deductions.*.name' => 'required_with:deductions|string',
+            'deductions.*.name' => 'required_with:deductions|string|min:3',
             'deductions.*.amount' => 'required_with:deductions|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()->all()]);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
         // Filter out empty allowances/deductions

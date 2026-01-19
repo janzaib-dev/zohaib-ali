@@ -14,7 +14,7 @@ class ShiftController extends Controller
         if (! auth()->user()->can('hr.shifts.view')) {
             abort(403, 'Unauthorized action.');
         }
-        $shifts = Shift::orderBy('name')->get();
+        $shifts = Shift::orderBy('name')->paginate(12);
 
         return view('hr.shifts.index', compact('shifts'));
     }
@@ -22,7 +22,7 @@ class ShiftController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|min:3|max:255',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
             'break_start' => 'nullable|date_format:H:i',
@@ -32,7 +32,7 @@ class ShiftController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()->all()]);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
         // If setting as default, unset other defaults

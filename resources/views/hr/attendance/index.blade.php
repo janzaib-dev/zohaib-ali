@@ -249,7 +249,8 @@
                 </div>
 
                 <!-- Attendance Grid -->
-                <form id="attendanceForm" action="{{ route('hr.attendance.store') }}" method="POST">
+                <form id="attendanceForm" action="{{ route('hr.attendance.store') }}" method="POST"
+                    data-ajax-validate="true">
                     @csrf
                     <input type="hidden" name="date" value="{{ $selectedDate }}">
 
@@ -362,6 +363,10 @@
                         @endforelse
                     </div>
 
+                    <div class="d-flex justify-content-center mt-4">
+                        {{ $employees->links() }}
+                    </div>
+
                     <!-- Floating Save Bar -->
                     @if ($employees->count() > 0 && $selectedDate == date('Y-m-d'))
                         @can('hr.attendance.create')
@@ -386,30 +391,7 @@
         }
 
         $(document).ready(function() {
-            $('#attendanceForm').submit(function(e) {
-                e.preventDefault();
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: new FormData(this),
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Saved!',
-                                text: response.success,
-                                showConfirmButton: false,
-                                timer: 1500
-                            }).then(() => location.reload());
-                        }
-                    },
-                    error: function() {
-                        Swal.fire('Error', 'Something went wrong', 'error');
-                    }
-                });
-            });
+            // Custom submit handler removed - using data-ajax-validate
         });
     </script>
 @endsection

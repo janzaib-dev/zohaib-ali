@@ -90,14 +90,14 @@
 
                 <!-- Stats Row -->
                 @php
-                    $withSalary = $employees->filter(fn($e) => $e->salaryStructure !== null)->count();
-                    $withoutSalary = $employees->count() - $withSalary;
-                    $totalBase = $employees->sum(fn($e) => $e->salaryStructure?->base_salary ?? 0);
+                    $withSalary = \App\Models\Hr\Employee::has('salaryStructure')->count();
+                    $withoutSalary = \App\Models\Hr\Employee::doesntHave('salaryStructure')->count();
+                    $totalBase = \App\Models\Hr\SalaryStructure::sum('base_salary');
                 @endphp
                 <div class="stats-row">
                     <div class="stat-card primary">
                         <div class="stat-icon"><i class="fa fa-users"></i></div>
-                        <div class="stat-value">{{ $employees->count() }}</div>
+                        <div class="stat-value">{{ $employees->total() }}</div>
                         <div class="stat-label">Total Employees</div>
                     </div>
                     <div class="stat-card success">
@@ -131,7 +131,7 @@
                                 <button class="btn btn-outline-danger btn-sm" data-filter="no">No Salary</button>
                             </div>
                         </div>
-                        <span class="text-muted small" id="empCount">{{ $employees->count() }} employees</span>
+                        <span class="text-muted small" id="empCount">{{ $employees->total() }} employees</span>
                     </div>
 
                     <div class="hr-grid" id="salaryGrid">
@@ -222,6 +222,9 @@
                                 <p>No employees found.</p>
                             </div>
                         @endforelse
+                    </div>
+                    <div class="px-4 py-3 border-top">
+                        {{ $employees->links() }}
                     </div>
                 </div>
             </div>

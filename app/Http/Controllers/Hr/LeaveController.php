@@ -15,7 +15,7 @@ class LeaveController extends Controller
         if (! auth()->user()->can('hr.leaves.view')) {
             abort(403, 'Unauthorized action.');
         }
-        $leaves = Leave::with('employee')->latest()->get();
+        $leaves = Leave::with('employee')->latest()->paginate(12);
         $employees = Employee::all();
 
         return view('hr.leaves.index', compact('leaves', 'employees'));
@@ -28,10 +28,11 @@ class LeaveController extends Controller
             'leave_type' => 'required',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
+            'reason' => 'nullable|string|min:3',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()->all()]);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
         if (! auth()->user()->can('hr.leaves.create')) {

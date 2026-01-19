@@ -97,14 +97,15 @@
 
                 <!-- Stats Row -->
                 @php
-                    $publicCount = $holidays->where('type', 'public')->count();
-                    $companyCount = $holidays->where('type', 'company')->count();
-                    $optionalCount = $holidays->where('type', 'optional')->count();
+                    $allHolidays = \App\Models\Hr\Holiday::whereYear('date', $year)->get();
+                    $publicCount = $allHolidays->where('type', 'public')->count();
+                    $companyCount = $allHolidays->where('type', 'company')->count();
+                    $optionalCount = $allHolidays->where('type', 'optional')->count();
                 @endphp
                 <div class="stats-row">
                     <div class="stat-card primary">
                         <div class="stat-icon"><i class="fa fa-calendar-alt"></i></div>
-                        <div class="stat-value">{{ $holidays->count() }}</div>
+                        <div class="stat-value">{{ $holidays->total() }}</div>
                         <div class="stat-label">Total Holidays</div>
                     </div>
                     <div class="stat-card danger">
@@ -137,7 +138,7 @@
                                         class="fa fa-sync"></i></button>
                             </div>
                         </div>
-                        <span class="text-muted small" id="holidayCount">{{ $holidays->count() }} holidays in
+                        <span class="text-muted small" id="holidayCount">{{ $holidays->total() }} holidays in
                             {{ $year }}</span>
                     </div>
 
@@ -180,6 +181,9 @@
                             </div>
                         @endforelse
                     </div>
+                    <div class="px-4 py-3 border-top">
+                        {{ $holidays->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -197,7 +201,7 @@
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="holidayForm" action="{{ route('hr.holidays.store') }}" method="POST">
+                <form id="holidayForm" action="{{ route('hr.holidays.store') }}" method="POST" data-ajax-validate="true">
                     @csrf
                     <input type="hidden" name="edit_id" id="edit_id">
                     <div class="modal-body">
@@ -305,22 +309,7 @@
 
             $('#refreshBtn').click(() => location.reload());
 
-            $('#holidayForm').submit(function(e) {
-                e.preventDefault();
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: $(this).serialize(),
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire('Success', response.success, 'success').then(() =>
-                                location.reload());
-                        } else if (response.errors) {
-                            Swal.fire('Error', response.errors.join('<br>'), 'error');
-                        }
-                    }
-                });
-            });
+            // Custom submit handler removed - using data-ajax-validate
         });
     </script>
 @endsection

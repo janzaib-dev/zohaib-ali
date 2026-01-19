@@ -15,21 +15,21 @@ class HolidayController extends Controller
             abort(403, 'Unauthorized action.');
         }
         $year = request('year', date('Y'));
-        $holidays = Holiday::whereYear('date', $year)->orderBy('date')->get();
+        $holidays = Holiday::whereYear('date', $year)->orderBy('date')->paginate(12)->withQueryString();
         return view('hr.holidays.index', compact('holidays', 'year'));
     }
 
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|min:3|max:255',
             'date' => 'required|date',
             'type' => 'required|in:public,company,optional',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|min:3',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()->all()]);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
         if ($request->filled('edit_id')) {
@@ -45,7 +45,7 @@ class HolidayController extends Controller
             }
             // Check if date already exists
             if (Holiday::whereDate('date', $request->date)->exists()) {
-                return response()->json(['errors' => ['A holiday already exists on this date.']]);
+                return response()->json(['errors' => ['date' => ['A holiday already exists on this date.']]], 422);
             }
             Holiday::create($request->all());
             $message = 'Holiday Created Successfully';

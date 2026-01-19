@@ -21,13 +21,13 @@
 
                 <!-- Stats Row -->
                 @php
-                    $defaultShift = $shifts->where('is_default', true)->first();
+                    $defaultShift = \App\Models\Hr\Shift::where('is_default', true)->first();
                     $totalEmpWithShift = \App\Models\Hr\Employee::whereNotNull('shift_id')->count();
                 @endphp
                 <div class="stats-row">
                     <div class="stat-card primary">
                         <div class="stat-icon"><i class="fa fa-clock"></i></div>
-                        <div class="stat-value">{{ $shifts->count() }}</div>
+                        <div class="stat-value">{{ $shifts->total() }}</div>
                         <div class="stat-label">Total Shifts</div>
                     </div>
                     <div class="stat-card success">
@@ -42,7 +42,7 @@
                     </div>
                     <div class="stat-card info">
                         <div class="stat-icon"><i class="fa fa-hourglass-half"></i></div>
-                        <div class="stat-value">{{ $shifts->avg('grace_minutes') ?? 0 }}</div>
+                        <div class="stat-value">{{ \App\Models\Hr\Shift::avg('grace_minutes') ?? 0 }}</div>
                         <div class="stat-label">Avg Grace (min)</div>
                     </div>
                 </div>
@@ -60,7 +60,7 @@
                                         class="fa fa-sync"></i></button>
                             </div>
                         </div>
-                        <span class="text-muted small" id="shiftCount">{{ $shifts->count() }} shifts</span>
+                        <span class="text-muted small" id="shiftCount">{{ $shifts->total() }} shifts</span>
                     </div>
 
                     <div class="hr-grid" id="shiftGrid">
@@ -128,6 +128,9 @@
                             </div>
                         @endforelse
                     </div>
+                    <div class="px-4 py-3 border-top">
+                        {{ $shifts->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -144,7 +147,7 @@
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="shiftForm" action="{{ route('hr.shifts.store') }}" method="POST">
+                <form id="shiftForm" action="{{ route('hr.shifts.store') }}" method="POST" data-ajax-validate="true">
                     @csrf
                     <input type="hidden" name="edit_id" id="edit_id">
                     <div class="modal-body">
@@ -278,22 +281,7 @@
 
             $('#refreshBtn').click(() => location.reload());
 
-            $('#shiftForm').submit(function(e) {
-                e.preventDefault();
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: $(this).serialize(),
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire('Success', response.success, 'success').then(() =>
-                                location.reload());
-                        } else if (response.errors) {
-                            Swal.fire('Error', response.errors.join('<br>'), 'error');
-                        }
-                    }
-                });
-            });
+            // Custom submit handler removed - using data-ajax-validate
         });
     </script>
 @endsection

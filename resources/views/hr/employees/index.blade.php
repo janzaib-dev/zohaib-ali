@@ -22,7 +22,7 @@
                 <!-- Stats Row -->
                 @php
                     $activeCount = $employees->where('status', 'active')->count();
-                    $inactiveCount = $employees->where('status', 'inactive')->count();
+                    $nonActiveCount = $employees->where('status', 'non-active')->count();
                     $terminatedCount = $employees->where('status', 'terminated')->count();
                 @endphp
                 <div class="stats-row">
@@ -38,8 +38,8 @@
                     </div>
                     <div class="stat-card warning">
                         <div class="stat-icon"><i class="fa fa-user-clock"></i></div>
-                        <div class="stat-value">{{ $inactiveCount }}</div>
-                        <div class="stat-label">Inactive</div>
+                        <div class="stat-value">{{ $nonActiveCount }}</div>
+                        <div class="stat-label">Non-Active</div>
                     </div>
                     <div class="stat-card danger">
                         <div class="stat-icon"><i class="fa fa-user-times"></i></div>
@@ -103,7 +103,7 @@
                                     <span class="hr-tag default"><i
                                             class="fa fa-briefcase me-1"></i>{{ $emp->designation->name ?? 'N/A' }}</span>
                                     <span
-                                        class="hr-tag {{ $emp->status == 'active' ? 'success' : ($emp->status == 'inactive' ? 'warning' : 'danger') }}">
+                                        class="hr-tag {{ $emp->status == 'active' ? 'success' : ($emp->status == 'non-active' ? 'warning' : 'danger') }}">
                                         {{ ucfirst($emp->status) }}
                                     </span>
                                 </div>
@@ -136,6 +136,9 @@
                             </div>
                         @endforelse
                     </div>
+                    <div class="px-4 py-3 border-top">
+                        {{ $employees->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -153,7 +156,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form id="employeeForm" action="{{ route('hr.employees.store') }}" method="POST"
-                    enctype="multipart/form-data">
+                    enctype="multipart/form-data" data-ajax-validate="true">
                     @csrf
                     <input type="hidden" name="edit_id" id="edit_id">
                     <div class="modal-body">
@@ -183,8 +186,14 @@
                             <div class="col-md-6">
                                 <div class="form-group-modern">
                                     <label class="form-label"><i class="fa fa-lock"></i> Password</label>
-                                    <input type="password" name="password" id="password" class="form-control"
-                                        placeholder="Leave blank to keep existing">
+                                    <div class="input-group">
+                                        <input type="password" name="password" id="password" class="form-control"
+                                            placeholder="Leave blank to keep existing">
+                                        <button class="btn btn-outline-secondary toggle-password" type="button"
+                                            data-target="password">
+                                            <i class="fa fa-eye"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -235,7 +244,7 @@
                                     <label class="form-label"><i class="fa fa-toggle-on"></i> Status</label>
                                     <select name="status" id="status" class="form-select">
                                         <option value="active">Active</option>
-                                        <option value="inactive">Inactive</option>
+                                        <option value="non-active">Non-Active</option>
                                         <option value="terminated">Terminated</option>
                                     </select>
                                 </div>
@@ -419,25 +428,22 @@
             // Refresh
             $('#refreshBtn').click(() => location.reload());
 
-            // Form Submit
-            $('#employeeForm').submit(function(e) {
-                e.preventDefault();
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: 'POST',
-                    data: new FormData(this),
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire('Success', response.success, 'success').then(() =>
-                                location.reload());
-                        } else if (response.errors) {
-                            Swal.fire('Error', response.errors.join('<br>'), 'error');
-                        }
-                    }
-                });
+            // Password Toggle Show/Hide
+            $(document).on('click', '.toggle-password', function() {
+                var targetId = $(this).data('target');
+                var input = $('#' + targetId);
+                var icon = $(this).find('i');
+
+                if (input.attr('type') === 'password') {
+                    input.attr('type', 'text');
+                    icon.removeClass('fa-eye').addClass('fa-eye-slash');
+                } else {
+                    input.attr('type', 'password');
+                    icon.removeClass('fa-eye-slash').addClass('fa-eye');
+                }
             });
+
+            // Custom submit handler removed - using data-ajax-validate
         });
     </script>
 @endsection

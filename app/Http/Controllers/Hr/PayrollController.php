@@ -15,7 +15,7 @@ class PayrollController extends Controller
         if (! auth()->user()->can('hr.payroll.view')) {
             abort(403, 'Unauthorized action.');
         }
-        $payrolls = Payroll::with('employee')->latest()->get();
+        $payrolls = Payroll::with('employee')->latest()->paginate(12);
         $employees = Employee::all();
 
         return view('hr.payroll.index', compact('payrolls', 'employees'));
@@ -33,7 +33,7 @@ class PayrollController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()->all()]);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
 
         $employee = Employee::findOrFail($request->employee_id);
@@ -41,7 +41,7 @@ class PayrollController extends Controller
         // Check if payroll already exists for this month
         $exists = Payroll::where('employee_id', $employee->id)->where('month', $request->month)->exists();
         if ($exists) {
-            return response()->json(['errors' => ['Payroll already generated for this month.']]);
+            return response()->json(['errors' => ['month' => ['Payroll already generated for this month.']]], 422);
         }
 
         Payroll::create([

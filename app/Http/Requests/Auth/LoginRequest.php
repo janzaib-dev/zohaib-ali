@@ -49,6 +49,18 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Check if user's employee profile is active
+        $user = Auth::user();
+        if (! $user->isEmployeeActive()) {
+            Auth::logout();
+
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'Your account has been deactivated. Please contact HR department.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 
