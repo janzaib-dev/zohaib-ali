@@ -25,6 +25,14 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::post('designations', [\App\Http\Controllers\Hr\DesignationController::class, 'store'])->name('designations.store')->middleware('permission:hr.designations.create|hr.designations.edit');
     Route::delete('designations/{designation}', [\App\Http\Controllers\Hr\DesignationController::class, 'destroy'])->name('designations.destroy')->middleware('permission:hr.designations.delete');
 
+    // Loans
+    Route::get('/loans', [\App\Http\Controllers\Hr\LoanController::class, 'index'])->name('loans.index')->middleware('permission:hr.loans.view');
+    Route::post('/loans', [\App\Http\Controllers\Hr\LoanController::class, 'store'])->name('loans.store')->middleware('permission:hr.loans.create');
+    Route::post('/loans/{id}/approve', [\App\Http\Controllers\Hr\LoanController::class, 'approve'])->name('loans.approve')->middleware('permission:hr.loans.approve');
+    Route::post('/loans/{id}/reject', [\App\Http\Controllers\Hr\LoanController::class, 'reject'])->name('loans.reject')->middleware('permission:hr.loans.approve');
+    Route::delete('/loans/{id}', [\App\Http\Controllers\Hr\LoanController::class, 'destroy'])->name('loans.destroy')->middleware('permission:hr.loans.delete');
+    Route::post('/loans/schedule', [\App\Http\Controllers\Hr\LoanController::class, 'scheduleDeduction'])->name('loans.schedule')->middleware('permission:hr.loans.schedule');
+
     // Employees
     Route::middleware(['permission:hr.employees.view'])->group(function () {
         Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');

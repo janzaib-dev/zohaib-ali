@@ -158,6 +158,7 @@
     <!-- Select2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
+    @vite(['resources/js/app.js'])
 </head>
 
 <body>
@@ -434,7 +435,7 @@
                         <li class="nav-item">
                             @canany(['hr.departments.view', 'hr.designations.view', 'hr.employees.view',
                                 'hr.attendance.view', 'hr.payroll.view', 'hr.leaves.view', 'hr.salary.structure.view',
-                                'hr.shifts.view', 'hr.holidays.view'])
+                                'hr.shifts.view', 'hr.holidays.view', 'hr.loans.view'])
                                 <a href="#" class="nav-link">
                                     <i class="menu_icon feather ft-users"></i>
                                     <span class="menu-title">HR Management</span>
@@ -477,6 +478,10 @@
                                         @can('hr.holidays.view')
                                             <li><a href="{{ route('hr.holidays.index') }}"><i
                                                         class="fa-solid fa-calendar-alt"></i> Holidays</a></li>
+                                        @endcan
+                                        @can('hr.loans.view')
+                                            <li><a href="{{ route('hr.loans.index') }}"><i
+                                                        class="fa-solid fa-hand-holding-dollar"></i> Loans</a></li>
                                         @endcan
                                     </ul>
                                 </div>
