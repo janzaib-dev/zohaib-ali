@@ -12,7 +12,15 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Pull attendance from biometric devices hourly
+        // Pull attendance from biometric devices hourly
+        $schedule->command('attendance:sync-from-device')->hourly();
+
+        // Mark absent employees automatically every night at 11:00 PM
+        $schedule->command('attendance:mark-absent')->dailyAt('23:00');
+        
+        // Sync device time daily to prevent drift
+        $schedule->command('device:sync-time')->dailyAt('04:00');
     }
 
     /**

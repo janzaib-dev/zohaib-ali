@@ -48,8 +48,13 @@ Route::get('/home', [HomeController::class, 'index'])->middleware('auth')->name(
 
 // Route::get('/adminpage', [HomeController::class, 'adminpage'])->middleware(['auth','admin'])->name('adminpage');
 
-Route::get('/', function () {
-    return view('welcome');
+Route::get('/test-log', function () {
+    try {
+        \Illuminate\Support\Facades\Log::info('Test log entry');
+        return 'Log written successfully to ' . storage_path('logs/laravel.log');
+    } catch (\Exception $e) {
+        return 'Log write failed: ' . $e->getMessage();
+    }
 });
 
 // Route::get('/dashboard', function () {

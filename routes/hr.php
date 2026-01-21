@@ -39,10 +39,14 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     });
     Route::post('employees', [EmployeeController::class, 'store'])->name('employees.store')->middleware('permission:hr.employees.create|hr.employees.edit');
     Route::delete('employees/{employee}', [EmployeeController::class, 'destroy'])->name('employees.destroy')->middleware('permission:hr.employees.delete');
-    Route::post('employees/{employee}/register-face', [EmployeeController::class, 'registerFace'])->name('employees.register-face')->middleware('permission:hr.employees.edit');
+    
+    // Face Recognition Routes
+    Route::get('employees/encodings', [EmployeeController::class, 'getEncodings'])->name('employees.encodings');
+    Route::post('employees/face-register', [EmployeeController::class, 'storeFace'])->name('employees.face-register')->middleware('permission:hr.employees.edit');
 
     // Shifts
     Route::get('shifts', [ShiftController::class, 'index'])->name('shifts.index')->middleware('permission:hr.shifts.view');
+    Route::post('shifts/sync', [ShiftController::class, 'syncToDevices'])->name('shifts.sync')->middleware('permission:hr.shifts.edit');
     Route::post('shifts', [ShiftController::class, 'store'])->name('shifts.store')->middleware('permission:hr.shifts.create|hr.shifts.edit');
     Route::delete('shifts/{shift}', [ShiftController::class, 'destroy'])->name('shifts.destroy')->middleware('permission:hr.shifts.delete');
 
@@ -57,6 +61,8 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::post('attendance', [AttendanceController::class, 'store'])->name('attendance.store')->middleware('permission:hr.attendance.create');
     Route::get('attendance/kiosk', [AttendanceController::class, 'kiosk'])->name('attendance.kiosk')->middleware('permission:hr.attendance.create');
     Route::post('attendance/mark', [AttendanceController::class, 'markAttendance'])->name('attendance.mark')->middleware('permission:hr.attendance.create');
+    Route::post('attendance/pull', [AttendanceController::class, 'pullFromDevices'])->name('attendance.pull')->middleware('permission:hr.biometric.devices.edit');
+    Route::post('attendance/mark-absent', [AttendanceController::class, 'markAbsent'])->name('attendance.mark-absent')->middleware('permission:hr.attendance.create');
 
     // Payroll
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index')->middleware('permission:hr.payroll.view');
@@ -76,6 +82,22 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::get('salary-structure/{employee}/edit', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'edit'])->name('salary-structure.edit')->middleware('permission:hr.salary.structure.view|hr.salary.structure.create|hr.salary.structure.edit');
     // Update - requires create (for new) or edit (for existing) - controller handles logic
     Route::put('salary-structure/{employee}', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'update'])->name('salary-structure.update')->middleware('permission:hr.salary.structure.create|hr.salary.structure.edit');
+
+    // Biometric Devices
+    Route::middleware(['permission:hr.biometric.devices.view'])->group(function () {
+        Route::get('biometric-devices', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'index'])->name('biometric-devices.index');
+    });
+    Route::post('biometric-devices', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'store'])->name('biometric-devices.store')->middleware('permission:hr.biometric.devices.create|hr.biometric.devices.edit');
+    Route::put('biometric-devices/{device}', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'update'])->name('biometric-devices.update')->middleware('permission:hr.biometric.devices.edit');
+    Route::delete('biometric-devices/{device}', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'destroy'])->name('biometric-devices.destroy')->middleware('permission:hr.biometric.devices.delete');
+    
+    // Biometric Device Actions
+    Route::post('biometric-devices/{device}/test', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'testConnection'])->name('biometric-devices.test')->middleware('permission:hr.biometric.devices.view');
+    Route::post('biometric-devices/{device}/sync-employees', [App\Http\Controllers\Hr\BiometricDeviceController::class, 'syncEmployees'])->name('biometric-devices.sync-employees')->middleware('permission:hr.biometric.devices.edit');
+    Route::post('biometric-devices/{device}/pull-attendance', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'pullAttendance'])->name('biometric-devices.pull-attendance')->middleware('permission:hr.biometric.devices.edit');
+
+    // HR Settings
+    Route::post('settings/update', [\App\Http\Controllers\Hr\HrSettingController::class, 'update'])->name('settings.update')->middleware('permission:hr.biometric.devices.edit');
 
 });
 

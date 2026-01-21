@@ -29,6 +29,8 @@ class Attendance extends Model
         'status',
         'is_late',
         'late_minutes',
+        'is_early_in',
+        'early_in_minutes',
         'is_early_leave',
         'early_leave_minutes',
         'total_hours',

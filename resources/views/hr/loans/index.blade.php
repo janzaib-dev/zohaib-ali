@@ -115,6 +115,11 @@
                                                 </li>
                                             @endif
 
+                                            <li><a class="dropdown-item text-secondary py-2" href="javascript:void(0)"
+                                                    onclick="viewHistory({{ $loan->id }})"><i
+                                                        class="fa fa-history me-2"></i> View History</a>
+                                            </li>
+
                                             @can('hr.loans.delete')
                                                 <li>
                                                     @if ($loan->status != 'pending')
@@ -286,6 +291,91 @@
             </div>
         </div>
     </div>
+    <!-- History Modal -->
+    <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0 bg-light">
+                    <h5 class="modal-title"><i class="fa fa-history me-2 text-primary"></i> Loan History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="p-4 bg-white border-bottom">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h4 class="mb-0" id="hist_emp_name">Employee Name</h4>
+                            <span class="badge bg-primary fs-6" id="hist_status">Active</span>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-4">
+                                <small class="text-muted d-block uppercase tracking-wider">Total Amount</small>
+                                <span class="fs-5 fw-bold" id="hist_total">0.00</span>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block uppercase tracking-wider">Paid Amount</small>
+                                <span class="fs-5 fw-bold text-success" id="hist_paid">0.00</span>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block uppercase tracking-wider">Remaining</small>
+                                <span class="fs-5 fw-bold text-danger" id="hist_remaining">0.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-light">
+                        <ul class="nav nav-tabs nav-justified mb-3" id="historyTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="repayments-tab" data-bs-toggle="tab"
+                                    data-bs-target="#repayments" type="button" role="tab"
+                                    aria-controls="repayments" aria-selected="true">Repayments</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="scheduled-tab" data-bs-toggle="tab"
+                                    data-bs-target="#scheduled" type="button" role="tab" aria-controls="scheduled"
+                                    aria-selected="false">Scheduled Deductions</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content" id="historyTabContent">
+                            <div class="tab-pane fade show active" id="repayments" role="tabpanel"
+                                aria-labelledby="repayments-tab">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-borderless" id="repaymentsTable">
+                                        <thead class="text-muted border-bottom">
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Type</th>
+                                                <th class="text-end">Amount</th>
+                                                <th>Notes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- JS populated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="scheduled" role="tabpanel" aria-labelledby="scheduled-tab">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-borderless" id="scheduledTable">
+                                        <thead class="text-muted border-bottom">
+                                            <tr>
+                                                <th>Month</th>
+                                                <th>Status</th>
+                                                <th class="text-end">Amount</th>
+                                                <th>Notes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- JS populated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('js')
@@ -407,6 +497,93 @@
             $('#max_sched_amount').text(remaining);
             $('#schedule_amount').attr('max', remaining);
             $('#scheduleModal').modal('show');
+        }
+
+        function viewHistory(id) {
+            // Show loading or clear previous data
+            $('#hist_emp_name').text('Loading...');
+            $('#repaymentsTable tbody').html('<tr><td colspan="4" class="text-center">Loading...</td></tr>');
+            $('#scheduledTable tbody').html('<tr><td colspan="4" class="text-center">Loading...</td></tr>');
+            $('#historyModal').modal('show');
+
+            $.ajax({
+                url: '/hr/loans/' + id + '/history',
+                type: 'GET',
+                success: function(data) {
+                    // Populate Header
+                    // Assuming data contains: amount, paid_amount, remaining_amount, status, employee object
+                    // But fetch with('employee') might be needed in controller or relying on parent relation
+                    // Let's rely on data returned. The controller returns the loan model data.
+
+                    // Since controller does: Loan::with(['payments', 'scheduledDeductions'])->findOrFail($id);
+                    // It doesn't explicitly load employee name, but we can get it from the card that triggered this or update controller.
+                    // Actually, let's update controller to include employee too, or use card data.
+                    // For now, let's assume we update Controller or use generic.
+
+                    // Wait, I need check if controller returns employee.
+                    // Controller code: $loan = Loan::with(['payments', 'scheduledDeductions'])->findOrFail($id);
+                    // It does NOT load 'employee'. I should update controller or just use the relation if it was auto-loaded (it wasn't).
+
+                    // Actually, I can get employee name from the row that was clicked if I pass it, 
+                    // OR I can just update the Controller to include 'employee' which is cleaner.
+
+                    // For now I will focus on the data I have.
+                    // Let's populate numbers.
+
+                    $('#hist_total').text(parseFloat(data.amount).toLocaleString());
+                    $('#hist_paid').text(parseFloat(data.paid_amount).toLocaleString());
+                    $('#hist_remaining').text(parseFloat(data.remaining_amount).toLocaleString());
+                    $('#hist_status').text(data.status.toUpperCase());
+
+                    // Fill Repayments
+                    let repaymentHtml = '';
+                    if (data.payments && data.payments.length > 0) {
+                        data.payments.forEach(pay => {
+                            repaymentHtml += `
+                                <tr>
+                                    <td>${new Date(pay.created_at).toLocaleDateString()}</td>
+                                    <td><span class="badge bg-light text-dark border">${pay.payment_type}</span></td>
+                                    <td class="text-end fw-bold text-success">${parseFloat(pay.amount).toLocaleString()}</td>
+                                    <td class="small text-muted">${pay.notes || '-'}</td>
+                                </tr>
+                            `;
+                        });
+                    } else {
+                        repaymentHtml =
+                            '<tr><td colspan="4" class="text-center text-muted py-3">No payments recorded yet.</td></tr>';
+                    }
+                    $('#repaymentsTable tbody').html(repaymentHtml);
+
+                    // Fill Scheduled
+                    let schedHtml = '';
+                    if (data.scheduled_deductions && data.scheduled_deductions.length > 0) {
+                        data.scheduled_deductions.forEach(sch => {
+                            let statusBadge = sch.status === 'deducted' ? 'bg-success' : 'bg-warning';
+                            schedHtml += `
+                                <tr>
+                                    <td>${sch.deduction_month}</td>
+                                    <td><span class="badge ${statusBadge}">${sch.status}</span></td>
+                                    <td class="text-end fw-bold">${parseFloat(sch.amount).toLocaleString()}</td>
+                                    <td class="small text-muted">${sch.notes || '-'}</td>
+                                </tr>
+                            `;
+                        });
+                    } else {
+                        schedHtml =
+                            '<tr><td colspan="4" class="text-center text-muted py-3">No deductions scheduled (auto-deduct from installments).</td></tr>';
+                    }
+                    $('#scheduledTable tbody').html(schedHtml);
+
+                    // Hack to set name if not provided in JSON (Controller needs update for optimal experience)
+                    // But for now let's just use "Loan Details" if name missing
+                    if (data.employee) {
+                        $('#hist_emp_name').text(data.employee.first_name + ' ' + data.employee.last_name);
+                    } else {
+                        // Fallback or if controller updated
+                        $('#hist_emp_name').text('Loan Details');
+                    }
+                }
+            });
         }
     </script>
 @endsection

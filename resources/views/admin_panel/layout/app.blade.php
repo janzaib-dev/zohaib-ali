@@ -435,7 +435,7 @@
                         <li class="nav-item">
                             @canany(['hr.departments.view', 'hr.designations.view', 'hr.employees.view',
                                 'hr.attendance.view', 'hr.payroll.view', 'hr.leaves.view', 'hr.salary.structure.view',
-                                'hr.shifts.view', 'hr.holidays.view', 'hr.loans.view'])
+                                'hr.shifts.view', 'hr.holidays.view', 'hr.loans.view', 'hr.biometric.devices.view'])
                                 <a href="#" class="nav-link">
                                     <i class="menu_icon feather ft-users"></i>
                                     <span class="menu-title">HR Management</span>
@@ -482,6 +482,10 @@
                                         @can('hr.loans.view')
                                             <li><a href="{{ route('hr.loans.index') }}"><i
                                                         class="fa-solid fa-hand-holding-dollar"></i> Loans</a></li>
+                                        @endcan
+                                        @can('hr.biometric.devices.view')
+                                            <li><a href="{{ route('hr.biometric-devices.index') }}"><i
+                                                        class="fa-solid fa-fingerprint"></i> Biometric Devices</a></li>
                                         @endcan
                                     </ul>
                                 </div>

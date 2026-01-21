@@ -322,9 +322,20 @@
         }
     </style>
 
+    <!-- Script for Face API -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
     <div class="main-content">
         <div class="main-content-inner">
             <div class="my-attendance">
+                <!-- Status & Feedback Container -->
+                <div id="statusContainer" class="d-none mb-4 text-center">
+                    <div class="status-pill d-inline-block px-4 py-2 rounded-pill bg-white shadow-sm border">
+                        <i class="fa fa-spinner fa-spin text-primary me-2"></i>
+                        <span id="globalStatusText" class="fw-bold text-dark">Initializing AI...</span>
+                    </div>
+                </div>
+
                 <div class="attendance-card">
                     <div class="attendance-header">
                         <h2><i class="fa fa-fingerprint"></i> My Attendance</h2>
@@ -336,7 +347,12 @@
                         <div class="attendance-body">
                             <div class="employee-info">
                                 <div class="employee-avatar">
-                                    {{ strtoupper(substr($employee->first_name, 0, 1) . substr($employee->last_name, 0, 1)) }}
+                                    @if ($employee->face_photo)
+                                        <img src="{{ asset($employee->face_photo) }}" alt="Face"
+                                            style="width:100%; height:100%; object-fit:cover; border-radius:12px;">
+                                    @else
+                                        {{ strtoupper(substr($employee->first_name, 0, 1) . substr($employee->last_name, 0, 1)) }}
+                                    @endif
                                 </div>
                                 <div>
                                     <div class="employee-name">{{ $employee->full_name }}</div>
@@ -370,18 +386,18 @@
                                 <div class="status-row">
                                     <span class="status-label">Total Hours</span>
                                     <span class="status-value" id="totalHours">
-                                        {{ $attendance && $attendance->total_hours ? $attendance->total_hours . ' hrs' : '--' }}
+                                        {{ $attendance && $attendance->total_hours ? number_format($attendance->total_hours, 2) . ' hrs' : '--' }}
                                     </span>
                                 </div>
                             </div>
 
                             @if (!$attendance || !$attendance->check_in_time)
                                 <button type="button" class="btn-checkin" id="openCameraBtn" data-type="check_in">
-                                    <i class="fa fa-camera"></i> Check In with Camera
+                                    <i class="fa fa-sign-in-alt"></i> Check In with Camera
                                 </button>
                             @elseif(!$attendance->check_out_time)
                                 <button type="button" class="btn-checkout" id="openCameraBtn" data-type="check_out">
-                                    <i class="fa fa-camera"></i> Check Out with Camera
+                                    <i class="fa fa-sign-out-alt"></i> Check Out with Camera
                                 </button>
                             @else
                                 <button type="button" class="btn-checkin btn-disabled" disabled>
@@ -404,24 +420,40 @@
         </div>
     </div>
 
-    <!-- Camera Modal -->
+    <!-- Camera Modal with AI Features -->
     <div class="camera-modal" id="cameraModal">
         <div class="camera-container">
             <div class="camera-title" id="cameraTitle">
                 <i class="fa fa-camera"></i> Check In
             </div>
-            <div class="video-container">
-                <video id="video" autoplay playsinline></video>
+
+            <div class="video-container"
+                style="position: relative; border-radius: 16px; overflow: hidden; background: #000;">
+                <video id="video" autoplay playsinline
+                    style="width: 100%; height: auto; transform: scaleX(-1);"></video>
+                <canvas id="face-overlay" style="position: absolute; top: 0; left: 0;"></canvas>
+
+                <!-- Face Guide Overlay -->
                 <div class="face-guide"></div>
+
+                <!-- Status Pills -->
+                <div id="aiStatus"
+                    style="position: absolute; bottom: 20px; left: 0; right: 0; text-align: center; pointer-events: none;">
+                    <span class="badge rounded-pill bg-dark bg-opacity-75 text-white shadow-sm px-3 py-2">
+                        <i class="fa fa-search me-1"></i> Looking for face...
+                    </span>
+                </div>
+
                 <div class="camera-countdown" id="countdown"></div>
-                <canvas id="canvas"></canvas>
+                <canvas id="canvas" style="display:none;"></canvas>
             </div>
+
             <div class="camera-actions">
-                <button class="btn-capture checkin" id="captureBtn">
-                    <i class="fa fa-camera"></i> Capture & Check In
+                <button class="btn-capture checkin" id="captureBtn" disabled>
+                    <i class="fa fa-camera"></i> Wait for Face...
                 </button>
                 <button class="btn-cancel" id="cancelBtn">
-                    <i class="fa fa-times"></i> Cancel
+                    Cancel
                 </button>
             </div>
         </div>
@@ -431,299 +463,255 @@
     <script>
         let currentType = 'check_in';
         let stream = null;
+        let isModelsLoaded = false;
+        let detectionInterval = null;
+
         const video = document.getElementById('video');
+        const overlay = document.getElementById('face-overlay');
         const canvas = document.getElementById('canvas');
         const cameraModal = document.getElementById('cameraModal');
+
+        // Preload Face API Models
+        $(document).ready(async function() {
+            const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+            try {
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    // faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL) // Not strictly needed for presence check
+                ]);
+                isModelsLoaded = true;
+                console.log('Models Loaded');
+                $('#globalStatusText').text('AI Ready');
+            } catch (e) {
+                console.error('Model Load Failed', e);
+            }
+        });
 
         // Update time
         function updateTime() {
             const now = new Date();
-            const time = now.toLocaleTimeString('en-US', {
+            $('#currentTime').text(now.toLocaleTimeString('en-US', {
                 hour12: true,
-                hour: '2-digit',
+                hour: 'numeric',
                 minute: '2-digit',
                 second: '2-digit'
-            });
-            const date = now.toLocaleDateString('en-US', {
+            }));
+            $('#currentDate').text(now.toLocaleDateString('en-US', {
                 weekday: 'long',
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'
-            });
-            $('#currentTime').text(time);
-            $('#currentDate').text(date);
+            }));
         }
         setInterval(updateTime, 1000);
         updateTime();
 
-        // Location requirement from designation
         const requiresLocation = {{ $requiresLocation ? 'true' : 'false' }};
 
-        // Open Camera - Check permissions first
+        // Open Camera
         $('#openCameraBtn').click(async function() {
             currentType = $(this).data('type');
             const btn = $(this);
-
-            // Show checking permissions state
             btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Checking permissions...');
 
-            // Check location permission only if required by designation
+            // Permissions
             if (requiresLocation) {
-                const locationPermission = await checkLocationPermission();
-                if (!locationPermission.granted) {
-                    btn.prop('disabled', false).html(currentType === 'check_in' ?
-                        '<i class="fa fa-camera"></i> Check In with Camera' :
-                        '<i class="fa fa-camera"></i> Check Out with Camera');
-                    showPermissionError('location', locationPermission.message);
+                const loc = await checkLocationPermission();
+                if (!loc.granted) {
+                    showPermissionError('location', loc.message);
+                    resetMainButton(btn);
                     return;
                 }
             }
-
-            // Check camera permission
-            const cameraPermission = await checkCameraPermission();
-            if (!cameraPermission.granted) {
-                btn.prop('disabled', false).html(currentType === 'check_in' ?
-                    '<i class="fa fa-camera"></i> Check In with Camera' :
-                    '<i class="fa fa-camera"></i> Check Out with Camera');
-                showPermissionError('camera', cameraPermission.message);
+            const cam = await checkCameraPermission();
+            if (!cam.granted) {
+                showPermissionError('camera', cam.message);
+                resetMainButton(btn);
                 return;
             }
 
-            // Restore button
-            btn.prop('disabled', false).html(currentType === 'check_in' ?
-                '<i class="fa fa-camera"></i> Check In with Camera' :
-                '<i class="fa fa-camera"></i> Check Out with Camera');
+            resetMainButton(btn);
 
-            // Update modal appearance
+            // Update UI
             if (currentType === 'check_in') {
                 $('#cameraTitle').html('<i class="fa fa-sign-in-alt"></i> Check In').removeClass('checkout')
                     .addClass('checkin');
-                $('#captureBtn').html('<i class="fa fa-camera"></i> Capture & Check In').removeClass('checkout')
-                    .addClass('checkin');
+                $('#captureBtn').removeClass('checkout').addClass('checkin');
             } else {
                 $('#cameraTitle').html('<i class="fa fa-sign-out-alt"></i> Check Out').removeClass('checkin')
                     .addClass('checkout');
-                $('#captureBtn').html('<i class="fa fa-camera"></i> Capture & Check Out').removeClass('checkin')
-                    .addClass('checkout');
+                $('#captureBtn').removeClass('checkin').addClass('checkout');
             }
 
-            // Start camera and open modal
-            startCamera();
+            // Start
             cameraModal.classList.add('active');
+            startCamera();
         });
 
-        // Check location permission
+        function resetMainButton(btn) {
+            btn.prop('disabled', false).html(currentType === 'check_in' ?
+                '<i class="fa fa-sign-in-alt"></i> Check In with Camera' :
+                '<i class="fa fa-sign-out-alt"></i> Check Out with Camera');
+        }
+
         async function checkLocationPermission() {
+            // ... existing logic ...
             return new Promise((resolve) => {
                 if (!navigator.geolocation) {
                     resolve({
                         granted: false,
-                        message: 'Geolocation is not supported by your browser.'
+                        message: 'Not supported'
                     });
                     return;
                 }
-
                 navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        resolve({
-                            granted: true,
-                            coords: position.coords
-                        });
-                    },
-                    (error) => {
-                        let message = 'Location permission denied.';
-                        if (error.code === 1) message =
-                            'Location access was denied. Please enable location permissions in your browser settings.';
-                        if (error.code === 2) message =
-                            'Location information is unavailable. Please check your device settings.';
-                        if (error.code === 3) message = 'Location request timed out. Please try again.';
-                        resolve({
-                            granted: false,
-                            message: message
-                        });
-                    }, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
+                    (p) => resolve({
+                        granted: true
+                    }),
+                    (e) => resolve({
+                        granted: false,
+                        message: 'Location denied'
+                    }), {
+                        timeout: 5000
                     }
                 );
             });
         }
-
-        // Check camera permission
         async function checkCameraPermission() {
             try {
-                const testStream = await navigator.mediaDevices.getUserMedia({
+                const s = await navigator.mediaDevices.getUserMedia({
                     video: true
                 });
-                testStream.getTracks().forEach(track => track.stop()); // Stop test stream
+                s.getTracks().forEach(t => t.stop());
                 return {
                     granted: true
                 };
-            } catch (err) {
-                let message = 'Camera access denied.';
-                if (err.name === 'NotAllowedError') {
-                    message = 'Camera permission denied. Please enable camera access in your browser settings.';
-                } else if (err.name === 'NotFoundError') {
-                    message = 'No camera found on your device.';
-                } else if (err.name === 'NotReadableError') {
-                    message = 'Camera is already in use by another application.';
-                }
+            } catch (e) {
                 return {
                     granted: false,
-                    message: message
+                    message: e.message
                 };
             }
         }
 
-        // Show permission error with nice UI
-        function showPermissionError(type, message) {
-            const icon = type === 'camera' ? 'fa-camera' : 'fa-map-marker-alt';
-            const title = type === 'camera' ? 'Camera Permission Required' : 'Location Permission Required';
-
-            $('#messageBox').html(`
-                <div class="message message-error" style="text-align: center; padding: 24px;">
-                    <i class="fa ${icon}" style="font-size: 2.5rem; margin-bottom: 12px; display: block;"></i>
-                    <strong style="font-size: 1.1rem;">${title}</strong><br>
-                    <small style="margin-top: 8px; display: block;">${message}</small>
-                    <br><br>
-                    <small style="color: #666;">
-                        <i class="fa fa-info-circle"></i> 
-                        To enable permissions, click the lock/info icon in your browser's address bar.
-                    </small>
-                </div>
-            `);
+        // Show permission error
+        function showPermissionError(type, msg) {
+            $('#messageBox').html(`<div class="message message-error">${msg}</div>`);
+            setTimeout(() => $('#messageBox').empty(), 5000);
         }
 
-        // Start camera stream
         async function startCamera() {
+            // Wait for models if not loaded (should be loaded by now)
+            if (!isModelsLoaded) {
+                $('#aiStatus').html('<span class="badge rounded-pill bg-warning text-dark">Loading AI...</span>');
+                // You might want to wait or just proceed without AI for now (and enable button)
+            }
+
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        width: 480,
-                        height: 360,
+                        width: 640,
+                        height: 480,
                         facingMode: 'user'
                     }
                 });
                 video.srcObject = stream;
+
+                // Start Detection Loop
+                startDetection();
+
             } catch (err) {
-                showPermissionError('camera', 'Camera access denied. Please allow camera permissions.');
+                showPermissionError('camera', 'Camera failed.');
                 closeCamera();
             }
         }
 
-        // Stop camera
+        function startDetection() {
+            // Detect faces
+            $('#captureBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Detecting Face...');
+
+            detectionInterval = setInterval(async () => {
+                if (!isModelsLoaded || !stream) return;
+
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
+
+                if (detection) {
+                    // Face Found
+                    $('.face-guide').css('border-color', '#22c55e'); // Green
+                    $('#aiStatus').html(
+                        '<span class="badge rounded-pill bg-success text-white"><i class="fa fa-check"></i> Face Detected</span>'
+                    );
+                    $('#captureBtn').prop('disabled', false).html('<i class="fa fa-camera"></i> Capture & ' + (
+                        currentType == 'check_in' ? 'Check In' : 'Check Out'));
+                } else {
+                    // No Face
+                    $('.face-guide').css('border-color', 'rgba(255,255,255,0.5)');
+                    $('#aiStatus').html(
+                        '<span class="badge rounded-pill bg-danger bg-opacity-75 text-white">No Face Detected</span>'
+                    );
+                    $('#captureBtn').prop('disabled', true).html('<i class="fa fa-search"></i> Look at Camera');
+                }
+
+            }, 500); // Check every 500ms
+        }
+
         function stopCamera() {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
             }
+            if (detectionInterval) clearInterval(detectionInterval);
+            $('#aiStatus').empty();
         }
 
-        // Close modal
         function closeCamera() {
             stopCamera();
             cameraModal.classList.remove('active');
         }
 
-        // Cancel button
-        $('#cancelBtn').click(function() {
-            if (!$(this).prop('disabled')) {
-                closeCamera();
-            }
-        });
+        $('#cancelBtn').click(closeCamera);
 
-        // Disable all controls during processing
-        function setProcessingState(isProcessing) {
-            const captureBtn = $('#captureBtn');
-            const cancelBtn = $('#cancelBtn');
-
-            if (isProcessing) {
-                captureBtn.prop('disabled', true);
-                cancelBtn.prop('disabled', true).css('opacity', '0.5').css('cursor', 'not-allowed');
-            } else {
-                captureBtn.prop('disabled', false);
-                cancelBtn.prop('disabled', false).css('opacity', '1').css('cursor', 'pointer');
-            }
-        }
-
-        // Capture photo and submit
         $('#captureBtn').click(function() {
+            // Capture Flow
+            clearInterval(detectionInterval); // Stop detecting
             const btn = $(this);
+            btn.prop('disabled', true).html('Capturing...');
 
-            // Disable both buttons
-            setProcessingState(true);
-            btn.html('<i class="fa fa-spinner fa-spin"></i> Get Ready...');
+            // Flash
+            $('.video-container').css('opacity', 0.5);
+            setTimeout(() => $('.video-container').css('opacity', 1), 100);
 
-            // Show countdown
-            let count = 3;
-            const countdownEl = $('#countdown');
-            countdownEl.show().css({
-                'animation': 'pulse 0.5s ease-in-out infinite'
-            });
+            // Capture
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
 
-            const countdownInterval = setInterval(() => {
-                countdownEl.text(count);
-                count--;
+            // If video is mirrored (transform scaleX -1), we must mirror capture too?
+            // Actually css transform doesn't affect video stream content.
+            // But it affects user perception. If user looks left, video shows right (mirror).
+            // If we draw raw video, it is NOT mirrored.
+            // Usually for attendance photo, raw is fine.
+            ctx.drawImage(video, 0, 0);
+            const photo = canvas.toDataURL('image/jpeg', 0.8);
 
-                if (count === 2) btn.html('<i class="fa fa-spinner fa-spin"></i> Smile! 📸');
-                if (count === 1) btn.html('<i class="fa fa-spinner fa-spin"></i> Hold still...');
-                if (count === 0) btn.html('<i class="fa fa-spinner fa-spin"></i> Capturing...');
-
-                if (count < 0) {
-                    clearInterval(countdownInterval);
-                    countdownEl.hide();
-
-                    // Flash effect
-                    $('.video-container').css('filter', 'brightness(2)');
-                    setTimeout(() => {
-                        $('.video-container').css('filter', 'brightness(1)');
-                    }, 100);
-
-                    // Capture photo
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    canvas.getContext('2d').drawImage(video, 0, 0);
-                    const photo = canvas.toDataURL('image/jpeg', 0.8);
-
-                    btn.html('<i class="fa fa-map-marker-alt fa-pulse"></i> Getting Location...');
-
-                    // Submit with location
-                    getLocationAndSubmit(photo, btn);
-                }
-            }, 1000);
+            // Get Loc
+            getLocationAndSubmit(photo, btn);
         });
 
-        // Get location and submit attendance
         function getLocationAndSubmit(photo, btn) {
-            // Only request location if designation requires it
             if (requiresLocation && navigator.geolocation) {
-                btn.html('<i class="fa fa-map-marker-alt fa-pulse"></i> Getting Location...');
+                btn.html('Getting Location...');
                 navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        console.log('Location captured:', position.coords.latitude, position.coords.longitude);
-                        btn.html('<i class="fa fa-cloud-upload-alt fa-pulse"></i> Uploading...');
-                        submitAttendance(photo, btn, position.coords.latitude, position.coords.longitude);
-                    },
-                    function(error) {
-                        console.log('Location error:', error.code, error.message);
-                        btn.html('<i class="fa fa-cloud-upload-alt fa-pulse"></i> Uploading...');
-                        submitAttendance(photo, btn, null, null);
-                    }, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
+                    (p) => submitAttendance(photo, btn, p.coords.latitude, p.coords.longitude),
+                    (e) => submitAttendance(photo, btn, null, null)
                 );
             } else {
-                // On-site worker - skip location request
-                btn.html('<i class="fa fa-cloud-upload-alt fa-pulse"></i> Uploading...');
                 submitAttendance(photo, btn, null, null);
             }
         }
 
-        // Submit attendance
-        function submitAttendance(photo, btn, latitude, longitude) {
+        function submitAttendance(photo, btn, lat, lng) {
+            btn.html('Uploading...');
             $.ajax({
                 url: '{{ route('my-attendance.mark') }}',
                 type: 'POST',
@@ -731,80 +719,27 @@
                     _token: '{{ csrf_token() }}',
                     type: currentType,
                     photo: photo,
-                    latitude: latitude,
-                    longitude: longitude
+                    latitude: lat,
+                    longitude: lng
                 },
-                success: function(response) {
-                    if (response.success) {
-                        // Success - show in modal briefly then close
-                        btn.html('<i class="fa fa-check-circle"></i> Success!').removeClass('checkin checkout')
-                            .css('background', '#22c55e');
-                        $('#cancelBtn').hide();
-
+                success: function(res) {
+                    if (res.success) {
+                        $('#aiStatus').html('<span class="badge bg-success">Success!</span>');
                         setTimeout(() => {
                             closeCamera();
-
-                            let msg = response.message;
-                            if (response.location) {
-                                msg += '<br><small><i class="fa fa-map-marker-alt"></i> ' + response
-                                    .location + '</small>';
-                            }
-                            $('#messageBox').html(
-                                '<div class="message message-success" style="animation: fadeIn 0.3s ease;">' +
-                                '<i class="fa fa-check-circle fa-lg"></i><br>' +
-                                msg + '</div>');
-
-                            // Reload after showing success
-                            setTimeout(() => location.reload(), 2000);
-                        }, 800);
+                            location.reload();
+                        }, 1000);
                     } else {
-                        // Error - allow retry
-                        closeCamera();
-                        $('#messageBox').html(
-                            '<div class="message message-error"><i class="fa fa-exclamation-circle"></i> ' +
-                            response.error + '</div>');
-                        setProcessingState(false);
-                        resetCaptureButton();
+                        $('#aiStatus').html('<span class="badge bg-danger">' + res.error + '</span>');
+                        startDetection(); // Restart detection to retry
                     }
                 },
-                error: function() {
-                    closeCamera();
-                    $('#messageBox').html(
-                        '<div class="message message-error"><i class="fa fa-exclamation-circle"></i> Network error. Please try again.</div>'
-                    );
-                    setProcessingState(false);
-                    resetCaptureButton();
+                error: function(err) {
+                    $('#aiStatus').html('<span class="badge bg-danger">Error: ' + err.statusText + '</span>');
+                    startDetection();
                 }
             });
         }
-
-        // Reset capture button text
-        function resetCaptureButton() {
-            const captureBtn = $('#captureBtn');
-            if (currentType === 'check_in') {
-                captureBtn.html('<i class="fa fa-camera"></i> Capture & Check In').addClass('checkin').removeClass(
-                    'checkout');
-            } else {
-                captureBtn.html('<i class="fa fa-camera"></i> Capture & Check Out').addClass('checkout').removeClass(
-                    'checkin');
-            }
-            $('#cancelBtn').show();
-        }
-
-        // Close modal on outside click (only if not processing)
-        cameraModal.addEventListener('click', function(e) {
-            if (e.target === cameraModal && !$('#cancelBtn').prop('disabled')) {
-                closeCamera();
-            }
-        });
-
-        // Keyboard escape to close
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && cameraModal.classList.contains('active') && !$('#cancelBtn').prop(
-                    'disabled')) {
-                closeCamera();
-            }
-        });
     </script>
 
     <style>

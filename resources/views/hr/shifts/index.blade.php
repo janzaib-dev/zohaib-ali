@@ -13,37 +13,52 @@
                         <p class="page-subtitle">Configure work shifts and schedules</p>
                     </div>
                     @can('hr.shifts.create')
-                        <button type="button" class="btn btn-create" id="createBtn">
-                            <i class="fa fa-plus"></i> Add Shift
-                        </button>
+                        <div class="btn-group">
+                            @can('hr.shifts.edit')
+                                <button type="button" class="btn btn-dark" id="syncBtn">
+                                    <i class="fa fa-sync"></i> Sync to Device
+                                </button>
+                            @endcan
+                            <button type="button" class="btn btn-create" id="createBtn">
+                                <i class="fa fa-plus"></i> Add Shift
+                            </button>
+                        </div>
                     @endcan
                 </div>
 
                 <!-- Stats Row -->
+                <!-- Stats Row -->
                 @php
                     $defaultShift = \App\Models\Hr\Shift::where('is_default', true)->first();
+                    // Count employees explicitly assigned to default shift
+                    $defaultShiftEmpCount = $defaultShift
+                        ? \App\Models\Hr\Employee::where('shift_id', $defaultShift->id)->count()
+                        : 0;
+                    // Count employees with custom times
+                    $customTimeEmpCount = \App\Models\Hr\Employee::whereNotNull('custom_start_time')->count();
+                    // Count employees with ANY shift assigned
                     $totalEmpWithShift = \App\Models\Hr\Employee::whereNotNull('shift_id')->count();
                 @endphp
                 <div class="stats-row">
                     <div class="stat-card primary">
-                        <div class="stat-icon"><i class="fa fa-clock"></i></div>
-                        <div class="stat-value">{{ $shifts->total() }}</div>
-                        <div class="stat-label">Total Shifts</div>
+                        <div class="stat-icon"><i class="fa fa-users"></i></div>
+                        <div class="stat-value">{{ $defaultShiftEmpCount }}</div>
+                        <div class="stat-label">On Default Shift</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-icon"><i class="fa fa-user-clock"></i></div>
+                        <div class="stat-value">{{ $customTimeEmpCount }}</div>
+                        <div class="stat-label">Custom Timing</div>
                     </div>
                     <div class="stat-card success">
                         <div class="stat-icon"><i class="fa fa-check-circle"></i></div>
-                        <div class="stat-value">{{ $defaultShift ? '1' : '0' }}</div>
-                        <div class="stat-label">Default Shift</div>
-                    </div>
-                    <div class="stat-card warning">
-                        <div class="stat-icon"><i class="fa fa-users"></i></div>
                         <div class="stat-value">{{ $totalEmpWithShift }}</div>
-                        <div class="stat-label">Employees Assigned</div>
+                        <div class="stat-label">Shift Assigned</div>
                     </div>
                     <div class="stat-card info">
-                        <div class="stat-icon"><i class="fa fa-hourglass-half"></i></div>
-                        <div class="stat-value">{{ \App\Models\Hr\Shift::avg('grace_minutes') ?? 0 }}</div>
-                        <div class="stat-label">Avg Grace (min)</div>
+                        <div class="stat-icon"><i class="fa fa-clock"></i></div>
+                        <div class="stat-value">{{ $shifts->total() }}</div>
+                        <div class="stat-label">Total Shifts</div>
                     </div>
                 </div>
 
@@ -221,6 +236,35 @@
 
     <script>
         $(document).ready(function() {
+            $('#syncBtn').click(function() {
+                Swal.fire({
+                    title: 'Sync Shifts?',
+                    text: 'This will push all shift schedules to connected biometric devices.',
+                    icon: 'info',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, Sync',
+                    showLoaderOnConfirm: true,
+                    preConfirm: () => {
+                        return $.ajax({
+                            url: '{{ route('hr.shifts.sync') }}',
+                            type: 'POST',
+                            data: {
+                                _token: '{{ csrf_token() }}'
+                            },
+                        }).catch(error => {
+                            Swal.showValidationMessage(
+                                `Request failed: ${error.responseJSON.error || error.statusText}`
+                            )
+                        });
+                    },
+                    allowOutsideClick: () => !Swal.isLoading()
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire('Synced!', result.value.success, 'success');
+                    }
+                });
+            });
+
             $('#createBtn').click(function() {
                 $('#shiftForm')[0].reset();
                 $('#edit_id').val('');

@@ -76,4 +76,27 @@ class ShiftController extends Controller
 
         return response()->json(['success' => 'Shift Deleted Successfully']);
     }
+
+    /**
+     * Sync Shifts to All Devices
+     */
+    public function syncToDevices(\App\Services\BiometricDeviceService $service)
+    {
+        if (! auth()->user()->can('hr.shifts.edit')) {
+            return response()->json(['error' => 'Unauthorized action.'], 403);
+        }
+
+        $devices = \App\Models\BiometricDevice::all();
+        if ($devices->isEmpty()) {
+            return response()->json(['error' => 'No biometric devices found.'], 404);
+        }
+
+        $results = [];
+        foreach ($devices as $device) {
+            $res = $service->syncShifts($device);
+            $results[] = "Device {$device->name}: ".$res['message'];
+        }
+
+        return response()->json(['success' => 'Sync completed. '.implode(' | ', $results)]);
+    }
 }

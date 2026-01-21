@@ -2,9 +2,9 @@
 
 namespace App\Models\Hr;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\User;
 
 class Employee extends Model
 {
@@ -31,10 +31,17 @@ class Employee extends Model
         'custom_end_time',
         'face_encoding',
         'face_photo',
+        'biometric_device_id',
+        'device_user_id',
+        'fingerprint_enrolled_at',
+        'last_device_sync_at',
+        'punch_gap_minutes',
     ];
 
     protected $casts = [
         'face_encoding' => 'array',
+        'fingerprint_enrolled_at' => 'datetime',
+        'last_device_sync_at' => 'datetime',
     ];
 
     public function documents()
@@ -86,7 +93,7 @@ class Employee extends Model
     {
         return $this->hasOne(SalaryStructure::class);
     }
-    
+
     public function getFullNameAttribute()
     {
         return "{$this->first_name} {$this->last_name}";
@@ -100,6 +107,7 @@ class Employee extends Model
         if ($this->custom_start_time) {
             return $this->custom_start_time;
         }
+
         return $this->shift ? $this->shift->start_time : '09:00:00';
     }
 
@@ -111,6 +119,7 @@ class Employee extends Model
         if ($this->custom_end_time) {
             return $this->custom_end_time;
         }
+
         return $this->shift ? $this->shift->end_time : '18:00:00';
     }
 
@@ -127,6 +136,22 @@ class Employee extends Model
      */
     public function hasFaceRegistered()
     {
-        return !empty($this->face_encoding);
+        return ! empty($this->face_encoding);
+    }
+
+    /**
+     * Get biometric device relationship
+     */
+    public function biometricDevice()
+    {
+        return $this->belongsTo(\App\Models\BiometricDevice::class, 'biometric_device_id');
+    }
+
+    /**
+     * Check if employee has fingerprint enrolled on device
+     */
+    public function hasFingerprint()
+    {
+        return ! empty($this->device_user_id) && ! empty($this->fingerprint_enrolled_at);
     }
 }

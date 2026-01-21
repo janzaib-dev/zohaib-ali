@@ -8,6 +8,7 @@ use App\Models\Hr\Designation;
 use App\Models\Hr\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 
 class EmployeeController extends Controller
 {
@@ -16,11 +17,12 @@ class EmployeeController extends Controller
         if (! auth()->user()->can('hr.employees.view')) {
             abort(403, 'Unauthorized action.');
         }
-        $employees = Employee::with(['department', 'designation'])->latest()->paginate(12);
+        $employees = Employee::with(['department', 'designation', 'shift'])->latest()->paginate(12);
         $departments = Department::all();
         $designations = Designation::all();
+        $shifts = \App\Models\Hr\Shift::all();
 
-        return view('hr.employees.index', compact('employees', 'departments', 'designations'));
+        return view('hr.employees.index', compact('employees', 'departments', 'designations', 'shifts'));
     }
 
     public function store(Request $request)
@@ -35,6 +37,7 @@ class EmployeeController extends Controller
             'joining_date' => 'required|date',
             'basic_salary' => 'required|numeric',
             'password' => $request->filled('edit_id') ? 'nullable|min:6' : 'required|min:6',
+            'punch_gap_minutes' => 'nullable|integer|min:1|max:120',
             'document_degree' => 'nullable|file|mimes:pdf,jpg,png,jpeg|max:2048',
             'document_certificate' => 'nullable|file|mimes:pdf,jpg,png,jpeg|max:2048',
             'document_hsc_marksheet' => 'nullable|file|mimes:pdf,jpg,png,jpeg|max:2048',
@@ -48,6 +51,15 @@ class EmployeeController extends Controller
 
         $data = $request->except(['document_degree', 'document_certificate', 'document_hsc_marksheet', 'document_ssc_marksheet', 'document_cv', 'password']);
         $data['is_docs_submitted'] = $request->has('is_docs_submitted') ? 1 : 0;
+
+        // Handle Custom Shift Logic
+        if ($request->shift_id === 'custom') {
+            $data['shift_id'] = null; // No standard shift assigned
+        } else {
+            // Standard shift assigned, clear custom times
+            $data['custom_start_time'] = null;
+            $data['custom_end_time'] = null;
+        }
 
         if ($request->filled('edit_id')) {
             if (! auth()->user()->can('hr.employees.edit')) {
@@ -89,43 +101,108 @@ class EmployeeController extends Controller
         foreach ($fileFields as $field) {
             if ($request->hasFile($field)) {
                 $file = $request->file($field);
-                $filename = time().'_'.$field.'.'.$file->getClientOriginalExtension();
-                $file->move(public_path('uploads/human_resource/documents'), $filename);
-                $filePath = 'uploads/human_resource/documents/'.$filename;
+                $path = $file->store('employee_docs', 'public');
 
-                // Update or Create the document record
-                // Since $field matches the form name (e.g. document_degree), we use it as key or map if needed.
-                // We'll remove 'document_' prefix to get pure type
-                $type = str_replace('document_', '', $field);
-
-                \App\Models\Hr\EmployeeDocument::updateOrCreate(
-                    ['employee_id' => $employee->id, 'type' => $type],
-                    ['file_path' => $filePath]
+                $employee->documents()->updateOrCreate(
+                    ['type' => str_replace('document_', '', $field)],
+                    ['file_path' => $path, 'file_name' => $file->getClientOriginalName()]
                 );
             }
         }
 
-        return response()->json([
-            'success' => $request->filled('edit_id') ? 'Employee Updated Successfully' : 'Employee Created Successfully',
-            'reload' => true,
-        ]);
-    }
+        // Auto-sync to biometric device when creating new employee
+        if (!$request->filled('edit_id')) {
+            try {
+                $activeDevice = \App\Models\BiometricDevice::active()->first();
+                if ($activeDevice) {
+                    $syncService = app(\App\Services\BiometricSyncService::class);
+                    $syncService->syncEmployeeToDevice($employee, $activeDevice);
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning('Failed to auto-sync employee to biometric device: ' . $e->getMessage());
+                // Don't fail the employee creation if sync fails
+            }
+        }
 
-    public function update(Request $request, Employee $employee)
-    {
-        // Not used in this pattern, handled in store with edit_id
+        return response()->json(['success' => 'Employee saved successfully']);
     }
 
     public function destroy(Employee $employee)
     {
         if (! auth()->user()->can('hr.employees.delete')) {
-            return response()->json(['error' => 'Unauthorized action.'], 403);
+            abort(403, 'Unauthorized action.');
+        }
+        // Delete User Account
+        if ($employee->user_id) {
+            \App\Models\User::destroy($employee->user_id);
         }
         $employee->delete();
 
-        return response()->json([
-            'success' => 'Employee Deleted Successfully',
-            'reload' => true,
+        return redirect()->route('hr.employees.index')->with('success', 'Employee deleted successfully');
+    }
+    
+    /**
+     * Get face encodings for all employees (for Kiosk)
+     */
+    public function getEncodings()
+    {
+        $employees = Employee::whereNotNull('face_encoding')
+            ->where('status', 'active')
+            ->select('id', 'first_name', 'last_name', 'face_encoding', 'face_photo', 'designation_id', 'department_id')
+            ->with(['department', 'designation'])
+            ->get();
+            
+        $data = $employees->map(function ($emp) {
+            return [
+                'id' => $emp->id,
+                'name' => $emp->full_name,
+                'department' => $emp->department->name ?? 'N/A',
+                'designation' => $emp->designation->name ?? 'N/A',
+                'photo' => $emp->face_photo ? asset($emp->face_photo) : null,
+                'descriptor' => $emp->face_encoding
+            ];
+        });
+        
+        return response()->json($data);
+    }
+    
+    /**
+     * Store face encoding for an employee
+     */
+    public function storeFace(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'employee_id' => 'required|exists:hr_employees,id',
+            'descriptor' => 'required|array',
+            'image' => 'nullable|string' // Base64 image
         ]);
+        
+        if ($validator->fails()) {
+           return response()->json(['errors' => $validator->errors()], 422); 
+        }
+        
+        $employee = Employee::findOrFail($request->employee_id);
+        $employee->face_encoding = $request->descriptor;
+        
+        // Save face photo if provided
+        if ($request->image) {
+            $imageData = explode(',', $request->image);
+            if (count($imageData) > 1) {
+                $decoded = base64_decode($imageData[1]);
+                $fileName = 'face_' . $employee->id . '_' . time() . '.jpg';
+                $path = 'uploads/faces/';
+                
+                if (!file_exists(public_path($path))) {
+                    mkdir(public_path($path), 0755, true);
+                }
+                
+                file_put_contents(public_path($path . $fileName), $decoded);
+                $employee->face_photo = $path . $fileName;
+            }
+        }
+        
+        $employee->save();
+        
+        return response()->json(['success' => 'Face registered successfully for ' . $employee->full_name]);
     }
 }

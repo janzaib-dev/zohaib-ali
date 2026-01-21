@@ -100,7 +100,7 @@ class LoanController extends Controller
 
     public function getHistory($id)
     {
-        $loan = Loan::with(['payments', 'scheduledDeductions'])->findOrFail($id);
+        $loan = Loan::with(['employee', 'payments', 'scheduledDeductions'])->findOrFail($id);
 
         return response()->json($loan);
     }
