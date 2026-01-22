@@ -3,16 +3,19 @@
 
     <style>
         :root {
-            --perm-primary: #6366f1;
-            --perm-success: #22c55e;
+            --perm-primary: #4f46e5;
+            --perm-success: #10b981;
             --perm-warning: #f59e0b;
             --perm-danger: #ef4444;
             --perm-info: #0ea5e9;
-            --perm-bg: #f8fafc;
+            --perm-bg: #f3f4f6;
             --perm-card: #ffffff;
-            --perm-border: #e2e8f0;
-            --perm-text: #1e293b;
-            --perm-muted: #64748b;
+            --perm-border: #e5e7eb;
+            --perm-text: #111827;
+            --perm-muted: #6b7280;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --radius-lg: 1rem;
         }
 
         .page-header {
@@ -294,6 +297,26 @@
             background: #f3e8ff;
             color: #7c3aed;
         }
+        
+        .perm-action-badge.mark {
+            background: #ffedd5;
+            color: #c2410c;
+        }
+        
+        .perm-action-badge.print {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+        
+        .perm-action-badge.export {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .perm-action-badge.other {
+            background: #f1f5f9;
+            color: #64748b;
+        }
 
         .perm-actions {
             display: flex;
@@ -501,8 +524,14 @@
                 <!-- Stats Row -->
                 @php
                     $groupedPerms = $permissions->groupBy(function ($p) {
-                        return explode('.', $p->name)[0];
-                    });
+                         // Group logic: everything before the last dot
+                        $parts = explode('.', $p->name);
+                        if (count($parts) > 1) {
+                            array_pop($parts);
+                            return implode('.', $parts);
+                        }
+                        return 'General';
+                    })->sortKeys();
                 @endphp
                 <div class="stats-row">
                     <div class="stat-card primary">
@@ -549,6 +578,8 @@
                     <div class="perm-groups" id="permGroups">
                         @forelse($groupedPerms as $module => $perms)
                             @php
+                                // Icon logic
+                                $mainCategory = explode('.', $module)[0];
                                 $moduleIcons = [
                                     'hr' => 'fa-users',
                                     'users' => 'fa-user',
@@ -561,13 +592,35 @@
                                     'purchase' => 'fa-cart-plus',
                                     'accounts' => 'fa-calculator',
                                 ];
-                                $icon = $moduleIcons[$module] ?? 'fa-folder';
+                                $icon = $moduleIcons[$mainCategory] ?? 'fa-folder';
+                                
+                                // Format Title
+                                $title = str_replace('.', ' ', $module);
+                                $title = ucwords($title);
+                                $title = str_replace('Hr ', 'HR ', $title);
+                                
+                                // Sort permissions in this group
+                                $perms = $perms->sortBy(function($p) {
+                                    $action = explode('.', $p->name);
+                                    $action = end($action);
+                                    $order = [
+                                        'view' => 1, 'read' => 1,
+                                        'create' => 2, 'add' => 2,
+                                        'edit' => 3, 'update' => 3,
+                                        'delete' => 4, 'remove' => 4,
+                                        'approve' => 5,
+                                        'mark' => 6,
+                                        'print' => 7, 
+                                        'export' => 8
+                                    ];
+                                    return $order[$action] ?? 99;
+                                });
                             @endphp
                             <div class="perm-group" data-module="{{ strtolower($module) }}">
                                 <div class="perm-group-header">
                                     <div class="perm-group-title">
                                         <div class="perm-group-icon"><i class="fa {{ $icon }}"></i></div>
-                                        <span class="perm-group-name">{{ $module }}</span>
+                                        <span class="perm-group-name">{{ $title }}</span>
                                     </div>
                                     <span class="perm-group-count">{{ $perms->count() }} permissions</span>
                                 </div>
@@ -576,17 +629,14 @@
                                         @foreach ($perms as $perm)
                                             @php
                                                 $action = collect(explode('.', $perm->name))->last();
-                                                $actionClass = in_array($action, ['view', 'read'])
-                                                    ? 'view'
-                                                    : (in_array($action, ['create', 'add'])
-                                                        ? 'create'
-                                                        : (in_array($action, ['edit', 'update'])
-                                                            ? 'edit'
-                                                            : (in_array($action, ['delete', 'remove'])
-                                                                ? 'delete'
-                                                                : ($action === 'approve'
-                                                                    ? 'approve'
-                                                                    : 'view'))));
+                                                $actionClass = in_array($action, ['view', 'read']) ? 'view' :
+                                                              (in_array($action, ['create', 'add']) ? 'create' :
+                                                              (in_array($action, ['edit', 'update']) ? 'edit' :
+                                                              (in_array($action, ['delete', 'remove']) ? 'delete' :
+                                                              (in_array($action, ['approve']) ? 'approve' :
+                                                              (in_array($action, ['mark']) ? 'mark' :
+                                                              (in_array($action, ['print']) ? 'print' :
+                                                              (in_array($action, ['export']) ? 'export' : 'other')))))));
                                             @endphp
                                             <div class="perm-item" data-id="{{ $perm->id }}"
                                                 data-name="{{ strtolower($perm->name) }}">

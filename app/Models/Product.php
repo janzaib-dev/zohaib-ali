@@ -60,8 +60,7 @@ class Product extends Model
         return $this->hasOne(Stock::class);
     }
 
-    public function boms(){ return $this->hasMany(ProductBom::class,'product_id'); }
-public function components(){ return $this->belongsToMany(Product::class,'product_boms','product_id','part_id')->withPivot('qty_per_unit'); }
+
 public function movements(){ return $this->hasMany(StockMovement::class); }
 public function scopeWithAvailable($q){
     return $q->withSum('movements as available_qty','qty'); // sum of ledger

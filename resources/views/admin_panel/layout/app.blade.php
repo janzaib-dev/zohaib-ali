@@ -394,7 +394,7 @@
                         </li>
                         <li class="nav-item">
                             @canany(['item.stock.report.view', 'purchase.report.view', 'sale.report.view',
-                                'customer.ledger.view', 'assembly.report.view', 'inventory.onhand.view'])
+                                'customer.ledger.view', 'inventory.onhand.view'])
                                 <a href="#" class="nav-link">
                                     <i class="menu_icon feather ft-clipboard"></i>
                                     <span class="menu-title">Reports</span>
@@ -419,10 +419,7 @@
                                                         class="fa-solid fa-users"></i> Customer Ledger</a></li>
                                         @endcan
 
-                                        @can('assembly.report.view')
-                                            <li><a href="{{ route('assembly.report') }}"><i class="fas fa-cogs"></i> Assembly
-                                                    Report</a></li>
-                                        @endcan
+
                                         @can('inventory.onhand.view')
                                             <li><a href="{{ route('reports.onhand') }}"><i class="fas fa-warehouse"></i>
                                                     Inventory On-Hand</a></li>

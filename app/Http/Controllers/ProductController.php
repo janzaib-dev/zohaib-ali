@@ -7,7 +7,7 @@ use App\Models\Category;
 use App\Models\Subcategory;
 use App\Models\Brand;
 use App\Models\Unit;
-use App\Models\ProductBom;
+
 use App\Models\StockMovement;
 use App\Models\Stock;
 use Illuminate\Support\Facades\DB;
@@ -61,106 +61,7 @@ class ProductController extends Controller
     }
 
 
-    public function assemblyReport(Request $request, $id)
-    {
-        // optional: user ne target units pass kiye (e.g. kitne banana chahte ho)
-        $targetUnits = (float)$request->get('target', 0);
 
-        // product + BOM rows
-        $product = Product::findOrFail($id);
-        $bomRows = ProductBom::with(['part:id,item_name,unit_id'])
-            ->where('product_id', $id)
-            ->get(['id', 'product_id', 'part_id', 'qty_per_unit']);
-
-        // sab involved product_ids (finished + parts)
-        $allIds = collect([$id])->merge($bomRows->pluck('part_id'))->unique()->values();
-
-        // available map: product_id => available_qty
-        $avail = StockMovement::whereIn('product_id', $allIds)
-            ->selectRaw('product_id, COALESCE(SUM(qty),0) as qty_sum')
-            ->groupBy('product_id')
-            ->pluck('qty_sum', 'product_id');
-
-        $readyStock = (float)($avail[$id] ?? 0);
-
-        // assemblePossible = min(floor(available_part / qty_per_unit))
-        $assemblePossible = $bomRows->count() ? $bomRows->map(function ($r) use ($avail) {
-            $a = (float)($avail[$r->part_id] ?? 0);
-            $rpu = (float)$r->qty_per_unit;
-            return $rpu > 0 ? floor($a / $rpu) : INF;
-        })->min() : 0;
-
-        // agar user ne target diya hai to usko use karo; warna assemblePossible ko target maan lo
-        $target = $targetUnits > 0 ? $targetUnits : $assemblePossible;
-
-        // per-part breakdown
-        $parts = $bomRows->map(function ($r) use ($avail, $target) {
-            $available = (float)($avail[$r->part_id] ?? 0);
-            $needed = (float)$r->qty_per_unit * (float)$target;
-            $shortage = max(0, $needed - $available);
-            return [
-                'part_id' => $r->part_id,
-                'part_name' => $r->part->item_name ?? 'N/A',
-                'qty_per_unit' => (float)$r->qty_per_unit,
-                'available' => $available,
-                'needed' => $needed,
-                'shortage' => $shortage,
-            ];
-        });
-
-        // response
-        return response()->json([
-            'product_id' => $product->id,
-            'product_name' => $product->item_name,
-            'ready_stock' => $readyStock,
-            'assemble_possible' => (float)$assemblePossible,
-            'total_sellable' => (float)($readyStock + $assemblePossible),
-            'target_used' => (float)$target,
-            'parts' => $parts,
-            'short_parts' => $parts->filter(fn($p) => $p['shortage'] > 0)->values(),
-        ]);
-    }
-
-    public function assemblySummary()
-    {
-        // sirf wo products jinke BOM rows hain (assembled)
-        $assembledIds = ProductBom::select('product_id')->distinct()->pluck('product_id');
-
-        // sab related product_ids (finished + unke parts)
-        $partIds = ProductBom::whereIn('product_id', $assembledIds)->pluck('part_id');
-        $allIds = $assembledIds->merge($partIds)->unique()->values();
-
-        // available map
-        $avail = StockMovement::whereIn('product_id', $allIds)
-            ->selectRaw('product_id, COALESCE(SUM(qty),0) as qty_sum')
-            ->groupBy('product_id')
-            ->pluck('qty_sum', 'product_id');
-
-        // build rows
-        $rows = $assembledIds->map(function ($pid) use ($avail) {
-            $p = Product::find($pid);
-            $bom = ProductBom::where('product_id', $pid)->get();
-            if (!$p || $bom->isEmpty()) {
-                return null;
-            }
-            $assemblePossible = $bom->map(function ($r) use ($avail) {
-                $a = (float)($avail[$r->part_id] ?? 0);
-                $rpu = (float)$r->qty_per_unit;
-                return $rpu > 0 ? floor($a / $rpu) : INF;
-            })->min();
-            $ready = (float)($avail[$pid] ?? 0);
-
-            return [
-                'product_id' => $pid,
-                'product_name' => $p->item_name,
-                'ready_stock' => $ready,
-                'assemble_possible' => (float)$assemblePossible,
-                'total_sellable' => (float)($ready + $assemblePossible),
-            ];
-        })->filter()->values();
-
-        return view('admin_panel.product.assembly_summary', compact('rows'));
-    }
 
 
     // ===== Product search (general) =====
@@ -281,8 +182,8 @@ class ProductController extends Controller
                 'loose_piece' => $request->loose_piece,
                 'image' => $imagePath,
                 'color' => $request->color ? json_encode($request->color) : null,
-                'is_part' => $request->has('is_part') ? 1 : 0,
-                'is_assembled' => $request->has('is_assembled') ? 1 : 0,
+                'is_part' => 0,
+                'is_assembled' => 0,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -310,22 +211,7 @@ class ProductController extends Controller
                 );
             }
 
-            // BOM save
-            if ($request->boolean('is_assembled') && $request->filled('bom_json')) {
-                $rows = collect(json_decode($request->bom_json, true))
-                    ->filter(fn($r) => !empty($r['part_id']) && (float)($r['required_per_unit'] ?? 0) > 0)
-                    ->map(fn($r) => [
-                        'product_id' => $product->id,
-                        'part_id' => $r['part_id'],
-                        'qty_per_unit' => (float)$r['required_per_unit'],
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ])->values();
 
-                if ($rows->count()) {
-                    DB::table('product_boms')->insert($rows->all());
-                }
-            }
         });
 
         return redirect()->back()->with('success', 'Product created successfully');
@@ -358,37 +244,7 @@ class ProductController extends Controller
     //         ];
     //     }));
     // }
-    public function searchPartName(Request $request)
-    {
-        $q = $request->get('q', '');
 
-        $parts = Product::query()
-            ->where('is_part', 1)
-            ->leftJoin('v_stock_onhand as v', 'v.product_id', '=', 'products.id')
-            ->where(function ($x) use ($q) {
-                $x->where('products.item_name', 'like', "%{$q}%")
-                    ->orWhere('products.item_code', 'like', "%{$q}%");
-            })
-            ->select([
-                'products.id',
-                'products.item_name',
-                'products.item_code',
-                'products.unit_id',
-                DB::raw('COALESCE(v.onhand_qty,0) as available_qty'),
-            ])
-            ->limit(20)
-            ->get();
-
-        return response()->json($parts->map(function ($p) {
-            return [
-                'id' => $p->id,
-                'item_name' => $p->item_name,
-                'item_code' => $p->item_code,
-                'unit' => optional(Unit::find($p->unit_id))->name ?? '',
-                'available_qty' => (float)$p->available_qty,
-            ];
-        }));
-    }
 
 
     // ===== Update product =====
@@ -425,29 +281,13 @@ class ProductController extends Controller
                 'piece_per_pack' => $request->piece_per_pack,
                 'loose_piece' => $request->loose_piece,
                 'image' => $imagePath,
-                'is_part' => $request->has('is_part') ? 1 : 0,
-                'is_assembled' => $request->has('is_assembled') ? 1 : 0,
+                'is_part' => 0,
+                'is_assembled' => 0,
                 'updated_at' => now(),
             ]);
 
             // BOM re-save (replace all for this product)
             DB::table('product_boms')->where('product_id', $id)->delete();
-
-            if ($request->has('is_assembled') && $request->is_assembled && $request->filled('bom_json')) {
-                $rows = collect(json_decode($request->bom_json, true))
-                    ->filter(fn($r) => !empty($r['part_id']) && (float)($r['required_per_unit'] ?? 0) > 0)
-                    ->map(fn($r) => [
-                        'product_id' => $id,
-                        'part_id' => $r['part_id'],
-                        'qty_per_unit' => (float)$r['required_per_unit'],
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ])->values();
-
-                if ($rows->count()) {
-                    DB::table('product_boms')->insert($rows->all());
-                }
-            }
 
             // Optional: stock adjustment field handle
             if ($request->filled('stock_adjust') && (float)$request->stock_adjust != 0) {

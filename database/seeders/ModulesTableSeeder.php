@@ -49,8 +49,7 @@ class ModulesTableSeeder extends Seeder
             'customers',
             'customer.ledger',
             'bookings',
-            'assembly',
-            'assembly.report',
+
             'chart.of.accounts',
             'expense.voucher',
             'receipts.voucher',
@@ -80,6 +79,8 @@ class ModulesTableSeeder extends Seeder
             'hr.shifts',
             'hr.holidays',
             'hr.salary.structure',
+            'hr.loans',
+            'hr.biometric.devices',
         ];
 
         foreach ($modules as $name) {

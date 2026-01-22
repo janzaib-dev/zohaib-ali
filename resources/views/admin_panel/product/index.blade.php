@@ -162,12 +162,7 @@
                                         class="btn btn-sm btn-outline-success">
                                         🏷 Barcode
                                     </a>
-                                    @if ($product->is_assembled)
-                                        <a class="btn btn-sm btn-outline-primary"
-                                            href="{{ route('assembly.report.show', $product->id) }}">
-                                            <i class="fas fa-cogs"></i> Assembly Report
-                                        </a>
-                                    @endif
+
 
 
                                 </td>

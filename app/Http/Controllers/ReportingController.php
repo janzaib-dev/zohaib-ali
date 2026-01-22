@@ -21,9 +21,7 @@ class ReportingController extends Controller
                 products.item_name,
                 COALESCE(brands.name, "") as brand_name,
                 COALESCE(units.name, "") as unit_name,
-                COALESCE(soh.onhand_qty, 0) as onhand_qty,
-                products.is_part,
-                products.is_assembled
+                COALESCE(soh.onhand_qty, 0) as onhand_qty
             ')
             ->orderBy('products.item_name')
             ->get();

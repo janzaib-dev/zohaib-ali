@@ -488,6 +488,9 @@
             border-radius: 14px;
             border: 1px solid var(--role-border);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
         .perm-search-wrapper {
@@ -641,6 +644,18 @@
             border-left: 3px solid var(--role-primary);
         }
 
+        /* Make entire item clickable */
+        .perm-item label {
+            cursor: pointer;
+            flex: 1;
+            padding: 8px 0;
+            /* Increase hit area */
+        }
+
+        .perm-item-wrapper {
+            cursor: pointer;
+        }
+
         .perm-item input[type="checkbox"] {
             width: 18px;
             height: 18px;
@@ -685,6 +700,26 @@
         .perm-action-badge.approve {
             background: #f3e8ff;
             color: #7c3aed;
+        }
+
+        .perm-action-badge.mark {
+            background: #ffedd5;
+            color: #c2410c;
+        }
+
+        .perm-action-badge.print {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .perm-action-badge.export {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .perm-action-badge.other {
+            background: #f1f5f9;
+            color: #64748b;
         }
 
         /* Empty State */
@@ -1054,15 +1089,50 @@
                 };
 
                 allPermissions.forEach(function(p) {
+                    // Group by everything before the last dot (the action)
                     var parts = p.name.split('.');
-                    var module = parts[0] || 'other';
+                    if (parts.length > 1) {
+                        parts.pop(); // remove action
+                        var module = parts.join('.');
+                    } else {
+                        var module = 'General';
+                    }
+
                     if (!groups[module]) groups[module] = [];
                     groups[module].push(p);
                 });
 
                 Object.keys(groups).sort().forEach(function(module) {
                     var perms = groups[module];
-                    var icon = moduleIcons[module] || 'fa-folder';
+
+                    // Custom sort order
+                    var order = {
+                        'view': 1,
+                        'create': 2,
+                        'edit': 3,
+                        'delete': 4,
+                        'approve': 5,
+                        'mark': 6,
+                        'print': 7,
+                        'export': 8
+                    };
+                    perms.sort(function(a, b) {
+                        var actionA = a.name.split('.').pop();
+                        var actionB = b.name.split('.').pop();
+                        var valA = order[actionA] || 99;
+                        var valB = order[actionB] || 99;
+                        return valA - valB;
+                    });
+
+                    // Icon logic: check first part of module (e.g. 'hr' from 'hr.employees')
+                    var mainCategory = module.split('.')[0];
+                    var icon = moduleIcons[mainCategory] || 'fa-folder-open';
+
+                    // Format Title: hr.employees -> HR Employees
+                    var title = module.replace(/\./g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                        .replace('Hr ', 'HR ');
+
+                    var icon = moduleIcons[module] || moduleIcons[mainCategory] || 'fa-folder';
                     var checkedCount = perms.filter(p => assignedPerms.includes(p.name)).length;
 
                     var html = `
@@ -1070,7 +1140,7 @@
                             <div class="permission-group-header">
                                 <div class="module-name">
                                     <span class="module-icon"><i class="fa ${icon}"></i></span>
-                                    ${module.charAt(0).toUpperCase() + module.slice(1)}
+                                    ${title}
                                     <span class="badge bg-secondary">${perms.length}</span>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
@@ -1088,19 +1158,27 @@
                     perms.forEach(function(p) {
                         var checked = assignedPerms.includes(p.name);
                         var action = p.name.split('.').pop();
-                        var actionClass = ['view', 'create', 'edit', 'delete', 'approve'].includes(
-                            action) ? action : 'view';
+                        var knownActions = ['view', 'create', 'edit', 'delete', 'approve', 'mark',
+                            'print', 'export'
+                        ];
+                        var actionClass = knownActions.includes(action) ? action : 'other';
 
                         html += `
-                            <div class="col-md-6 col-lg-4 perm-item-wrapper" data-name="${p.name.toLowerCase()}">
-                                <div class="perm-item ${checked ? 'checked' : ''}">
-                                    <input type="checkbox" name="permissions[]" value="${p.name}" id="perm-${p.id}" ${checked ? 'checked' : ''}>
-                                    <label for="perm-${p.id}">${p.name}</label>
+                            <div class="col-12 col-md-6 col-lg-4 col-xl-3 perm-item-wrapper" data-name="${p.name.toLowerCase()}">
+                                <div class="perm-item ${checked ? 'checked' : ''}" onclick="togglePerm('${p.id}')">
+                                    <input type="checkbox" name="permissions[]" value="${p.name}" id="perm-${p.id}" ${checked ? 'checked' : ''} onclick="event.stopPropagation()">
+                                    <label for="perm-${p.id}" onclick="event.stopPropagation(); togglePerm('${p.id}')">${p.name}</label>
                                     <span class="perm-action-badge ${actionClass}">${action}</span>
                                 </div>
                             </div>
                         `;
                     });
+
+                    // Add click handler to valid scope
+                    window.togglePerm = function(id) {
+                        var checkbox = $('#perm-' + id);
+                        checkbox.prop('checked', !checkbox.prop('checked')).trigger('change');
+                    };
 
                     html += `
                                 </div>
@@ -1196,6 +1274,11 @@
             // Permission form submit
             $('#permissionForm').submit(function(e) {
                 e.preventDefault();
+                var btn = $(this).find('button[type="submit"]');
+                var originalContent = btn.html();
+
+                btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Saving...');
+
                 $.ajax({
                     url: $(this).attr('action'),
                     type: 'POST',
@@ -1206,6 +1289,7 @@
                     },
                     error: function() {
                         Swal.fire('Error', 'Something went wrong', 'error');
+                        btn.prop('disabled', false).html(originalContent);
                     }
                 });
             });

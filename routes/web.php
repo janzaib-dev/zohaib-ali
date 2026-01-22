@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountsHeadController;
-use App\Http\Controllers\AssemblyController;
+
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
@@ -82,13 +82,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/subcategory/delete/{id}', [SubcategoryController::class, 'delete'])->middleware('permission:subcategories.delete')->name('delete.subcategory');
     route::post('/subcategory/stote', [SubcategoryController::class, 'store'])->middleware('permission:subcategories.create|subcategories.edit')->name('store.subcategory');
 
-    Route::post('/assembly/pluck-part', [AssemblyController::class, 'pluckPart'])->middleware('permission:assembly.view')->name('assembly.pluck.part');
-    Route::post('/assembly/repair-incomplete', [AssemblyController::class, 'repairIncomplete'])->middleware('permission:assembly.edit')->name('assembly.repair.incomplete');
-    Route::post('/assembly/build-auto', [AssemblyController::class, 'buildAuto'])->middleware('permission:assembly.create')->name('assembly.build.auto');
-    Route::get('/products/{id}/assembly-report', [ProductController::class, 'assemblyReport'])->name('products.assembly-report');
-    Route::get('/assembly/summary', [ProductController::class, 'assemblySummary'])->name('assembly.summary');
 
-    Route::post('/assembly/ensure-part-for-sale', [AssemblyController::class, 'ensurePartForSale'])->name('assembly.ensure_part_for_sale');
+
+
+
     Route::get('productget', [ProductController::class, 'productget'])->name('productget');
 
     Route::get('/product', [ProductController::class, 'Product'])->middleware('permission:products.view')->name('product');
@@ -109,7 +106,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/generate-barcode-image', [ProductController::class, 'generateBarcode'])->name('generate-barcode-image');
     Route::get('/get-subcategories/{category_id}', [ProductController::class, 'getSubcategories'])->name('fetch-subcategories');
 
-    Route::get('/search-part-name', [ProductController::class, 'searchPartName'])->name('search-part-name');
+
 
     Route::prefix('discount')->group(function () {
         Route::get('/', [DiscountController::class, 'index'])->middleware('permission:discount.products.view')->name('discount.index');
@@ -119,30 +116,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/barcode/{id}', [DiscountController::class, 'barcode'])->middleware('permission:discount.products.view')->name('discount.barcode');
     });
 
-    Route::get('/parts-adjust', [AssemblyController::class, 'adjustForm'])
-        ->name('stock.adjust.form');
 
-    Route::post('/stock-adjust/bulk', [AssemblyController::class, 'adjustBulk'])
-        ->name('assembly.adjust.bulk');
-
-    // package type controller
-
-    // Route::get('/package-types', [PakageTypeController::class, 'index'])
-    //     ->name('package-type.index');
-
-    // Route::post('/package-type/store', [PackageTypeController::class, 'store'])
-    //     ->name('package-type.store');
-
-    // Route::post('/package-type/update', [PackageTypeController::class, 'update'])
-    //     ->name('package-type.update');
-
-    // Route::get('/package-type/delete/{id}', [PackageTypeController::class, 'destroy'])
-    //     ->name('package-type.delete');
-
-    // Assembly Routes
-    Route::get('/assembly-report', [AssemblyController::class, 'index'])->middleware('permission:assembly.report.view')->name('assembly.report');
-    Route::get('/assembly-report/{product}', [AssemblyController::class, 'show'])->middleware('permission:assembly.report.view')->name('assembly.report.show');
-    Route::post('/assembly/build', [AssemblyController::class, 'build'])->middleware('permission:assembly.create')->name('assembly.build');
 
     // routes/web.php
 

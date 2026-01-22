@@ -42,8 +42,7 @@ class AllModulesPermissionsSeeder extends Seeder
             'customers',
             'customer.ledger',
             'bookings',
-            'assembly',
-            'assembly.report',
+
             'chart.of.accounts',
             'expense.voucher',
             'receipts.voucher',
@@ -72,7 +71,9 @@ class AllModulesPermissionsSeeder extends Seeder
             'hr.designations',
             'hr.shifts',
             'hr.holidays',
-            'hr.salary.structure'
+            'hr.salary.structure',
+            'hr.loans',
+            'hr.biometric.devices'
         ];
 
         // Standard actions
