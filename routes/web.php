@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\AccountsHeadController;
-
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
@@ -10,8 +9,6 @@ use App\Http\Controllers\DiscountController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InwardgatepassController;
 use App\Http\Controllers\NarrationController;
-use App\Http\Controllers\PackageTypeController;
-use App\Http\Controllers\PakageTypeController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\ProductBookingController;
 use App\Http\Controllers\ProductController;
@@ -44,6 +41,10 @@ use Illuminate\Support\Facades\Route;
     |
     */
 
+Route::get('/', function () {
+    return auth()->check() ? redirect()->route('home') : redirect()->route('login');
+});
+
 Route::get('/home', [HomeController::class, 'index'])->middleware('auth')->name('home');
 
 // Route::get('/adminpage', [HomeController::class, 'adminpage'])->middleware(['auth','admin'])->name('adminpage');
@@ -51,15 +52,16 @@ Route::get('/home', [HomeController::class, 'index'])->middleware('auth')->name(
 Route::get('/test-log', function () {
     try {
         \Illuminate\Support\Facades\Log::info('Test log entry');
-        return 'Log written successfully to ' . storage_path('logs/laravel.log');
+
+        return 'Log written successfully to '.storage_path('logs/laravel.log');
     } catch (\Exception $e) {
-        return 'Log write failed: ' . $e->getMessage();
+        return 'Log write failed: '.$e->getMessage();
     }
 });
 
-// Route::get('/dashboard', function () {
-//     return view('dashboard');
-// })->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', function () {
+    return view('dashboard');
+})->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -82,10 +84,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/subcategory/delete/{id}', [SubcategoryController::class, 'delete'])->middleware('permission:subcategories.delete')->name('delete.subcategory');
     route::post('/subcategory/stote', [SubcategoryController::class, 'store'])->middleware('permission:subcategories.create|subcategories.edit')->name('store.subcategory');
 
-
-
-
-
     Route::get('productget', [ProductController::class, 'productget'])->name('productget');
 
     Route::get('/product', [ProductController::class, 'Product'])->middleware('permission:products.view')->name('product');
@@ -106,8 +104,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/generate-barcode-image', [ProductController::class, 'generateBarcode'])->name('generate-barcode-image');
     Route::get('/get-subcategories/{category_id}', [ProductController::class, 'getSubcategories'])->name('fetch-subcategories');
 
-
-
     Route::prefix('discount')->group(function () {
         Route::get('/', [DiscountController::class, 'index'])->middleware('permission:discount.products.view')->name('discount.index');
         Route::get('/create', [DiscountController::class, 'create'])->middleware('permission:discount.products.create')->name('discount.create');
@@ -115,8 +111,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/toggle-status/{id}', [DiscountController::class, 'toggleStatus'])->middleware('permission:discount.products.edit')->name('discount.toggleStatus');
         Route::get('/barcode/{id}', [DiscountController::class, 'barcode'])->middleware('permission:discount.products.view')->name('discount.barcode');
     });
-
-
 
     // routes/web.php
 

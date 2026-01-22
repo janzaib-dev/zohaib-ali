@@ -28,7 +28,7 @@ class LeaveController extends Controller
             'leave_type' => 'required',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'reason' => 'nullable|string|min:3',
+            'reason' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {

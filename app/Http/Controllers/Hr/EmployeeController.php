@@ -17,7 +17,9 @@ class EmployeeController extends Controller
         if (! auth()->user()->can('hr.employees.view')) {
             abort(403, 'Unauthorized action.');
         }
-        $employees = Employee::with(['department', 'designation', 'shift'])->latest()->paginate(12);
+        $employees = Employee::with(['department', 'designation', 'shift', 'leaves' => function($q) {
+            $q->where('leave_type', 'Casual');
+        }])->latest()->paginate(12);
         $departments = Department::all();
         $designations = Designation::all();
         $shifts = \App\Models\Hr\Shift::all();
@@ -28,9 +30,9 @@ class EmployeeController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'first_name' => 'required|string|min:3',
-            'last_name' => 'required|string|min:3',
-            'phone' => 'required|string|min:11|max:11',
+            'first_name' => 'required|string',
+            'last_name' => 'required|string',
+            'phone' => 'required|string|max:11',
             'email' => 'required|email|max:255|unique:hr_employees,email,'.$request->edit_id,
             'department_id' => 'required|exists:hr_departments,id',
             'designation_id' => 'required|exists:hr_designations,id',
@@ -49,7 +51,7 @@ class EmployeeController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $data = $request->except(['document_degree', 'document_certificate', 'document_hsc_marksheet', 'document_ssc_marksheet', 'document_cv', 'password']);
+        $data = $request->except(['document_degree', 'document_certificate', 'document_hsc_marksheet', 'document_ssc_marksheet', 'document_cv', 'password', 'casual_leave_days']);
         $data['is_docs_submitted'] = $request->has('is_docs_submitted') ? 1 : 0;
 
         // Handle Custom Shift Logic
@@ -110,6 +112,44 @@ class EmployeeController extends Controller
             }
         }
 
+        // Handle Casual Leave Days Sync
+        if ($request->has('casual_leave_days')) {
+            $submittedDates = $request->casual_leave_days ? explode(',', $request->casual_leave_days) : [];
+            $submittedDates = array_map('trim', $submittedDates);
+            
+            // Get existing single-day Casual leaves
+            $existingLeaves = $employee->leaves()
+                ->where('leave_type', 'Casual')
+                ->whereRaw('start_date = end_date') // Only manage single-day leaves to avoid messing up ranges
+                ->get();
+            
+            $existingDates = $existingLeaves->pluck('start_date')->map(function($d) {
+                return \Carbon\Carbon::parse($d)->format('Y-m-d');
+            })->toArray();
+            
+            // 1. Create new leaves
+            foreach ($submittedDates as $date) {
+                if (!empty($date) && !in_array($date, $existingDates)) {
+                     // Check if leave already exists (e.g. part of a range) - optional check
+                    $employee->leaves()->create([
+                        'leave_type' => 'Casual',
+                        'start_date' => $date,
+                        'end_date' => $date,
+                        'reason' => 'Casual Leave assigned via Employee Form',
+                        'status' => 'approved' 
+                    ]);
+                }
+            }
+            
+            // 2. Delete removed leaves
+            foreach ($existingLeaves as $leave) {
+                $leaveDate = \Carbon\Carbon::parse($leave->start_date)->format('Y-m-d');
+                if (!in_array($leaveDate, $submittedDates)) {
+                    $leave->delete();
+                }
+            }
+        }
+
         // Auto-sync to biometric device when creating new employee
         if (!$request->filled('edit_id')) {
             try {
@@ -136,6 +176,8 @@ class EmployeeController extends Controller
         if ($employee->user_id) {
             \App\Models\User::destroy($employee->user_id);
         }
+        // Delete all casual leave records for this employee
+        $employee->leaves()->where('leave_type', 'Casual')->delete();
         $employee->delete();
 
         return redirect()->route('hr.employees.index')->with('success', 'Employee deleted successfully');

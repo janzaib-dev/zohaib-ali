@@ -8,6 +8,7 @@ use App\Models\Hr\Department;
 use App\Models\Hr\Designation;
 use App\Models\Hr\Employee;
 use App\Models\Hr\Holiday;
+use App\Models\Hr\Leave;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -31,6 +32,11 @@ class AttendanceController extends Controller
         $query = Employee::with(['department', 'designation', 'shift',
             'attendances' => function ($q) use ($selectedDate) {
                 $q->whereDate('date', $selectedDate);
+            },
+            'leaves' => function ($q) use ($selectedDate) {
+                $q->where('status', 'approved')
+                  ->whereDate('start_date', '<=', $selectedDate)
+                  ->whereDate('end_date', '>=', $selectedDate);
             },
         ])->where('status', 'active');
 
@@ -63,14 +69,40 @@ class AttendanceController extends Controller
         $employees = $query->orderBy('first_name')->paginate(12)->withQueryString();
 
         // Calculate summary
+        // Calculate summary
         $allAttendances = Attendance::whereDate('date', $selectedDate)->get();
+        $totalActiveEmployees = Employee::where('status', 'active')->count();
+        
+        // 1. Present & Late (from key source: actual attendance records)
+        $presentCount = $allAttendances->where('status', 'present')->where('is_late', false)->count();
+        $lateCount = $allAttendances->filter(function($a) {
+            return $a->status == 'late' || ($a->status == 'present' && $a->is_late);
+        })->count();
+        
+        // Get IDs of people who are physically here (present or late) so we don't count them as on leave
+        $presentOrLateIds = $allAttendances->whereIn('status', ['present', 'late'])->pluck('employee_id')->values()->toArray();
+
+        // 2. Leaves (from Leave model - source of truth for scheduled leaves)
+        // We exclude anyone who is marked present/late today (they showed up despite leave)
+        $leaveCount = Leave::where('status', 'approved')
+            ->whereDate('start_date', '<=', $selectedDate)
+            ->whereDate('end_date', '>=', $selectedDate)
+            ->whereHas('employee', function($q) {
+                $q->where('status', 'active');
+            })
+            ->whereNotIn('employee_id', $presentOrLateIds)
+            ->count();
+
+        // 3. Absent
+        // Anyone active who is not Present, Late, or On Leave
+        $accountedForCount = $presentCount + $lateCount + $leaveCount;
+        $absentCount = max(0, $totalActiveEmployees - $accountedForCount);
+
         $summary = [
-            'present' => $allAttendances->where('status', 'present')->where('is_late', false)->count(),
-            'absent' => $allAttendances->where('status', 'absent')->count(),
-            'late' => $allAttendances->filter(function($a) {
-                return $a->status == 'late' || ($a->status == 'present' && $a->is_late);
-            })->count(),
-            'leave' => $allAttendances->where('status', 'leave')->count(),
+            'present' => $presentCount,
+            'absent' => $absentCount,
+            'late' => $lateCount,
+            'leave' => $leaveCount,
         ];
 
         $isHoliday = Holiday::isHoliday($today);
@@ -216,8 +248,19 @@ class AttendanceController extends Controller
                         }
                     }
 
-                    // Handle 'Absent' Override
+                    // Handle 'Absent' Override - But Check for Leave First
                     if (isset($data['status']) && $data['status'] == 'absent') {
+                        // Check if employee has approved leave on this date
+                        if (Leave::hasApprovedLeave($empId, $dateParsed)) {
+                            // Cannot mark absent - employee has approved leave
+                            $leave = Leave::getApprovedLeave($empId, $dateParsed);
+                            return response()->json([
+                                'error' => "Cannot mark {$employee->full_name} as absent. Employee has approved {$leave->leave_type} leave from " . 
+                                          Carbon::parse($leave->start_date)->format('M d') . " to " . 
+                                          Carbon::parse($leave->end_date)->format('M d, Y') . "."
+                            ], 422);
+                        }
+                        
                         $updateData['clock_in'] = null;
                         $updateData['clock_out'] = null;
                         $updateData['check_in_time'] = null;
@@ -229,6 +272,14 @@ class AttendanceController extends Controller
                         $isEarlyLeave = false;
                         $earlyLeaveMinutes = 0;
                         $totalHours = 0;
+                    }
+
+                    // Check if employee has approved leave (auto-set to leave status)
+                    if (Leave::hasApprovedLeave($empId, $dateParsed) && (!isset($data['status']) || $data['status'] != 'leave')) {
+                        // If employee has leave but HR hasn't explicitly set it, auto-set to leave
+                        if (!isset($data['clock_in']) && !isset($data['clock_out'])) {
+                            $updateData['status'] = 'leave';
+                        }
                     }
 
                     $updateData['is_late'] = $isLate;

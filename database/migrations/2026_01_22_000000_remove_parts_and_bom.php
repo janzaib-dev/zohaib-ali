@@ -14,10 +14,10 @@ return new class extends Migration
         // Drop the BOM table first as it has foreign keys to products
         Schema::dropIfExists('product_boms');
 
-        // Drop the columns from products table
-        Schema::table('products', function (Blueprint $table) {
-            $table->dropColumn(['is_part', 'is_assembled']);
-        });
+        // Do NOT drop the columns from products table, keep 'is_part' and 'is_assembled' for seeder and app use
+        // Schema::table('products', function (Blueprint $table) {
+        //     $table->dropColumn(['is_part', 'is_assembled']);
+        // });
     }
 
     /**

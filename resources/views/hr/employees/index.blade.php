@@ -180,6 +180,8 @@
                                 <input type="hidden" class="doc_ssc_marksheet"
                                     value="{{ $emp->getDocument('ssc_marksheet') }}">
                                 <input type="hidden" class="doc_cv" value="{{ $emp->getDocument('cv') }}">
+                                <input type="hidden" class="casual_leave_dates"
+                                    value="{{ $emp->leaves->pluck('start_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->implode(',') }}">
                             </div>
                         @empty
                             <div class="empty-state" style="grid-column: 1/-1;">
@@ -362,6 +364,45 @@
                                 </div>
                             </div>
 
+                            <!-- Casual Leave Days -->
+                            <div class="col-md-12 mb-3">
+                                <div class="form-group-modern">
+                                    <label class="form-label" for="casual_leave_days">
+                                        <i class="fa fa-calendar-check me-1"></i>
+                                        Casual Leave Days
+                                    </label>
+                                    <div id="casual_leave_days_container"
+                                        style="display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0;">
+                                        <span class="casual-day-option badge bg-light text-dark border"
+                                            data-value="Monday"
+                                            style="cursor:pointer; padding:8px 16px; font-size:15px;">Monday</span>
+                                        <span class="casual-day-option badge bg-light text-dark border"
+                                            data-value="Tuesday"
+                                            style="cursor:pointer; padding:8px 16px; font-size:15px;">Tuesday</span>
+                                        <span class="casual-day-option badge bg-light text-dark border"
+                                            data-value="Wednesday"
+                                            style="cursor:pointer; padding:8px 16px; font-size:15px;">Wednesday</span>
+                                        <span class="casual-day-option badge bg-light text-dark border"
+                                            data-value="Thursday"
+                                            style="cursor:pointer; padding:8px 16px; font-size:15px;">Thursday</span>
+                                        <span class="casual-day-option badge bg-light text-dark border"
+                                            data-value="Friday"
+                                            style="cursor:pointer; padding:8px 16px; font-size:15px;">Friday</span>
+                                        <span class="casual-day-option badge bg-light text-dark border"
+                                            data-value="Saturday"
+                                            style="cursor:pointer; padding:8px 16px; font-size:15px;">Saturday</span>
+                                        <span class="casual-day-option badge bg-light text-dark border"
+                                            data-value="Sunday"
+                                            style="cursor:pointer; padding:8px 16px; font-size:15px;">Sunday</span>
+                                    </div>
+                                    <input type="hidden" name="casual_leave_days" id="casual_leave_days" />
+                                    <small class="text-muted d-block mt-1">
+                                        <i class="fa fa-info-circle me-1"></i>
+                                        Click to select/deselect casual leave days. Selected days will be highlighted.
+                                    </small>
+                                </div>
+                            </div>
+
                             <!-- Documents -->
                             <div id="documents_container" class="row" style="display: none;">
                                 <div class="col-12 mb-3">
@@ -417,10 +458,39 @@
     </div>
 
     <!-- Scripts -->
+    <style>
+        .casual-day-option.selected {
+            background: #007bff !important;
+            color: #fff !important;
+            border-color: #007bff !important;
+            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.08);
+        }
+
+        .casual-day-option:hover {
+            background: #e3f0ff !important;
+        }
+    </style>
     <!-- jQuery and Bootstrap are already loaded in the main layout -->
+
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
+        // Badge click handler for casual leave days
+        $(document).ready(function() {
+            var $container = $('#casual_leave_days_container');
+            var $hiddenInput = $('#casual_leave_days');
+
+            $container.on('click', '.casual-day-option', function() {
+                $(this).toggleClass('selected');
+                var selected = [];
+                $container.find('.casual-day-option.selected').each(function() {
+                    selected.push($(this).data('value'));
+                });
+                $hiddenInput.val(selected.join(','));
+                console.log('Selected days:', selected);
+            });
+        });
+
         // Debug: Check if jQuery is loaded
         console.log('jQuery loaded:', typeof jQuery !== 'undefined');
         console.log('$ loaded:', typeof $ !== 'undefined');
@@ -458,6 +528,10 @@
                 $('#link_degree, #link_certificate, #link_hsc_marksheet, #link_ssc_marksheet, #link_cv')
                     .html('');
                 $('#modalLabel').html('<i class="fa fa-user-plus"></i><span>Add Employee</span>');
+
+                // Clear casual leave day selections
+                $('#casual_leave_days_container .casual-day-option').removeClass('selected');
+                $('#casual_leave_days').val('');
 
                 console.log('About to show modal...');
                 $('#employeeModal').modal('show');
@@ -515,6 +589,20 @@
                 setLink('link_hsc_marksheet', card.find('.doc_hsc_marksheet').val());
                 setLink('link_ssc_marksheet', card.find('.doc_ssc_marksheet').val());
                 setLink('link_cv', card.find('.doc_cv').val());
+
+
+                // Load casual leave days (badges)
+                const leaveDays = card.find('.casual_leave_dates').val();
+                $('#casual_leave_days_container .casual-day-option').removeClass('selected');
+                if (leaveDays) {
+                    const daysArray = leaveDays.split(',').filter(d => d.trim() !== '');
+                    daysArray.forEach(function(day) {
+                        $('#casual_leave_days_container .casual-day-option[data-value="' + day +
+                            '"]').addClass('selected');
+                    });
+                    $('#casual_leave_days').val(leaveDays);
+                    console.log('Loaded leave days:', daysArray);
+                }
 
                 $('#modalLabel').html('<i class="fa fa-pen"></i><span>Edit Employee</span>');
                 $('#employeeModal').modal('show');

@@ -22,7 +22,7 @@ class ShiftController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|min:3|max:255',
+            'name' => 'required|string|max:255',
             'start_time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i|after:start_time',
             'break_start' => 'nullable|date_format:H:i',

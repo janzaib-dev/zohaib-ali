@@ -20,8 +20,37 @@ class Leave extends Model
         'status',
     ];
 
+    protected $casts = [
+        'start_date' => 'date',
+        'end_date' => 'date',
+    ];
+
     public function employee()
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * Check if an employee has approved leave on a specific date
+     */
+    public static function hasApprovedLeave($employeeId, $date)
+    {
+        return self::where('employee_id', $employeeId)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->exists();
+    }
+
+    /**
+     * Get approved leave for an employee on a specific date
+     */
+    public static function getApprovedLeave($employeeId, $date)
+    {
+        return self::where('employee_id', $employeeId)
+            ->where('status', 'approved')
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->first();
     }
 }

@@ -21,7 +21,7 @@ class DesignationController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|min:3|max:255|unique:hr_designations,name,' . $request->edit_id,
+            'name' => 'required|string|max:255|unique:hr_designations,name,' . $request->edit_id,
         ]);
 
         if ($validator->fails()) {

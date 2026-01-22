@@ -22,10 +22,10 @@ class HolidayController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|min:3|max:255',
+            'name' => 'required|string|max:255',
             'date' => 'required|date',
             'type' => 'required|in:public,company,optional',
-            'description' => 'nullable|string|min:3',
+            'description' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {

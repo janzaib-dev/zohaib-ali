@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('hr_employees', function (Blueprint $table) {
-            $table->text('address')->nullable()->after('phone');
-            $table->boolean('is_docs_submitted')->default(false)->after('status');
+            // $table->text('address')->nullable()->after('phone'); // Already exists, skip to avoid duplicate error
+            // $table->boolean('is_docs_submitted')->default(false)->after('status'); // Already exists, skip to avoid duplicate error
             $table->string('document_degree')->nullable()->after('is_docs_submitted');
             $table->string('document_certificate')->nullable()->after('document_degree');
             $table->string('document_hsc_marksheet')->nullable()->after('document_certificate'); // Intermediate
@@ -28,9 +28,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('hr_employees', function (Blueprint $table) {
+            // $table->dropColumn('address'); // Do not drop, since we did not add in this migration
+            // $table->dropColumn('is_docs_submitted'); // Do not drop, since we did not add in this migration
             $table->dropColumn([
-                'address',
-                'is_docs_submitted',
                 'document_degree',
                 'document_certificate',
                 'document_hsc_marksheet',

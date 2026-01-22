@@ -411,7 +411,13 @@
                         @forelse ($employees as $emp)
                             @php
                                 $attendance = $emp->attendances->first();
+                                $approvedLeave = $emp->leaves->first(); // Get approved leave for this date
                                 $status = $attendance->status ?? 'absent';
+
+                                // If employee has approved leave and no attendance record, set status to leave
+                                if ($approvedLeave && !$attendance) {
+                                    $status = 'leave';
+                                }
 
                                 // Override status if late but still showing present
                                 if ($attendance && $attendance->status == 'present' && $attendance->is_late) {
@@ -450,6 +456,18 @@
                                     </div>
                                     <div class="hr-item-info ms-3">
                                         <h4 class="hr-item-name">{{ $emp->full_name }}</h4>
+
+                                        {{-- Display Leave Info if exists --}}
+                                        @if ($approvedLeave)
+                                            <div class="mb-2">
+                                                <span class="badge bg-info" style="font-size: 0.75rem;">
+                                                    <i class="fa fa-umbrella-beach me-1"></i>
+                                                    {{ ucfirst($approvedLeave->leave_type) }} Leave
+                                                    ({{ \Carbon\Carbon::parse($approvedLeave->start_date)->format('D') }})
+                                                </span>
+                                            </div>
+                                        @endif
+
                                         <div class="shift-info">
                                             @if ($isCustomShift)
                                                 <span class="badge bg-warning text-dark me-1"
