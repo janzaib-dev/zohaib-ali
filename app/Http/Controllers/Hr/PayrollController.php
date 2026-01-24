@@ -553,6 +553,105 @@ class PayrollController extends Controller
     }
 
     /**
+     * Generate daily payrolls for all daily wage employees for a specific date
+     */
+    public function generateDaily(Request $request)
+    {
+        if (! auth()->user()->can('hr.payroll.create')) {
+            return response()->json(['error' => 'Unauthorized action.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'date' => 'required|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Fetch employees configured for daily wages
+            $employees = Employee::with('salaryStructure')
+                ->whereHas('salaryStructure', function ($q) {
+                    $q->where('use_daily_wages', true);
+                })
+                ->where('status', 'active')
+                ->get();
+
+            $generated = 0;
+            $skipped = 0;
+            $errors = [];
+
+            foreach ($employees as $employee) {
+                // Skip if already exists for this date
+                $monthStr = Carbon::parse($request->date)->format('Y-m');
+                // Check exact date overlap for daily payroll
+                $exists = Payroll::where('employee_id', $employee->id)
+                    ->where('payroll_type', 'daily')
+                    ->whereDate('created_at', $request->date) // Usually we might check a date column, currently daily stores date in 'month' or created_at? 
+                    // Let's check how calculateDailyPayroll stores it. It stores 'month' => Y-m-d.
+                    ->where('month', $request->date) 
+                    ->exists();
+
+                if ($exists) {
+                    $skipped++;
+                    continue;
+                }
+
+                // Get attendance for the date
+                $attendance = Attendance::where('employee_id', $employee->id)
+                    ->whereDate('date', $request->date)
+                    ->first();
+
+                if (! $attendance || ! $attendance->clock_out) {
+                    $errors[] = $employee->full_name . ': No completed attendance found.';
+                    continue;
+                }
+
+                try {
+                    $payrollData = $this->payrollService->calculateDailyPayroll($employee, $attendance);
+
+                    $payroll = Payroll::create(array_merge(
+                        ['employee_id' => $employee->id],
+                        Arr::except($payrollData, ['allowance_details', 'deduction_details', 'new_pending_deductions'])
+                    ));
+
+                    $this->payrollService->savePayrollDetails(
+                        $payroll,
+                        $payrollData['allowance_details'] ?? [],
+                        $payrollData['deduction_details'] ?? []
+                    );
+
+                    $this->payrollService->updatePendingDeductions(
+                        $employee,
+                        $payrollData['new_pending_deductions'] ?? 0
+                    );
+
+                    $generated++;
+                } catch (\Exception $e) {
+                    $errors[] = $employee->full_name . ': ' . $e->getMessage();
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => "Daily payroll generated for {$generated} employees. {$skipped} skipped. " . (count($errors) > 0 ? count($errors) . " errors." : ""),
+                'errors' => $errors,
+                'reload' => true,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'errors' => ['general' => [$e->getMessage()]],
+            ], 422);
+        }
+    }
+
+    /**
      * Update payroll (add manual allowances/deductions, edit notes)
      */
     public function update(Request $request, $id)

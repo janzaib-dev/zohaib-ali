@@ -656,12 +656,32 @@
                     </div>
                     <div class="d-flex gap-2">
                         @can('hr.payroll.create')
-                            <button type="button" class="btn btn-create" id="generateMonthlyBtn">
-                                <i class="fa fa-calendar-alt"></i> Generate Monthly
-                            </button>
-                            <button type="button" class="btn btn-create" id="generateBtn">
-                                <i class="fa fa-plus"></i> Generate Payroll
-                            </button>
+                            <div class="dropdown">
+                                <button class="btn btn-create dropdown-toggle" type="button" id="generateDropdown"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fa fa-plus-circle"></i> Generate Payroll
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="generateDropdown">
+                                    <li>
+                                        <a class="dropdown-item py-2" href="javascript:void(0)" id="generateMonthlyBtn">
+                                            <i class="fa fa-calendar-alt me-2 text-primary"></i> Generate Monthly Payroll
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item py-2" href="javascript:void(0)" id="generateDailyBtn">
+                                            <i class="fa fa-calendar-day me-2 text-success"></i> Generate Daily Payroll
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item py-2" href="javascript:void(0)" id="generateBtn">
+                                            <i class="fa fa-hand-holding-usd me-2 text-warning"></i> Manual / Single Entry
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
                         @endcan
                     </div>
                 </div>
@@ -923,6 +943,46 @@
         </div>
     </div>
 
+    <!-- Generate Daily Payrolls Modal -->
+    <div class="modal fade" id="generateDailyModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header gradient"
+                    style="background: linear-gradient(135deg, #10b981, #059669) !important;">
+                    <h5 class="modal-title">
+                        <i class="fa fa-calendar-day"></i>
+                        <span>Generate Daily Payrolls</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="generateDailyForm" action="{{ route('hr.payroll.generate-daily') }}" method="POST"
+                    data-ajax-validate="true">
+                    @csrf
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i>
+                            This will generate payroll for all active daily-wage employees for the selected date.
+                        </div>
+                        <div class="form-group-modern">
+                            <label class="form-label"><i class="fa fa-calendar-day"></i> Date</label>
+                            <input type="date" name="date" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer-modern">
+                        <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">
+                            <i class="fa fa-times me-2"></i>Cancel
+                        </button>
+                        <button type="submit" class="btn btn-save"
+                            style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <i class="fa fa-check"></i>
+                            <span>Generate All</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Generate Monthly Payrolls Modal -->
     <div class="modal fade" id="generateMonthlyModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -1096,6 +1156,12 @@
                 $('#generateMonthlyModal').modal('show');
             });
 
+            // Generate daily modal
+            $('#generateDailyBtn').click(function() {
+                $('#generateDailyForm')[0].reset();
+                $('#generateDailyModal').modal('show');
+            });
+
             // Payroll type change
             $('#payrollTypeSelect').change(function() {
                 if ($(this).val() === 'daily') {
@@ -1177,11 +1243,11 @@
                                     <div class="expandable-content">
                                         ${data.allowance_details.length > 0 ? 
                                             data.allowance_details.map(allowance => `
-                                                                    <div class="d-flex justify-content-between py-1 border-bottom border-light">
-                                                                        <small class="text-muted">${allowance.name}</small>
-                                                                        <small class="fw-bold">Rs. ${parseFloat(allowance.amount).toFixed(2)}</small>
-                                                                    </div>
-                                                                `).join('') 
+                                                                                <div class="d-flex justify-content-between py-1 border-bottom border-light">
+                                                                                    <small class="text-muted">${allowance.name}</small>
+                                                                                    <small class="fw-bold">Rs. ${parseFloat(allowance.amount).toFixed(2)}</small>
+                                                                                </div>
+                                                                            `).join('') 
                                             : '<div class="text-center small text-muted py-1">- None -</div>'
                                         }
                                     </div>
@@ -1220,39 +1286,39 @@
                                     </div>
                                     <div class="expandable-content">
                                         ${data.payroll.payroll_type === 'daily' ? `
-                                                    <!-- Daily Payroll View -->
-                                                    <div class="py-3">
-                                                        <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-                                                            <span class="text-muted small fw-bold text-uppercase">Total Deduction</span>
-                                                            <span class="text-danger fw-bold fs-6">Rs. ${parseFloat(data.attendance_breakdown.total_deduction || 0).toFixed(2)}</span>
-                                                        </div>
-                                                        
-                                                        ${data.attendance_breakdown.has_data ? `
+                                                                <!-- Daily Payroll View -->
+                                                                <div class="py-3">
+                                                                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                                                        <span class="text-muted small fw-bold text-uppercase">Total Deduction</span>
+                                                                        <span class="text-danger fw-bold fs-6">Rs. ${parseFloat(data.attendance_breakdown.total_deduction || 0).toFixed(2)}</span>
+                                                                    </div>
+                                                                    
+                                                                    ${data.attendance_breakdown.has_data ? `
                                                     <div class="d-flex justify-content-between gap-3">
                                                         <div class="text-center p-2 rounded bg-white border ${data.attendance_breakdown.is_late ? 'border-warning apple-glow-warning' : 'border-light'} flex-fill">
                                                             <div class="small text-muted mb-1">Check In</div>
                                                             ${data.attendance_breakdown.late_deduction_amount > 0 ? `
-                                                                    <div class="text-danger fw-bold small mb-1">-Rs. ${parseFloat(data.attendance_breakdown.late_deduction_amount).toFixed(2)}</div>
-                                                                ` : ''}
+                                                                                <div class="text-danger fw-bold small mb-1">-Rs. ${parseFloat(data.attendance_breakdown.late_deduction_amount).toFixed(2)}</div>
+                                                                            ` : ''}
                                                             <div class="fw-bold ${data.attendance_breakdown.is_late ? 'text-warning' : 'text-dark'}">
                                                                 ${data.attendance_breakdown.check_in || '--:--'}
                                                             </div>
                                                             ${data.attendance_breakdown.is_late ? `
-                                                                    <div class="badge bg-warning text-dark mt-1" style="font-size: 0.7rem;">Late (${data.attendance_breakdown.late_minutes}m)</div>
-                                                                ` : ''}
+                                                                                <div class="badge bg-warning text-dark mt-1" style="font-size: 0.7rem;">Late (${data.attendance_breakdown.late_minutes}m)</div>
+                                                                            ` : ''}
                                                         </div>
                                                         
                                                         <div class="text-center p-2 rounded bg-white border ${data.attendance_breakdown.is_early_out ? 'border-info apple-glow-info' : 'border-light'} flex-fill">
                                                             <div class="small text-muted mb-1">Check Out</div>
                                                             ${data.attendance_breakdown.early_deduction_amount > 0 ? `
-                                                                    <div class="text-danger fw-bold small mb-1">-Rs. ${parseFloat(data.attendance_breakdown.early_deduction_amount).toFixed(2)}</div>
-                                                                ` : ''}
+                                                                                <div class="text-danger fw-bold small mb-1">-Rs. ${parseFloat(data.attendance_breakdown.early_deduction_amount).toFixed(2)}</div>
+                                                                            ` : ''}
                                                             <div class="fw-bold ${data.attendance_breakdown.is_early_out ? 'text-info' : 'text-dark'}">
                                                                 ${data.attendance_breakdown.check_out || '--:--'}
                                                             </div>
                                                             ${data.attendance_breakdown.is_early_out ? `
-                                                                    <div class="badge bg-info text-white mt-1" style="font-size: 0.7rem;">Early (${data.attendance_breakdown.early_checkout_minutes}m)</div>
-                                                                ` : ''}
+                                                                                <div class="badge bg-info text-white mt-1" style="font-size: 0.7rem;">Early (${data.attendance_breakdown.early_checkout_minutes}m)</div>
+                                                                            ` : ''}
                                                         </div>
                                                     </div>
                                                 ` : `
@@ -1260,26 +1326,26 @@
                                                         <i class="fa fa-exclamation-circle"></i> No attendance record
                                                     </div>
                                                 `}
-                                                    </div>
-                                                ` : `
-                                                    <!-- Monthly Payroll View -->
-                                                    <!-- Summary Badges -->
-                                                    <div class="d-flex flex-wrap gap-2 justify-content-center py-2 border-bottom mb-2">
-                                                         <span class="badge bg-white text-muted border border-light shadow-sm">
-                                                            Present: <b class="text-success">${data.attendance_breakdown.days_present || 0}</b>
-                                                         </span>
-                                                         <span class="badge bg-white text-muted border border-light shadow-sm">
-                                                            Absent: <b class="text-danger">${data.attendance_breakdown.days_absent || 0}</b>
-                                                         </span>
-                                                         <span class="badge bg-white text-muted border border-light shadow-sm">
-                                                            Late: <b class="text-warning">${data.attendance_breakdown.late_check_ins || 0}</b>
-                                                         </span>
-                                                         <span class="badge bg-white text-muted border border-light shadow-sm">
-                                                            Early Out: <b class="text-info">${data.attendance_breakdown.early_check_outs || 0}</b>
-                                                         </span>
-                                                    </div>
-                                                    
-                                                    ${!data.attendance_breakdown.has_data ? `
+                                                                </div>
+                                                            ` : `
+                                                                <!-- Monthly Payroll View -->
+                                                                <!-- Summary Badges -->
+                                                                <div class="d-flex flex-wrap gap-2 justify-content-center py-2 border-bottom mb-2">
+                                                                     <span class="badge bg-white text-muted border border-light shadow-sm">
+                                                                        Present: <b class="text-success">${data.attendance_breakdown.days_present || 0}</b>
+                                                                     </span>
+                                                                     <span class="badge bg-white text-muted border border-light shadow-sm">
+                                                                        Absent: <b class="text-danger">${data.attendance_breakdown.days_absent || 0}</b>
+                                                                     </span>
+                                                                     <span class="badge bg-white text-muted border border-light shadow-sm">
+                                                                        Late: <b class="text-warning">${data.attendance_breakdown.late_check_ins || 0}</b>
+                                                                     </span>
+                                                                     <span class="badge bg-white text-muted border border-light shadow-sm">
+                                                                        Early Out: <b class="text-info">${data.attendance_breakdown.early_check_outs || 0}</b>
+                                                                     </span>
+                                                                </div>
+                                                                
+                                                                ${!data.attendance_breakdown.has_data ? `
                                                 <div class="alert alert-warning py-2 mb-0 small text-center">
                                                     <i class="fa fa-exclamation-triangle me-1"></i>
                                                     ${data.attendance_breakdown.data_message || 'Attendance data incomplete for this period'}
@@ -1289,11 +1355,11 @@
                                                 <div class="attendance-details-scroll" style="max-height: 200px; overflow-y: auto;">
                                                     
                                                     ${(data.attendance_breakdown.absent_records && data.attendance_breakdown.absent_records.length > 0) ? `
-                                                                <div class="mb-3">
-                                                                    <div class="small fw-bold text-danger mb-2 px-2">
-                                                                        <i class="fa fa-times-circle me-1"></i> Absent Days (${data.attendance_breakdown.absent_records.length})
-                                                                    </div>
-                                                                    ${data.attendance_breakdown.absent_records.map(record => `
+                                                                            <div class="mb-3">
+                                                                                <div class="small fw-bold text-danger mb-2 px-2">
+                                                                                    <i class="fa fa-times-circle me-1"></i> Absent Days (${data.attendance_breakdown.absent_records.length})
+                                                                                </div>
+                                                                                ${data.attendance_breakdown.absent_records.map(record => `
                                                                 <div class="d-flex justify-content-between align-items-center py-1 px-2 border-bottom" style="font-size: 0.8rem;">
                                                                     <div>
                                                                         <span class="text-muted">${record.date}</span>
@@ -1302,15 +1368,15 @@
                                                                     <span class="text-danger fw-bold">-Rs. ${parseFloat(record.deduction).toFixed(2)}</span>
                                                                 </div>
                                                             `).join('')}
-                                                                </div>
-                                                            ` : ''}
+                                                                            </div>
+                                                                        ` : ''}
                                                     
                                                     ${(data.attendance_breakdown.late_records && data.attendance_breakdown.late_records.length > 0) ? `
-                                                                <div class="mb-3">
-                                                                    <div class="small fw-bold text-warning mb-2 px-2">
-                                                                        <i class="fa fa-clock me-1"></i> Late Check-ins (${data.attendance_breakdown.late_records.length})
-                                                                    </div>
-                                                                    ${data.attendance_breakdown.late_records.map(record => `
+                                                                            <div class="mb-3">
+                                                                                <div class="small fw-bold text-warning mb-2 px-2">
+                                                                                    <i class="fa fa-clock me-1"></i> Late Check-ins (${data.attendance_breakdown.late_records.length})
+                                                                                </div>
+                                                                                ${data.attendance_breakdown.late_records.map(record => `
                                                                 <div class="d-flex justify-content-between align-items-center py-1 px-2 border-bottom" style="font-size: 0.8rem;">
                                                                     <div>
                                                                         <span class="text-muted">${record.date}</span>
@@ -1320,15 +1386,15 @@
                                                                     <span class="text-danger fw-bold">-Rs. ${parseFloat(record.deduction).toFixed(2)}</span>
                                                                 </div>
                                                             `).join('')}
-                                                                </div>
-                                                            ` : ''}
+                                                                            </div>
+                                                                        ` : ''}
                                                     
                                                     ${(data.attendance_breakdown.early_records && data.attendance_breakdown.early_records.length > 0) ? `
-                                                                <div class="mb-2">
-                                                                    <div class="small fw-bold text-info mb-2 px-2">
-                                                                        <i class="fa fa-sign-out-alt me-1"></i> Early Check-outs (${data.attendance_breakdown.early_records.length})
-                                                                    </div>
-                                                                    ${data.attendance_breakdown.early_records.map(record => `
+                                                                            <div class="mb-2">
+                                                                                <div class="small fw-bold text-info mb-2 px-2">
+                                                                                    <i class="fa fa-sign-out-alt me-1"></i> Early Check-outs (${data.attendance_breakdown.early_records.length})
+                                                                                </div>
+                                                                                ${data.attendance_breakdown.early_records.map(record => `
                                                                 <div class="d-flex justify-content-between align-items-center py-1 px-2 border-bottom" style="font-size: 0.8rem;">
                                                                     <div>
                                                                         <span class="text-muted">${record.date}</span>
@@ -1338,28 +1404,28 @@
                                                                     <span class="text-danger fw-bold">-Rs. ${parseFloat(record.deduction).toFixed(2)}</span>
                                                                 </div>
                                                             `).join('')}
-                                                                </div>
-                                                            ` : ''}
+                                                                            </div>
+                                                                        ` : ''}
                                                     
                                                     ${(!data.attendance_breakdown.absent_records?.length && !data.attendance_breakdown.late_records?.length && !data.attendance_breakdown.early_records?.length) ? `
-                                                                <div class="text-center text-muted py-2 small">
-                                                                    <i class="fa fa-check-circle text-success me-1"></i> No attendance issues this period
-                                                                </div>
-                                                            ` : ''}
+                                                                            <div class="text-center text-muted py-2 small">
+                                                                                <i class="fa fa-check-circle text-success me-1"></i> No attendance issues this period
+                                                                            </div>
+                                                                        ` : ''}
                                                 </div>
                                             `}
-                                                `}
+                                                            `}
                                     </div>
                                 </div>
                                 
                                 ${data.breakdown.deductions.carried_forward > 0 ? `
-                                                        <div class="detail-row py-2" style="background: #fff1f2; border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; border: 1px dashed #fecaca;">
-                                                            <div class="d-flex justify-content-between w-100">
-                                                                <span class="label text-danger small fw-bold">Carried Forward (From Prev)</span>
-                                                                <span class="value text-danger small fw-bold">Rs. ${parseFloat(data.breakdown.deductions.carried_forward).toFixed(2)}</span>
-                                                            </div>
-                                                        </div>
-                                                    ` : ''}
+                                                                    <div class="detail-row py-2" style="background: #fff1f2; border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; border: 1px dashed #fecaca;">
+                                                                        <div class="d-flex justify-content-between w-100">
+                                                                            <span class="label text-danger small fw-bold">Carried Forward (From Prev)</span>
+                                                                            <span class="value text-danger small fw-bold">Rs. ${parseFloat(data.breakdown.deductions.carried_forward).toFixed(2)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ` : ''}
 
                                 <div class="detail-row py-2">
                                     <div class="d-flex justify-content-between w-100">
@@ -1391,13 +1457,13 @@
                             </div>
                         </div>
                         ${data.payroll.notes ? `
-                                                    <div class="col-12">
-                                                        <div class="alert alert-warning mb-0 py-2 fs-7 small d-flex align-items-center">
-                                                            <i class="fa fa-sticky-note me-2 text-warning"></i> 
-                                                            <span class="fst-italic text-truncate">${data.payroll.notes}</span>
-                                                        </div>
-                                                    </div>
-                                                ` : ''}
+                                                                <div class="col-12">
+                                                                    <div class="alert alert-warning mb-0 py-2 fs-7 small d-flex align-items-center">
+                                                                        <i class="fa fa-sticky-note me-2 text-warning"></i> 
+                                                                        <span class="fst-italic text-truncate">${data.payroll.notes}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ` : ''}
                     </div>
                 `;
 

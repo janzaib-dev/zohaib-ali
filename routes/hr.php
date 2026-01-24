@@ -71,6 +71,7 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::get('payroll/{payroll}/details', [PayrollController::class, 'details'])->name('payroll.details')->middleware('permission:hr.payroll.view');
     Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate')->middleware('permission:hr.payroll.create');
     Route::post('payroll/generate-monthly', [PayrollController::class, 'generateMonthly'])->name('payroll.generate-monthly')->middleware('permission:hr.payroll.create');
+    Route::post('payroll/generate-daily', [PayrollController::class, 'generateDaily'])->name('payroll.generate-daily')->middleware('permission:hr.payroll.create');
     Route::put('payroll/{payroll}', [PayrollController::class, 'update'])->name('payroll.update')->middleware('permission:hr.payroll.edit');
     Route::patch('payroll/{payroll}/mark-reviewed', [PayrollController::class, 'markReviewed'])->name('payroll.mark-reviewed')->middleware('permission:hr.payroll.edit');
     Route::patch('payroll/{payroll}/mark-paid', [PayrollController::class, 'markPaid'])->name('payroll.mark-paid')->middleware('permission:hr.payroll.edit');
