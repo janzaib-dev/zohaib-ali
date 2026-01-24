@@ -24,9 +24,9 @@ class ShiftController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i|after:start_time',
+            'end_time' => 'required|date_format:H:i',
             'break_start' => 'nullable|date_format:H:i',
-            'break_end' => 'nullable|date_format:H:i|after:break_start',
+            'break_end' => 'nullable|date_format:H:i',
             'grace_minutes' => 'required|integer|min:0|max:60',
             'is_default' => 'boolean',
         ]);

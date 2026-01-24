@@ -21,6 +21,9 @@ class Kernel extends ConsoleKernel
         
         // Sync device time daily to prevent drift
         $schedule->command('device:sync-time')->dailyAt('04:00');
+
+        // Generate monthly payrolls on the 25th of every month
+        $schedule->command('payroll:generate-monthly')->monthlyOn(25, '00:00');
     }
 
     /**

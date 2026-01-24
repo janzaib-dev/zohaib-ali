@@ -12,26 +12,82 @@ class SalaryStructure extends Model
     protected $table = 'hr_salary_structures';
 
     protected $fillable = [
+        'name',
+        'parent_structure_id',
         'employee_id',
         'salary_type',
         'base_salary',
+        'daily_wages',
+        'use_daily_wages',
         'commission_percentage',
         'sales_target',
         'commission_tiers',
         'allowances',
         'deductions',
+        'attendance_deduction_policy',
+        'carry_forward_deductions',
         'leave_salary_per_day',
     ];
 
     protected $casts = [
+        'use_daily_wages' => 'boolean',
+        'carry_forward_deductions' => 'boolean',
         'allowances' => 'array',
         'deductions' => 'array',
+        'attendance_deduction_policy' => 'array',
         'commission_tiers' => 'array',
     ];
 
+    /**
+     * Legacy relationship (for backward compatibility)
+     * @deprecated Use employees() or assignedEmployees() instead
+     */
     public function employee()
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * Many-to-many: All employee assignments (history)
+     */
+    public function employees()
+    {
+        return $this->belongsToMany(
+            Employee::class,
+            'employee_salary_structures'
+        )->withPivot(['start_date', 'end_date', 'is_active', 'assigned_by', 'notes'])
+         ->withTimestamps()
+         ->using(EmployeeSalaryStructure::class);
+    }
+
+    /**
+     * Get only currently assigned employees
+     */
+    public function assignedEmployees()
+    {
+        return $this->belongsToMany(
+            Employee::class,
+            'employee_salary_structures'
+        )->wherePivot('is_active', true)
+         ->wherePivotNull('end_date')
+         ->withPivot(['start_date', 'end_date', 'is_active', 'assigned_by', 'notes'])
+         ->withTimestamps();
+    }
+
+    /**
+     * Get all assignment records
+     */
+    public function assignments()
+    {
+        return $this->hasMany(EmployeeSalaryStructure::class);
+    }
+
+    /**
+     * Get count of currently assigned employees
+     */
+    public function getAssignedCountAttribute()
+    {
+        return $this->assignedEmployees()->count();
     }
 
     /**
@@ -153,5 +209,15 @@ class SalaryStructure extends Model
         $breakdown['net'] = $breakdown['gross'] - $breakdown['deductions'] - $breakdown['leave_deduction'];
 
         return $breakdown;
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_structure_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_structure_id');
     }
 }

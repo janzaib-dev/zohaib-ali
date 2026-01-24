@@ -3,6 +3,7 @@
 namespace App\Models\Hr;
 
 use App\Models\User;
+use App\Models\Hr\EmployeeSalaryStructure;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -25,7 +26,6 @@ class Employee extends Model
         'is_docs_submitted',
         'date_of_birth',
         'joining_date',
-        'basic_salary',
         'status',
         'custom_start_time',
         'custom_end_time',
@@ -36,6 +36,7 @@ class Employee extends Model
         'fingerprint_enrolled_at',
         'last_device_sync_at',
         'punch_gap_minutes',
+        'pending_deductions',
     ];
 
     protected $casts = [
@@ -89,9 +90,55 @@ class Employee extends Model
         return $this->hasMany(Payroll::class);
     }
 
+    /**
+     * Legacy relationship (for backward compatibility)
+     *
+     * @deprecated Use salaryStructures() or activeSalaryStructure() instead
+     */
     public function salaryStructure()
     {
         return $this->hasOne(SalaryStructure::class);
+    }
+
+    /**
+     * Many-to-many: All salary structure assignments (history)
+     */
+    public function salaryStructures()
+    {
+        return $this->belongsToMany(
+            SalaryStructure::class,
+            'employee_salary_structures'
+        )->withPivot(['start_date', 'end_date', 'is_active', 'assigned_by', 'notes'])
+            ->withTimestamps()
+            ->using(EmployeeSalaryStructure::class);
+    }
+
+    /**
+     * Get active salary structure assignment
+     */
+    public function activeSalaryStructure()
+    {
+        return $this->hasOne(EmployeeSalaryStructure::class)
+            ->where('is_active', true)
+            ->whereNull('end_date')
+            ->with('salaryStructure')
+            ->latest('start_date');
+    }
+
+    /**
+     * Get the actual salary structure related to the active assignment.
+     */
+    public function getSalaryStructureAttribute()
+    {
+        return $this->activeSalaryStructure ? $this->activeSalaryStructure->salaryStructure : null;
+    }
+
+    /**
+     * Get all salary structure assignment records
+     */
+    public function salaryStructureAssignments()
+    {
+        return $this->hasMany(EmployeeSalaryStructure::class);
     }
 
     public function getFullNameAttribute()

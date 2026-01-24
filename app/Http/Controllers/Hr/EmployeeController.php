@@ -8,7 +8,6 @@ use App\Models\Hr\Designation;
 use App\Models\Hr\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Storage;
 
 class EmployeeController extends Controller
 {
@@ -17,7 +16,7 @@ class EmployeeController extends Controller
         if (! auth()->user()->can('hr.employees.view')) {
             abort(403, 'Unauthorized action.');
         }
-        $employees = Employee::with(['department', 'designation', 'shift', 'leaves' => function($q) {
+        $employees = Employee::with(['department', 'designation', 'shift', 'leaves' => function ($q) {
             $q->where('leave_type', 'Casual');
         }])->latest()->paginate(12);
         $departments = Department::all();
@@ -38,7 +37,7 @@ class EmployeeController extends Controller
             'designation_id' => 'required|exists:hr_designations,id',
             'joining_date' => 'required|date',
             'basic_salary' => 'required|numeric',
-            'password' => $request->filled('edit_id') ? 'nullable|min:6' : 'required|min:6',
+            'password' => 'nullable|min:6',
             'punch_gap_minutes' => 'nullable|integer|min:1|max:120',
             'document_degree' => 'nullable|file|mimes:pdf,jpg,png,jpeg|max:2048',
             'document_certificate' => 'nullable|file|mimes:pdf,jpg,png,jpeg|max:2048',
@@ -116,42 +115,42 @@ class EmployeeController extends Controller
         if ($request->has('casual_leave_days')) {
             $submittedDates = $request->casual_leave_days ? explode(',', $request->casual_leave_days) : [];
             $submittedDates = array_map('trim', $submittedDates);
-            
+
             // Get existing single-day Casual leaves
             $existingLeaves = $employee->leaves()
                 ->where('leave_type', 'Casual')
                 ->whereRaw('start_date = end_date') // Only manage single-day leaves to avoid messing up ranges
                 ->get();
-            
-            $existingDates = $existingLeaves->pluck('start_date')->map(function($d) {
+
+            $existingDates = $existingLeaves->pluck('start_date')->map(function ($d) {
                 return \Carbon\Carbon::parse($d)->format('Y-m-d');
             })->toArray();
-            
+
             // 1. Create new leaves
             foreach ($submittedDates as $date) {
-                if (!empty($date) && !in_array($date, $existingDates)) {
-                     // Check if leave already exists (e.g. part of a range) - optional check
+                if (! empty($date) && ! in_array($date, $existingDates)) {
+                    // Check if leave already exists (e.g. part of a range) - optional check
                     $employee->leaves()->create([
                         'leave_type' => 'Casual',
                         'start_date' => $date,
                         'end_date' => $date,
                         'reason' => 'Casual Leave assigned via Employee Form',
-                        'status' => 'approved' 
+                        'status' => 'approved',
                     ]);
                 }
             }
-            
+
             // 2. Delete removed leaves
             foreach ($existingLeaves as $leave) {
                 $leaveDate = \Carbon\Carbon::parse($leave->start_date)->format('Y-m-d');
-                if (!in_array($leaveDate, $submittedDates)) {
+                if (! in_array($leaveDate, $submittedDates)) {
                     $leave->delete();
                 }
             }
         }
 
         // Auto-sync to biometric device when creating new employee
-        if (!$request->filled('edit_id')) {
+        if (! $request->filled('edit_id')) {
             try {
                 $activeDevice = \App\Models\BiometricDevice::active()->first();
                 if ($activeDevice) {
@@ -159,7 +158,7 @@ class EmployeeController extends Controller
                     $syncService->syncEmployeeToDevice($employee, $activeDevice);
                 }
             } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning('Failed to auto-sync employee to biometric device: ' . $e->getMessage());
+                \Illuminate\Support\Facades\Log::warning('Failed to auto-sync employee to biometric device: '.$e->getMessage());
                 // Don't fail the employee creation if sync fails
             }
         }
@@ -180,9 +179,9 @@ class EmployeeController extends Controller
         $employee->leaves()->where('leave_type', 'Casual')->delete();
         $employee->delete();
 
-        return redirect()->route('hr.employees.index')->with('success', 'Employee deleted successfully');
+        return response()->json(['success' => 'Employee deleted successfully']);
     }
-    
+
     /**
      * Get face encodings for all employees (for Kiosk)
      */
@@ -193,7 +192,7 @@ class EmployeeController extends Controller
             ->select('id', 'first_name', 'last_name', 'face_encoding', 'face_photo', 'designation_id', 'department_id')
             ->with(['department', 'designation'])
             ->get();
-            
+
         $data = $employees->map(function ($emp) {
             return [
                 'id' => $emp->id,
@@ -201,13 +200,13 @@ class EmployeeController extends Controller
                 'department' => $emp->department->name ?? 'N/A',
                 'designation' => $emp->designation->name ?? 'N/A',
                 'photo' => $emp->face_photo ? asset($emp->face_photo) : null,
-                'descriptor' => $emp->face_encoding
+                'descriptor' => $emp->face_encoding,
             ];
         });
-        
+
         return response()->json($data);
     }
-    
+
     /**
      * Store face encoding for an employee
      */
@@ -216,35 +215,35 @@ class EmployeeController extends Controller
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:hr_employees,id',
             'descriptor' => 'required|array',
-            'image' => 'nullable|string' // Base64 image
+            'image' => 'nullable|string', // Base64 image
         ]);
-        
+
         if ($validator->fails()) {
-           return response()->json(['errors' => $validator->errors()], 422); 
+            return response()->json(['errors' => $validator->errors()], 422);
         }
-        
+
         $employee = Employee::findOrFail($request->employee_id);
         $employee->face_encoding = $request->descriptor;
-        
+
         // Save face photo if provided
         if ($request->image) {
             $imageData = explode(',', $request->image);
             if (count($imageData) > 1) {
                 $decoded = base64_decode($imageData[1]);
-                $fileName = 'face_' . $employee->id . '_' . time() . '.jpg';
+                $fileName = 'face_'.$employee->id.'_'.time().'.jpg';
                 $path = 'uploads/faces/';
-                
-                if (!file_exists(public_path($path))) {
+
+                if (! file_exists(public_path($path))) {
                     mkdir(public_path($path), 0755, true);
                 }
-                
-                file_put_contents(public_path($path . $fileName), $decoded);
-                $employee->face_photo = $path . $fileName;
+
+                file_put_contents(public_path($path.$fileName), $decoded);
+                $employee->face_photo = $path.$fileName;
             }
         }
-        
+
         $employee->save();
-        
-        return response()->json(['success' => 'Face registered successfully for ' . $employee->full_name]);
+
+        return response()->json(['success' => 'Face registered successfully for '.$employee->full_name]);
     }
 }

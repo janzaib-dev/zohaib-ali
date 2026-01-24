@@ -9,7 +9,8 @@
                 <div class="row">
                     <div class="col-lg-12">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h3>Salary Structure: {{ $employee->full_name }}</h3>
+                            <h3>{{ isset($salaryStructure->id) ? 'Edit Salary Structure' : 'Create New Salary Structure' }}
+                            </h3>
                             <a href="{{ route('hr.salary-structure.index') }}" class="btn btn-secondary">
                                 <i class="fa fa-arrow-left"></i> Back to List
                             </a>
@@ -22,62 +23,113 @@
                             </div>
                         @endif
 
+                        @if (($hasAssignments ?? false) && isset($salaryStructure->id))
+                            <div class="alert alert-warning mb-3">
+                                <i class="fa fa-exclamation-triangle"></i> <strong>Warning:</strong> This structure is
+                                currently assigned to active employees.
+                                <ul class="mb-0 mt-1">
+                                    <li>Changes <strong>WILL</strong> affect currently assigned employees immediately.</li>
+                                    <li>Please review changes carefully.</li>
+                                    <li>Payroll type cannot be changed.</li>
+                                </ul>
+                            </div>
+                        @endif
+
                         <div class="border mt-1 shadow rounded p-4" style="background-color: white;">
-                            <form id="salaryForm" action="{{ route('hr.salary-structure.update', $employee->id) }}"
+                            <form id="salaryForm"
+                                action="{{ isset($salaryStructure->id) ? route('hr.salary-structure.update-template', $salaryStructure->id) : route('hr.salary-structure.store') }}"
                                 method="POST" data-ajax-validate="true">
                                 @csrf
-                                @method('PUT')
+                                @if (isset($salaryStructure->id))
+                                    @method('PUT')
+                                @endif
 
                                 <div class="row">
-                                    <!-- Basic Info -->
+                                    <!-- Info Alert -->
                                     <div class="col-md-12 mb-3">
                                         <div class="alert alert-info">
-                                            <strong>Employee:</strong> {{ $employee->full_name }} |
-                                            <strong>Department:</strong> {{ $employee->department->name ?? 'N/A' }} |
-                                            <strong>Designation:</strong> {{ $employee->designation->name ?? 'N/A' }} |
-                                            <strong>Joining Date:</strong> {{ $employee->joining_date }}
+                                            <i class="fa fa-info-circle"></i>
+                                            <strong>{{ isset($salaryStructure->id) ? 'Editing Standalone Salary Structure' : 'Creating Standalone Salary Structure' }}</strong><br>
+                                            {{ isset($salaryStructure->id) ? 'Update the compensation details below.' : 'After creating this structure, you can assign it to one or multiple employees from the structures list.' }}
                                         </div>
                                     </div>
 
-                                    <!-- Salary Type -->
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label fw-bold">Salary Type</label>
-                                        <select name="salary_type" id="salary_type" class="form-control" required
+                                    <!-- Structure Name -->
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Structure Name <span
+                                                class="text-danger">*</span></label>
+                                        <input type="text" name="name" class="form-control" required
+                                            placeholder="e.g. Senior Developer Package, Daily Worker A"
+                                            value="{{ $salaryStructure->name ?? '' }}"
                                             {{ $readOnly ?? false ? 'disabled' : '' }}>
-                                            <option value="salary"
-                                                {{ ($salaryStructure->salary_type ?? '') == 'salary' ? 'selected' : '' }}>
-                                                Salary Based (Fixed)</option>
-                                            <option value="commission"
-                                                {{ ($salaryStructure->salary_type ?? '') == 'commission' ? 'selected' : '' }}>
-                                                Commission Based</option>
-                                            <option value="both"
-                                                {{ ($salaryStructure->salary_type ?? '') == 'both' ? 'selected' : '' }}>
-                                                Both
-                                                (Salary + Commission)</option>
-                                        </select>
                                     </div>
+
+                                    <!-- Salary Type UI -->
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Structure Type <span
+                                                class="text-danger">*</span></label>
+                                        @php
+                                            $uiType = 'monthly'; // default
+                                            if (isset($salaryStructure->id)) {
+                                                if ($salaryStructure->salary_type === 'commission') {
+                                                    $uiType = 'commission';
+                                                } elseif (
+                                                    $salaryStructure->salary_type === 'both' ||
+                                                    $salaryStructure->salary_type === 'monthly_commission'
+                                                ) {
+                                                    $uiType = 'monthly_commission';
+                                                } elseif ($salaryStructure->use_daily_wages) {
+                                                    if ($salaryStructure->base_salary > 0) {
+                                                        $uiType = 'monthly_daily';
+                                                    } else {
+                                                        $uiType = 'daily';
+                                                    }
+                                                }
+                                            }
+                                        @endphp
+                                        <select id="ui_structure_type" class="form-select" required
+                                            {{ ($readOnly ?? false) || ($hasAssignments ?? false) ? 'disabled' : '' }}>
+                                            <option value="monthly" {{ $uiType == 'monthly' ? 'selected' : '' }}>Monthly
+                                                Salary Only</option>
+                                            <option value="daily" {{ $uiType == 'daily' ? 'selected' : '' }}>Daily Wages
+                                                Only</option>
+                                            <option value="monthly_daily"
+                                                {{ $uiType == 'monthly_daily' ? 'selected' : '' }}>Monthly Salary + Daily
+                                                Wages</option>
+                                            <option value="commission" {{ $uiType == 'commission' ? 'selected' : '' }}>
+                                                Commission Only</option>
+                                            <option value="monthly_commission"
+                                                {{ $uiType == 'monthly_commission' ? 'selected' : '' }}>Monthly Salary +
+                                                Commission</option>
+                                        </select>
+
+                                        <!-- Hidden Inputs for Backend Mapping -->
+                                        <input type="hidden" name="salary_type" id="salary_type"
+                                            value="{{ $salaryStructure->salary_type ?? 'salary' }}">
+                                        <input type="hidden" name="use_daily_wages" id="use_daily_wages_hidden"
+                                            value="{{ $salaryStructure->use_daily_wages ?? '0' }}">
+                                    </div>
+
 
                                     <!-- Base Salary -->
                                     <div class="col-md-4 mb-3" id="base_salary_container">
                                         <label class="form-label fw-bold">Base Salary</label>
                                         <input type="number" step="0.01" name="base_salary" id="base_salary"
-                                            class="form-control"
-                                            value="{{ $salaryStructure->base_salary ?? ($employee->basic_salary ?? 0) }}"
+                                            class="form-control" value="{{ $salaryStructure->base_salary ?? 0 }}"
                                             {{ $readOnly ?? false ? 'disabled' : '' }}>
                                     </div>
 
-                                    <!-- Daily Wages -->
-                                    <div class="col-md-4 mb-3">
-                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <label class="form-label fw-bold mb-0">Daily Wages</label>
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="use_daily_wages"
-                                                    name="use_daily_wages" value="1"
-                                                    {{ $salaryStructure->use_daily_wages ? 'checked' : '' }}
-                                                    {{ $readOnly ?? false ? 'disabled' : '' }}>
-                                                <label class="form-check-label small" for="use_daily_wages">Enable</label>
-                                            </div>
+                                    <!-- Daily Wages (Conditional) -->
+                                    <div class="col-md-4 mb-3" id="daily_wages_container"
+                                        style="display:
+                                                       none;">
+                                        <label class="form-label fw-bold">Daily Wage Rate</label>
+                                        <!-- Hidden Toggle for backward compatibility/JS logic -->
+                                        <div class="form-check form-switch d-none">
+                                            <input class="form-check-input" type="checkbox" id="use_daily_wages"
+                                                value="1">
                                         </div>
+
                                         <input type="number" step="0.01" name="daily_wages" id="daily_wages"
                                             class="form-control" value="{{ $salaryStructure->daily_wages ?? '' }}"
                                             placeholder="Daily Rate"
@@ -122,15 +174,15 @@
                                                             <i class="fa fa-toggle-on text-success"></i> Commission Type
                                                         </label>
                                                         <div class="btn-group w-100" role="group">
-                                                            <input type="radio" class="btn-check" name="commission_mode"
-                                                                id="mode_flat" value="flat"
+                                                            <input type="radio" class="btn-check"
+                                                                name="commission_mode" id="mode_flat" value="flat"
                                                                 {{ !$salaryStructure->commission_tiers || count($salaryStructure->commission_tiers ?? []) == 0 ? 'checked' : '' }}>
                                                             <label class="btn btn-outline-info" for="mode_flat">
                                                                 <i class="fa fa-percent"></i> Flat Commission
                                                             </label>
 
-                                                            <input type="radio" class="btn-check" name="commission_mode"
-                                                                id="mode_tiered" value="tiered"
+                                                            <input type="radio" class="btn-check"
+                                                                name="commission_mode" id="mode_tiered" value="tiered"
                                                                 {{ $salaryStructure->commission_tiers && count($salaryStructure->commission_tiers ?? []) > 0 ? 'checked' : '' }}>
                                                             <label class="btn btn-outline-warning" for="mode_tiered">
                                                                 <i class="fa fa-layer-group"></i> Tiered Commission
@@ -699,24 +751,69 @@
                 $('input[name="commission_mode"]').prop('disabled', true);
             }
 
-            // Toggle commission section
-            function toggleCommissionSection() {
-                var type = $('#salary_type').val();
-                if (type === 'commission' || type === 'both') {
-                    $('#commission_section').slideDown();
-                } else {
-                    $('#commission_section').slideUp();
-                }
+            var isReadOnly = {{ $readOnly ?? false ? 'true' : 'false' }};
 
-                if (type === 'commission') {
-                    $('#base_salary_container').hide();
-                    $('#daily_wages_container').hide();
-                } else {
+            // Start - New Structure Type Logic
+            function updateStructureUI() {
+                var type = $('#ui_structure_type').val();
+
+                // Defaults
+                $('#base_salary_container').hide();
+                $('#daily_wages_container').hide();
+                $('#commission_section').slideUp();
+                $('#attendance_rules_section').slideUp();
+
+                // Reset backend values
+                var salaryType = 'salary';
+                var useDaily = '0';
+                var isDailyChecked = false;
+
+                if (type === 'monthly') {
+                    salaryType = 'salary';
+                    $('#base_salary_container').show();
+                    useDaily = '0';
+                } else if (type === 'daily') {
+                    salaryType = 'salary';
+                    $('#daily_wages_container').show();
+                    $('#attendance_rules_section').slideDown();
+                    useDaily = '1';
+                    isDailyChecked = true;
+                } else if (type === 'monthly_daily') {
+                    salaryType = 'salary';
                     $('#base_salary_container').show();
                     $('#daily_wages_container').show();
+                    $('#attendance_rules_section').slideDown();
+                    useDaily = '1';
+                    isDailyChecked = true;
+                } else if (type === 'commission') {
+                    salaryType = 'commission';
+                    $('#commission_section').slideDown();
+                } else if (type === 'monthly_commission') {
+                    salaryType = 'both';
+                    $('#base_salary_container').show();
+                    $('#commission_section').slideDown();
                 }
+
+                // Update Hidden Inputs
+                $('#salary_type').val(salaryType);
+                $('#use_daily_wages_hidden').val(useDaily);
+                // Only update checkbox if not read-only to avoid UI flickering/state issues, though hidden input handles submission
+                if (!isReadOnly) {
+                    $('#use_daily_wages').prop('checked', isDailyChecked);
+                }
+
+                // Enable/Disable inputs to prevent validation issues
+                // respect ReadOnly mode (if ReadOnly, everything stays disabled)
+                if (!isReadOnly) {
+                    $('#base_salary').prop('disabled', !$('#base_salary_container').is(':visible'));
+                    $('#daily_wages').prop('disabled', !$('#daily_wages_container').is(':visible'));
+                }
+
                 recalculate();
             }
+
+            // Bind Event
+            $('#ui_structure_type').change(updateStructureUI);
 
             // Toggle between Flat and Tiered commission mode
             function toggleCommissionMode() {
@@ -735,11 +832,11 @@
             }
 
             $('input[name="commission_mode"]').change(toggleCommissionMode);
-            $('#salary_type').change(toggleCommissionSection);
 
-            // Initial calls
-            toggleCommissionSection();
+            // Initial call
+            updateStructureUI();
             toggleCommissionMode();
+
 
             // Update tier display
             function updateTierDisplay() {

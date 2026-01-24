@@ -4,76 +4,191 @@
     @include('hr.partials.hr-styles')
 
     <style>
-        .salary-card {
-            background: var(--hr-card);
-            border: 1px solid var(--hr-border);
-            border-radius: 14px;
+        .structure-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
             padding: 20px;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
 
-        .salary-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        .structure-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
+            border-color: #d1d5db;
         }
 
-        .salary-card.has-salary {
-            border-left: 4px solid #22c55e;
-        }
-
-        .salary-card.no-salary {
-            border-left: 4px solid #ef4444;
-        }
-
-        .salary-breakdown {
-            background: #f8fafc;
-            border-radius: 10px;
-            padding: 16px;
-            margin-top: 12px;
-        }
-
-        .salary-row {
+        .structure-card-header {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px dashed var(--hr-border);
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #f3f4f6;
         }
 
-        .salary-row:last-child {
-            border-bottom: none;
+        .structure-title {
+            font-size: 1.125rem;
             font-weight: 700;
-            color: var(--hr-primary);
+            color: #111827;
+            margin: 0 0 4px 0;
+            line-height: 1.4;
         }
 
-        .salary-row .label {
-            color: var(--hr-muted);
+        .structure-type-badge {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #f3f4f6;
+            color: #6b7280;
+            vertical-align: middle;
+            margin-left: 6px;
         }
 
-        .salary-type-badge {
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 0.75rem;
+        .salary-amount-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #4f46e5;
+            /* Indigo 600 */
+            margin: 0;
+            line-height: 1;
+        }
+
+        .salary-amount-label {
+            color: #9ca3af;
+            font-size: 0.7rem;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: right;
+            margin-top: 4px;
         }
 
-        .salary-type-badge.salary {
+        .structure-details {
+            flex: 1;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .detail-label {
+            color: #6b7280;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .assigned-info {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .assigned-count {
+            font-weight: 600;
+            color: #4f46e5;
             background: #eef2ff;
-            color: #6366f1;
+            padding: 2px 8px;
+            border-radius: 12px;
         }
 
-        .salary-type-badge.commission {
-            background: #fef3c7;
-            color: #d97706;
+        .card-actions {
+            margin-top: auto;
+            border-top: 1px solid #f3f4f6;
+            padding-top: 16px;
         }
 
-        .salary-type-badge.hybrid {
-            background: #dcfce7;
-            color: #16a34a;
+        .btn-assign-main {
+            width: 100%;
+            background-color: #4f46e5;
+            color: white;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            text-decoration: none;
+            transition: 0.2s;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            display: block;
+            margin-bottom: 12px;
         }
 
-        .salary-type-badge.not-set {
-            background: #f1f5f9;
-            color: #64748b;
+        .btn-assign-main:hover {
+            background-color: #4338ca;
+            color: white;
+        }
+
+        .secondary-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            flex: 1;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            padding: 8px;
+            border-radius: 6px;
+            background-color: white;
+            border: 1px solid #e5e7eb;
+            color: #6b7280;
+            transition: all 0.2s;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .action-btn:hover {
+            background-color: #f9fafb;
+            color: #111827;
+            border-color: #d1d5db;
+        }
+
+        .action-btn.delete:hover {
+            background-color: #fef2f2;
+            color: #ef4444;
+            border-color: #fecaca;
+        }
+
+        .create-structure-card {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100%;
+            cursor: pointer;
+            transition: all 0.2s;
+            background-color: #f9fafb;
+            color: #6b7280;
+        }
+
+        .create-structure-card:hover {
+            border-color: #4f46e5;
+            color: #4f46e5;
+            background-color: #eef2ff;
         }
     </style>
 
@@ -83,185 +198,270 @@
                 <!-- Page Header -->
                 <div class="page-header d-flex justify-content-between align-items-start">
                     <div>
-                        <h1 class="page-title"><i class="fa fa-chart-line"></i> Salary Structure</h1>
-                        <p class="page-subtitle">Manage employee salary components and structures</p>
+                        <h1 class="page-title"><i class="fa fa-money-bill-wave"></i> Salary Structures</h1>
+                        <p class="page-subtitle">Create and manage salary structures, then assign them to employees</p>
                     </div>
+                    @if ($canCreate || $canEdit)
+                        <button class="btn btn-create" onclick="createNewStructure()">
+                            <i class="fa fa-plus me-1"></i> Create New Structure
+                        </button>
+                    @endif
                 </div>
 
                 <!-- Stats Row -->
                 @php
-                    $withSalary = \App\Models\Hr\Employee::has('salaryStructure')->count();
-                    $withoutSalary = \App\Models\Hr\Employee::doesntHave('salaryStructure')->count();
-                    $totalBase = \App\Models\Hr\SalaryStructure::sum('base_salary');
+                    $totalStructures = \App\Models\Hr\SalaryStructure::count();
+                    $totalAssignments = \App\Models\Hr\EmployeeSalaryStructure::where('is_active', true)
+                        ->distinct('employee_id')
+                        ->count();
+                    $unassignedEmployees = \App\Models\Hr\Employee::where('status', 'active')
+                        ->whereDoesntHave('activeSalaryStructure')
+                        ->count();
                 @endphp
                 <div class="stats-row">
                     <div class="stat-card primary">
-                        <div class="stat-icon"><i class="fa fa-users"></i></div>
-                        <div class="stat-value">{{ $employees->total() }}</div>
-                        <div class="stat-label">Total Employees</div>
+                        <div class="stat-icon"><i class="fa fa-file-invoice-dollar"></i></div>
+                        <div class="stat-value">{{ $totalStructures }}</div>
+                        <div class="stat-label">Total Structures</div>
                     </div>
                     <div class="stat-card success">
-                        <div class="stat-icon"><i class="fa fa-check-circle"></i></div>
-                        <div class="stat-value">{{ $withSalary }}</div>
-                        <div class="stat-label">With Salary</div>
+                        <div class="stat-icon"><i class="fa fa-users"></i></div>
+                        <div class="stat-value">{{ $totalAssignments }}</div>
+                        <div class="stat-label">Assigned Employees</div>
                     </div>
-                    <div class="stat-card danger">
-                        <div class="stat-icon"><i class="fa fa-exclamation-triangle"></i></div>
-                        <div class="stat-value">{{ $withoutSalary }}</div>
-                        <div class="stat-label">Without Salary</div>
-                    </div>
-                    <div class="stat-card info">
-                        <div class="stat-icon"><i class="fa fa-coins"></i></div>
-                        <div class="stat-value">{{ number_format($totalBase, 0) }}</div>
-                        <div class="stat-label">Total Base</div>
+                    <div class="stat-card warning">
+                        <div class="stat-icon"><i class="fa fa-user-times"></i></div>
+                        <div class="stat-value">{{ $unassignedEmployees }}</div>
+                        <div class="stat-label">Unassigned Employees</div>
                     </div>
                 </div>
 
-                <!-- Salary Structure Card -->
+                <!-- Salary Structures Grid -->
                 <div class="hr-card">
                     <div class="hr-header">
                         <div class="d-flex align-items-center gap-3">
                             <div class="search-box">
                                 <i class="fa fa-search"></i>
-                                <input type="search" id="salarySearch" placeholder="Search employees...">
-                            </div>
-                            <div class="btn-group">
-                                <button class="btn btn-outline-secondary btn-sm active" data-filter="all">All</button>
-                                <button class="btn btn-outline-success btn-sm" data-filter="has">Has Salary</button>
-                                <button class="btn btn-outline-danger btn-sm" data-filter="no">No Salary</button>
+                                <input type="search" id="structureSearch" placeholder="Search structures...">
                             </div>
                         </div>
-                        <span class="text-muted small" id="empCount">{{ $employees->total() }} employees</span>
+                        <span class="text-muted small" id="structureCount">{{ $structures->total() }} structures</span>
                     </div>
 
-                    <div class="hr-grid" id="salaryGrid">
-                        @forelse($employees as $emp)
+                    <div class="hr-grid" id="structuresGrid">
+                        @forelse($structures as $structure)
                             @php
-                                $salary = $emp->salaryStructure;
-                                $hasSalary = $salary !== null;
-                                $net = $hasSalary
-                                    ? $salary->base_salary + $salary->total_allowances - $salary->total_deductions
-                                    : 0;
+                                $childCount = $structure->children->sum('assigned_count');
+                                $totalAssigned = $structure->assigned_count + $childCount;
                             @endphp
-                            <div class="salary-card {{ $hasSalary ? 'has-salary' : 'no-salary' }}"
-                                data-id="{{ $emp->id }}" data-name="{{ strtolower($emp->full_name) }}"
-                                data-has="{{ $hasSalary ? 'has' : 'no' }}">
-                                <div class="hr-item-header">
-                                    <div class="d-flex align-items-center">
-                                        <div class="hr-avatar">
-                                            {{ strtoupper(substr($emp->first_name, 0, 1) . substr($emp->last_name, 0, 1)) }}
-                                        </div>
-                                        <div class="hr-item-info">
-                                            <h4 class="hr-item-name">{{ $emp->full_name }}</h4>
-                                            <div class="hr-item-subtitle">{{ $emp->department->name ?? 'N/A' }} •
-                                                {{ $emp->designation->name ?? 'N/A' }}</div>
+                            <div class="structure-card"
+                                data-name="{{ strtolower($structure->name ?? $structure->salary_type) }}">
+                                <div class="structure-card-header">
+                                    <div style="flex: 1;">
+                                        <h3 class="structure-title">
+                                            {{ $structure->name }}
+                                            @if ($structure->salary_type == 'both')
+                                                <span class="structure-type-badge">Monthly + Comm.</span>
+                                            @elseif($structure->salary_type == 'commission')
+                                                <span class="structure-type-badge">Commission</span>
+                                            @elseif($structure->use_daily_wages)
+                                                @if ($structure->base_salary > 0)
+                                                    <span class="structure-type-badge">Monthly + Daily</span>
+                                                @else
+                                                    <span class="structure-type-badge">Daily Wages</span>
+                                                @endif
+                                            @else
+                                                <span class="structure-type-badge">Monthly Salary</span>
+                                            @endif
+                                        </h3>
+                                        <div class="assigned-info">
+                                            <i class="fa fa-users"></i>
+                                            <span class="assigned-count">{{ $totalAssigned }}</span> Assigned
                                         </div>
                                     </div>
-                                    @if ($hasSalary)
-                                        <span
-                                            class="salary-type-badge {{ $salary->salary_type }}">{{ ucfirst($salary->salary_type) }}</span>
+                                    <div class="salary-amount">
+                                        <p class="salary-amount-value">
+                                            Rs.
+                                            {{ number_format($structure->use_daily_wages ? $structure->daily_wages : $structure->base_salary, 0) }}
+                                        </p>
+                                        <p class="salary-amount-label">
+                                            {{ $structure->use_daily_wages ? 'Per Day' : 'Base Salary' }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="structure-details">
+                                    @if (!$structure->use_daily_wages)
+                                        <div class="detail-row">
+                                            <span class="detail-label">Allowances</span>
+                                            <span class="detail-value text-success">+ Rs.
+                                                {{ number_format($structure->total_allowances, 0) }}</span>
+                                        </div>
+                                        <div class="detail-row">
+                                            <span class="detail-label">Deductions</span>
+                                            <span class="detail-value text-danger">- Rs.
+                                                {{ number_format($structure->total_deductions, 0) }}</span>
+                                        </div>
+                                        <div class="detail-row">
+                                            <span class="detail-label">Net Salary</span>
+                                            <span class="detail-value">Rs.
+                                                {{ number_format($structure->base_salary + $structure->total_allowances - $structure->total_deductions, 0) }}</span>
+                                        </div>
                                     @else
-                                        <span class="salary-type-badge not-set">Not Set</span>
+                                        <div class="detail-row">
+                                            <span class="detail-label">Deduction Rules</span>
+                                            <span class="detail-value">
+                                                {{ count($structure->attendance_deduction_policy['late_rules'] ?? []) }}
+                                                Late /
+                                                {{ count($structure->attendance_deduction_policy['early_rules'] ?? []) }}
+                                                Early
+                                            </span>
+                                        </div>
+                                        <div class="detail-row">
+                                            <span class="detail-label">Carry Forward</span>
+                                            <span class="detail-value">
+                                                {{ $structure->carry_forward_deductions ? 'Yes' : 'No' }}
+                                            </span>
+                                        </div>
+                                    @endif
+
+                                    @if ($structure->commission_percentage)
+                                        <div class="detail-row">
+                                            <span class="detail-label">Commission</span>
+                                            <span class="detail-value">{{ $structure->commission_percentage }}%</span>
+                                        </div>
                                     @endif
                                 </div>
 
-                                @if ($hasSalary)
-                                    <div class="salary-breakdown">
-                                        <div class="salary-row">
-                                            <span class="label">Base Salary</span>
-                                            <span>Rs. {{ number_format($salary->base_salary, 2) }}</span>
-                                        </div>
-                                        <div class="salary-row">
-                                            <span class="label">Allowances</span>
-                                            <span class="text-success">+ Rs.
-                                                {{ number_format($salary->total_allowances, 2) }}</span>
-                                        </div>
-                                        <div class="salary-row">
-                                            <span class="label">Deductions</span>
-                                            <span class="text-danger">- Rs.
-                                                {{ number_format($salary->total_deductions, 2) }}</span>
-                                        </div>
-                                        <div class="salary-row">
-                                            <span class="label">Net Salary</span>
-                                            <span>Rs. {{ number_format($net, 2) }}</span>
-                                        </div>
-                                    </div>
-                                @else
-                                    <div class="salary-breakdown text-center">
-                                        <i class="fa fa-exclamation-triangle text-warning mb-2"></i>
-                                        <p class="mb-0 text-muted">No salary structure assigned</p>
-                                    </div>
-                                @endif
-
-                                <div class="d-flex justify-content-end mt-3">
-                                    @if ($hasSalary)
-                                        @if ($canEdit)
-                                            <a href="{{ route('hr.salary-structure.edit', $emp->id) }}"
-                                                class="btn btn-create btn-sm">
-                                                <i class="fa fa-edit me-1"></i> Edit
-                                            </a>
-                                        @elseif($canView)
-                                            <a href="{{ route('hr.salary-structure.edit', $emp->id) }}"
-                                                class="btn btn-outline-primary btn-sm">
-                                                <i class="fa fa-eye me-1"></i> View
-                                            </a>
-                                        @endif
-                                    @else
-                                        @if ($canCreate || $canEdit)
-                                            <a href="{{ route('hr.salary-structure.edit', $emp->id) }}"
-                                                class="btn btn-create btn-sm">
-                                                <i class="fa fa-plus me-1"></i> Assign Salary
-                                            </a>
-                                        @endif
+                                <div class="card-actions">
+                                    @if ($canEdit)
+                                        <a href="{{ route('hr.salary-structure.assign-page', $structure->id) }}"
+                                            class="btn-assign-main" title="Assign to Employees">
+                                            <i class="fa fa-user-plus me-1"></i> Assign Employees
+                                        </a>
                                     @endif
+
+                                    <div class="secondary-actions">
+                                        @if ($canView || $canEdit)
+                                            <a href="{{ route('hr.salary-structure.view-assigned', $structure->id) }}"
+                                                class="action-btn" title="View Assigned Employees">
+                                                <i class="fa fa-eye"></i>
+                                            </a>
+                                        @endif
+
+                                        @if ($canEdit)
+                                            <a href="{{ route('hr.salary-structure.edit-template', $structure->id) }}"
+                                                class="action-btn" title="Edit Template">
+                                                <i class="fa fa-pencil-alt"></i>
+                                            </a>
+                                            <a href="{{ route('hr.salary-structure.individual-update-page', $structure->id) }}"
+                                                class="action-btn" title="Update Individual Employees">
+                                                <i class="fa fa-user-cog"></i>
+                                            </a>
+                                        @endif
+
+                                        @if ($canDelete)
+                                            <a href="javascript:void(0);" onclick="deleteStructure({{ $structure->id }})"
+                                                class="action-btn delete" title="Delete Template">
+                                                <i class="fa fa-trash"></i>
+                                            </a>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                         @empty
-                            <div class="empty-state" style="grid-column: 1/-1;">
-                                <i class="fa fa-chart-line"></i>
-                                <p>No employees found.</p>
+                            <div class="col-12">
+                                <div class="empty-state">
+                                    <i class="fa fa-money-bill-wave"></i>
+                                    <p>No salary structures created yet.</p>
+                                    @if ($canCreate || $canEdit)
+                                        <button class="btn btn-create mt-3" onclick="createNewStructure()">
+                                            <i class="fa fa-plus me-1"></i> Create First Structure
+                                        </button>
+                                    @endif
+                                </div>
                             </div>
                         @endforelse
                     </div>
-                    <div class="px-4 py-3 border-top">
-                        {{ $employees->links() }}
-                    </div>
+
+                    @if ($structures->total() > 0)
+                        <div class="px-4 py-3 border-top">
+                            {{ $structures->links() }}
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        $(document).ready(function() {
-            $('[data-filter]').click(function() {
-                $(this).addClass('active').siblings().removeClass('active');
-                var filter = $(this).data('filter');
+        function createNewStructure() {
+            window.location.href = "{{ route('hr.salary-structure.create') }}";
+        }
 
-                $('.salary-card').each(function() {
-                    if (filter === 'all') {
-                        $(this).show();
-                    } else {
-                        $(this).toggle($(this).data('has') === filter);
-                    }
-                });
-                updateCount();
+        function deleteStructure(id) {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You won't be able to revert this! This will permanently delete the structure template.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete it!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: "{{ route('hr.salary-structure.destroy-template', ':id') }}".replace(':id',
+                            id),
+                        type: 'POST', // Method override for DELETE is handled by _method
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            _method: 'DELETE'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire(
+                                    'Deleted!',
+                                    response.success,
+                                    'success'
+                                ).then(() => {
+                                    location.reload(); // Reload to update list/stats
+                                });
+                            }
+                        },
+                        error: function(xhr) {
+                            let msg = 'Something went wrong!';
+                            if (xhr.responseJSON && xhr.responseJSON.error) {
+                                msg = xhr.responseJSON.error;
+                            }
+                            Swal.fire(
+                                'Error!',
+                                msg,
+                                'error'
+                            );
+                        }
+                    });
+                }
             });
+        }
 
-            function updateCount() {
-                $('#empCount').text($('.salary-card:visible').length + ' employees');
-            }
-
-            $('#salarySearch').on('input', function() {
+        $(document).ready(function() {
+            $('#structureSearch').on('input', function() {
                 var q = $(this).val().toLowerCase();
-                $('.salary-card').each(function() {
+                $('.structure-card').each(function() {
                     var name = $(this).data('name') || '';
                     $(this).toggle(name.indexOf(q) !== -1);
                 });
                 updateCount();
             });
+
+            function updateCount() {
+                $('#structureCount').text($('.structure-card:visible').length + ' structures');
+            }
         });
     </script>
 @endsection

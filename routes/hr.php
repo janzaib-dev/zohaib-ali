@@ -1,16 +1,16 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Hr\AttendanceController;
 use App\Http\Controllers\Hr\DepartmentController;
 use App\Http\Controllers\Hr\EmployeeController;
-use App\Http\Controllers\Hr\AttendanceController;
-use App\Http\Controllers\Hr\PayrollController;
-use App\Http\Controllers\Hr\LeaveController;
-use App\Http\Controllers\Hr\ShiftController;
 use App\Http\Controllers\Hr\HolidayController;
+use App\Http\Controllers\Hr\LeaveController;
+use App\Http\Controllers\Hr\PayrollController;
+use App\Http\Controllers\Hr\ShiftController;
+use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
-    
+
     // Departments
     Route::middleware(['permission:hr.departments.view'])->group(function () {
         Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
@@ -39,7 +39,7 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     });
     Route::post('employees', [EmployeeController::class, 'store'])->name('employees.store')->middleware('permission:hr.employees.create|hr.employees.edit');
     Route::delete('employees/{employee}', [EmployeeController::class, 'destroy'])->name('employees.destroy')->middleware('permission:hr.employees.delete');
-    
+
     // Face Recognition Routes
     Route::get('employees/encodings', [EmployeeController::class, 'getEncodings'])->name('employees.encodings');
     Route::post('employees/face-register', [EmployeeController::class, 'storeFace'])->name('employees.face-register')->middleware('permission:hr.employees.edit');
@@ -66,7 +66,13 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
 
     // Payroll
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index')->middleware('permission:hr.payroll.view');
+    Route::get('payroll/monthly', [PayrollController::class, 'monthly'])->name('payroll.monthly')->middleware('permission:hr.payroll.view');
+    Route::get('payroll/daily', [PayrollController::class, 'daily'])->name('payroll.daily')->middleware('permission:hr.payroll.view');
+    Route::get('payroll/{payroll}/details', [PayrollController::class, 'details'])->name('payroll.details')->middleware('permission:hr.payroll.view');
     Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate')->middleware('permission:hr.payroll.create');
+    Route::post('payroll/generate-monthly', [PayrollController::class, 'generateMonthly'])->name('payroll.generate-monthly')->middleware('permission:hr.payroll.create');
+    Route::put('payroll/{payroll}', [PayrollController::class, 'update'])->name('payroll.update')->middleware('permission:hr.payroll.edit');
+    Route::patch('payroll/{payroll}/mark-reviewed', [PayrollController::class, 'markReviewed'])->name('payroll.mark-reviewed')->middleware('permission:hr.payroll.edit');
     Route::patch('payroll/{payroll}/mark-paid', [PayrollController::class, 'markPaid'])->name('payroll.mark-paid')->middleware('permission:hr.payroll.edit');
     Route::delete('payroll/{payroll}', [PayrollController::class, 'destroy'])->name('payroll.destroy')->middleware('permission:hr.payroll.delete');
 
@@ -78,10 +84,35 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     // Salary Structure
     // Index - requires any of view/create/edit (controller handles specifics)
     Route::get('salary-structure', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'index'])->name('salary-structure.index')->middleware('permission:hr.salary.structure.view|hr.salary.structure.create|hr.salary.structure.edit');
+
+    // Create standalone salary structure
+    Route::get('salary-structure/create', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'create'])->name('salary-structure.create')->middleware('permission:hr.salary.structure.create|hr.salary.structure.edit');
+    Route::post('salary-structure', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'store'])->name('salary-structure.store')->middleware('permission:hr.salary.structure.create|hr.salary.structure.edit');
+
+    Route::post('salary-structure/bulk-edit', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'bulkEdit'])->name('salary-structure.bulk-edit')->middleware('permission:hr.salary.structure.edit');
+    Route::post('salary-structure/bulk-update', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'bulkUpdate'])->name('salary-structure.bulk-update')->middleware('permission:hr.salary.structure.edit');
+
     // Edit page - requires view (for read-only), create (for new), or edit (for existing)
     Route::get('salary-structure/{employee}/edit', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'edit'])->name('salary-structure.edit')->middleware('permission:hr.salary.structure.view|hr.salary.structure.create|hr.salary.structure.edit');
     // Update - requires create (for new) or edit (for existing) - controller handles logic
     Route::put('salary-structure/{employee}', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'update'])->name('salary-structure.update')->middleware('permission:hr.salary.structure.create|hr.salary.structure.edit');
+
+    // Edit Template (Standalone Structure)
+    Route::get('salary-structure/{salaryStructure}/edit-template', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'editTemplate'])->name('salary-structure.edit-template')->middleware('permission:hr.salary.structure.edit');
+    Route::put('salary-structure/{salaryStructure}/update-template', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'updateTemplate'])->name('salary-structure.update-template')->middleware('permission:hr.salary.structure.edit');
+    Route::delete('salary-structure/{salaryStructure}/destroy-template', [\App\Http\Controllers\Hr\SalaryStructureController::class, 'destroyTemplate'])->name('salary-structure.destroy-template')->middleware('permission:hr.salary.structure.delete');
+
+    // Salary Structure Assignment (New Architecture)
+    Route::get('salary-structure/{salaryStructure}/assign', [\App\Http\Controllers\Hr\SalaryStructureAssignmentController::class, 'assignPage'])->name('salary-structure.assign-page')->middleware('permission:hr.salary.structure.edit');
+    Route::post('salary-structure/fetch-employees', [\App\Http\Controllers\Hr\SalaryStructureAssignmentController::class, 'fetchEmployees'])->name('salary-structure.fetch-employees')->middleware('permission:hr.salary.structure.edit');
+    Route::post('salary-structure/{salaryStructure}/assign', [\App\Http\Controllers\Hr\SalaryStructureAssignmentController::class, 'assign'])->name('salary-structure.assign')->middleware('permission:hr.salary.structure.edit');
+    Route::get('salary-structure/{salaryStructure}/view-assigned', [\App\Http\Controllers\Hr\SalaryStructureAssignmentController::class, 'viewAssigned'])->name('salary-structure.view-assigned')->middleware('permission:hr.salary.structure.view');
+    Route::delete('salary-structure/{salaryStructure}/employee/{employee}', [\App\Http\Controllers\Hr\SalaryStructureAssignmentController::class, 'removeAssignment'])->name('salary-structure.remove-assignment')->middleware('permission:hr.salary.structure.edit');
+
+    // Individual Updates
+    Route::get('salary-structure/{salaryStructure}/individual-update', [\App\Http\Controllers\Hr\SalaryStructureAssignmentController::class, 'individualUpdatePage'])->name('salary-structure.individual-update-page')->middleware('permission:hr.salary.structure.edit');
+    Route::get('salary-structure/individual/{employee}/edit', [\App\Http\Controllers\Hr\SalaryStructureAssignmentController::class, 'editIndividual'])->name('salary-structure.edit-individual')->middleware('permission:hr.salary.structure.edit');
+    Route::post('salary-structure/individual/{employee}/update', [\App\Http\Controllers\Hr\SalaryStructureAssignmentController::class, 'updateIndividual'])->name('salary-structure.update-individual')->middleware('permission:hr.salary.structure.edit');
 
     // Biometric Devices
     Route::middleware(['permission:hr.biometric.devices.view'])->group(function () {
@@ -90,7 +121,7 @@ Route::middleware(['auth'])->prefix('hr')->name('hr.')->group(function () {
     Route::post('biometric-devices', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'store'])->name('biometric-devices.store')->middleware('permission:hr.biometric.devices.create|hr.biometric.devices.edit');
     Route::put('biometric-devices/{device}', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'update'])->name('biometric-devices.update')->middleware('permission:hr.biometric.devices.edit');
     Route::delete('biometric-devices/{device}', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'destroy'])->name('biometric-devices.destroy')->middleware('permission:hr.biometric.devices.delete');
-    
+
     // Biometric Device Actions
     Route::post('biometric-devices/{device}/test', [\App\Http\Controllers\Hr\BiometricDeviceController::class, 'testConnection'])->name('biometric-devices.test')->middleware('permission:hr.biometric.devices.view');
     Route::post('biometric-devices/{device}/sync-employees', [App\Http\Controllers\Hr\BiometricDeviceController::class, 'syncEmployees'])->name('biometric-devices.sync-employees')->middleware('permission:hr.biometric.devices.edit');
