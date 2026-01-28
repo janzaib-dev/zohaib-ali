@@ -441,14 +441,14 @@
                                           <th class="col-product">Product</th>
                                           <th class="col-warehouse">Warehouse</th>
                                           <th class="col-stock">Stock</th>
-                                          <th class="col-qty">Qty</th>
-                                          <th class="col-loose">Loose Pcs</th>
-                                          <th class="col-stock">T.Pieces</th>
+                                          <th class="col-qty">Total Pcs</th>
+                                          <th class="col-qty">Pack Size</th>
+                                          <th class="col-loose">Loose</th>
+                                          <th class="col-pieces">Boxes</th>
                                           <th class="col-price">Retail Price</th>
                                           <th class="col-disc">Disc %</th>
                                           <th class="col-disc-amt">Disc Amt</th>
                                           <th class="col-price-p">Price/Pc</th>
-                                          <th class="col-price-m2">Price/m²</th>
                                           <th class="col-amount">Amount</th>
                                           <th class="col-action">—</th>
                                       </tr>
@@ -777,7 +777,7 @@
                           $('#address').val(d.address || '');
                           $('#tel').val(d.mobile || '');
                           $('#remarks').val(d.status || '');
-                          $('#previousBalance').val((+d.opening_balance || 0).toFixed(2));
+                          $('#previousBalance').val((+d.previous_balance || 0).toFixed(2));
                       }
                   );
               });
@@ -898,50 +898,32 @@
           });
 
           function fetchProductPrice($row, productId) {
-              $.get('{{ route('products.ajax.search') }}', {
-                      term: productId,
-                      single_fetch: 1
-                  })
-                  .done(function(res) {
-                      // Since we don't have a direct price endpoint, we use search or create one in ProductController
-                      // Or better: use the existing 'get-stock/pid' logic if available, OR
-                      // Use the 'products.ajax.search' if we modified it to return price.
-                      // The ProductController::getPrice method exists! Line 20 of ProductController.
-                      $.get('{{ url('get-price') }}', {
-                          product_id: productId
-                      }).done(function(pRes) {
-                          console.log('Price fetched for product ' + productId + ':', pRes);
-                          $row.find('.retail-price').val(pRes.retail_price || 0);
+              // Direct call to get-price
+              console.log('Fetching price for product:', productId);
+              $.get('{{ route('get-price') }}', {
+                  product_id: productId
+              }).done(function(pRes) {
+                  console.log('Price fetched:', pRes);
 
-                          // Store metadata for calculation
-                          $row.data('size_mode', pRes.size_mode);
-                          $row.data('pieces_per_box', pRes.pieces_per_box || 0);
-                          $row.data('price_per_m2', pRes.price_per_m2 || 0);
+                  // Populate Fields
+                  // Retail Price = Box Price (if by_carton)
+                  $row.find('.retail-price').val(pRes.retail_price || 0);
 
-                          // Populate new fields
-                          $row.find('.price-per-piece').val(pRes.purchase_price_per_piece ||
-                              0); // Assuming purchase price for now or calculate from box? 
-                          // Wait, user asked for "price per piece". For by_size/by_cartons, this might be calculated.
-                          // Let's use logic:
-                          let ppPiece = 0;
-                          if (pRes.size_mode === 'by_pieces') {
-                              ppPiece = pRes.retail_price;
-                          } else if (pRes.size_mode === 'by_size') {
-                              // Calculate m2 per piece (cm * cm / 10000)
-                              let h = parseFloat(pRes.height || 0);
-                              let w = parseFloat(pRes.width || 0);
-                              let m2 = (h * w) / 10000;
-                              ppPiece = m2 * parseFloat(pRes.price_per_m2 || 0);
-                          } else if (pRes.pieces_per_box > 0) {
-                              ppPiece = pRes.sale_price_per_box / pRes.pieces_per_box;
-                          }
-                          $row.find('.price-per-piece').val(ppPiece.toFixed(2));
+                  // Pack Size
+                  $row.find('.pack-qty').val(pRes.pieces_per_box || 1);
 
-                          $row.find('.price-per-m2').val(pRes.price_per_m2 || 0);
+                  // Piece Price
+                  $row.find('.price-per-piece').val(pRes.sale_price_per_piece || 0);
 
-                          computeRow($row);
-                      });
-                  });
+                  // Store Metadata for calculations
+                  $row.data('size_mode', pRes.size_mode);
+                  $row.data('pieces_per_box', pRes.pieces_per_box || 1);
+                  $row.data('price_per_m2', pRes.price_per_m2 || 0);
+
+                  computeRow($row);
+              }).fail(function(err) {
+                  console.error('Price fetch failed', err);
+              });
           }
 
           function loadWarehousesForProduct($row, productId) {
@@ -1041,24 +1023,30 @@
       <input type="text" class="form-control stock text-center input-readonly" readonly tabindex="-1">
     </td>
 
-    <!-- QTY -->
+    <!-- Qty Pieces (Input) -->
     <td class="col-qty">
-      <input type="text" class="form-control sales-qty text-end" name="qty[]" id="sales-qty">
+      <input type="text" class="form-control sales-qty text-end" name="qty[]" id="sales-qty" placeholder="Pcs">
     </td>
 
-    <!-- LOOSE PIECES -->
+    <!-- PACK QTY (Hidden) -->
+    <!-- Pack Size (Readonly) -->
+    <td class="col-qty">
+       <input type="text" class="form-control pack-qty text-end input-readonly" name="pack_qty[]" readonly placeholder="Size" tabindex="-1">
+    </td>
+
+    <!-- LOOSE PIECES (Editable) -->
     <td class="col-loose">
-      <input type="text" class="form-control loose-pieces text-end" name="loose_pieces[]" placeholder="0">
+      <input type="text" class="form-control loose-pieces text-end" name="loose_pieces[]" placeholder="Loose">
     </td>
 
-    <!-- Total Pieces -->
+    <!-- Packet/Box (Calculated) -->
     <td class="col-pieces">
-      <input type="text" class="form-control total-pieces text-end input-readonly" name="total_pieces[]" readonly placeholder="0" tabindex="-1">
+      <input type="text" class="form-control total-pieces text-end input-readonly" name="total_pieces[]" readonly placeholder="Box" tabindex="-1">
     </td>
 
     <!-- RETAIL PRICE -->
     <td class="col-price">
-      <input type="text" id="retail-price" class="form-control retail-price text-end input-readonly" name="price[]" value="0" readonly tabindex="-1">
+      <input type="text" class="form-control retail-price text-end input-readonly" name="price[]" value="0" readonly tabindex="-1">
     </td>
 
     <!-- DISCOUNT -->
@@ -1085,10 +1073,7 @@
       <input type="text" class="form-control price-per-piece text-end input-readonly" name="price_per_piece[]" readonly placeholder="0.00" tabindex="-1">
     </td>
 
-    <!-- Price/m2 -->
-    <td class="col-price-m2">
-      <input type="text" class="form-control price-per-m2 text-end input-readonly" name="price_per_m2[]" readonly placeholder="0.00" tabindex="-1">
-    </td>
+
 
     <!-- NET AMOUNT -->
     <td class="col-amount">
@@ -1266,8 +1251,40 @@
           //   $('#address,#tel,#remarks').val('');
           //   loadCustomersByType(this.value);
           // });
-          // $(document).on('change', '#customerSelect', function() {
-          //   let id = $(this).val();
+          $(document).on('change', '#customerSelect', function() {
+              let id = $(this).val();
+              if (!id) return;
+
+              // Reset fields
+              $('#previousBalance').val('...');
+              $('#rangeBalance').val('...');
+
+              // Fetch customer details
+              let url = "{{ url('sale/customers') }}/" + id + "?t=" + new Date().getTime();
+
+              $.get(url, function(d) {
+                  // d is the customer object
+                  $('#address').val(d.address || '');
+                  $('#tel').val(d.mobile || '');
+                  $('#remarks').val(d.remarks || '');
+
+                  // Log DB values for debugging
+                  console.log("Customer Fetch Result:", d);
+                  console.log("Server Previous Balance:", d.previous_balance);
+                  console.log("Server Opening Balance:", d.opening_balance);
+
+                  // Use DB 'previous_balance' column strictly
+                  let prevBal = parseFloat(d.previous_balance || 0);
+                  $('#previousBalance').val(prevBal.toFixed(2));
+
+                  let rangeBal = parseFloat(d.balance_range || 0);
+                  $('#rangeBalance').val(rangeBal.toFixed(2));
+
+                  updateGrandTotals();
+              }).fail(function() {
+                  console.error("Failed to load customer data");
+              });
+          });
           //   if (!id) return;
 
           //   let type = $('input[name="partyType"]:checked').val(); // Get the selected type (customer/vendor)
@@ -1359,68 +1376,61 @@
               return parseFloat(v || 0) || 0;
           }
 
+          // Compute Row Logic
           function computeRow($row, isManual = false) {
-              const rp = toNum($row.find('.retail-price').val());
-              const qty = toNum($row.find('.sales-qty').val());
-              const loose = toNum($row.find('.loose-pieces').val());
+              const rp = toNum($row.find('.retail-price').val()); // Box Price
+
+              // Input fields: 
+              // sales-qty = Total Pieces (User Input)
+              const qtyPieces = toNum($row.find('.sales-qty').val());
+              const loose = toNum($row.find('.loose-pieces').val()); // Extra Loose pieces
+
+              const packQty = parseFloat($row.find('.pack-qty').val()) || 1;
+
               const stock = toNum($row.find('.stock').val());
-              const pricePerPiece = toNum($row.find('.price-per-piece').val());
 
               const discValue = toNum($row.find('.discount-value').val());
-              const discType = $row.find('.discount-toggle').data('type'); // percent | pkr
+              const discType = $row.find('.discount-toggle').data('type');
 
               let dam = toNum($row.find('.discount-amount').val());
 
-              if (qty > stock) {
-                  // Optional: strict stock check
-                  // $row.find('.sales-qty').val(stock);
+              // Calculate Boxes for Display (Visual only)
+              let boxes = 0;
+              if (packQty > 0) {
+                  boxes = qtyPieces / packQty;
               }
 
-              // Calculate Total Pieces
-              const sizeMode = $row.data('size_mode') || 'by_pieces';
-              const piecesPerBox = parseFloat($row.data('pieces_per_box') || 0);
-              let totalPieces = 0;
+              // Update UI (.total-pieces column now holds Calculated Boxes)
+              $row.find('.total-pieces').val(Number.isInteger(boxes) ? boxes : boxes.toFixed(2));
 
-              if (sizeMode === 'by_pieces') {
-                  totalPieces = qty + loose;
-              } else {
-                  // by_size or by_cartons -> Qty is boxes
-                  totalPieces = (qty * piecesPerBox) + loose;
-              }
-              $row.find('.total-pieces').val(totalPieces.toFixed(0));
+              // Total Pieces for Calculation
+              const totalPieces = qtyPieces + loose;
 
-              // 🔹 GROSS
-              let gross = (rp * qty) + (loose * pricePerPiece);
+              // 🔹 GROSS CALCULATION
+              // "fix total amount with piece which user input"
+              // Use Price Per Piece explicitly
+              let unitPrice = toNum($row.find('.price-per-piece').val());
+
+              const gross = totalPieces * unitPrice;
 
               /* ===== AUTO DISCOUNT ===== */
               if (!isManual) {
                   if (discValue > 0) {
                       if (discType === 'percent') {
-                          if (discValue >= 0 && discValue <= 100) {
-                              dam = (gross * discValue) / 100;
-                          } else {
-                              dam = 0;
-                          }
+                          dam = (gross * discValue) / 100;
                       } else {
-                          // PKR
-                          if (discValue < gross) {
-                              dam = discValue * qty; // If PKR is per item
-                              // OR if PKR is global for row? Usually discount input is per unit or total?
-                              // Based on previous logic: dam = discValue * qty. Let's keep it.
-                          } else {
-                              dam = 0;
-                          }
+                          // Fixed Amount (PKR)
+                          dam = discValue;
                       }
-                      $row.find('.discount-amount').val(dam.toFixed(2));
                   } else {
                       dam = 0;
-                      $row.find('.discount-amount').val('0.00');
                   }
+                  $row.find('.discount-amount').val(dam.toFixed(2));
               }
 
-              /* ===== NET ===== */
-              const net = Math.max(0, gross - dam);
-              $row.find('.sales-amount').val(net.toFixed(2));
+              /* ===== ROW AMOUNT (GROSS) ===== */
+              // "in amount wont show disscouted" -> Show Gross
+              $row.find('.sales-amount').val(gross.toFixed(2));
           }
 
 
@@ -1428,7 +1438,8 @@
 
 
 
-          $(document).on('input', '.sales-qty, .loose-pieces, .discount-value', function() {
+          // Main Input Trigger 
+          $(document).on('input', '.sales-qty, .pack-qty, .loose-pieces, .discount-value', function() {
               const $row = $(this).closest('tr');
               computeRow($row);
               updateGrandTotals();
@@ -1465,17 +1476,23 @@
 
                   const $r = $(this);
 
-                  const rp = toNum($r.find('.retail-price').val());
-                  const qty = toNum($r.find('.sales-qty').val());
+                  // Amount Column is now GROSS
+                  // We re-read it or re-calculate? Reading is safer to match UI.
+                  const gross = toNum($r.find('.sales-amount').val());
                   const dam = toNum($r.find('.discount-amount').val());
 
-                  const gross = rp * qty;
+                  // Net for this row
                   const net = Math.max(0, gross - dam);
 
-                  tQty += qty;
+                  // Total Pieces
+                  const qtyPcs = toNum($r.find('.sales-qty').val());
+                  const loose = toNum($r.find('.loose-pieces').val());
+                  const totalPieces = qtyPcs + loose;
+
+                  tQty += totalPieces;
                   tGross += gross;
                   tLineDisc += dam;
-                  tNet += net; // ✅ NET TOTAL
+                  tNet += net;
               });
 
               // ===== ORDER LEVEL =====
@@ -1910,33 +1927,6 @@
               if ($('#salesTableBody tr').length === 0) {
                   addNewRow();
               }
-          });
-
-          // New Logic for Customer Balance Range
-          $(document).on('change', '#customerSelect', function() {
-              const custId = $(this).val();
-              if (!custId) {
-                  $('#rangeBalance').val('0.00');
-                  $('#previousBalance').val('0.00');
-                  return;
-              }
-
-              $.get('{{ url('sale/customers') }}/' + custId, function(res) {
-                  if (res) {
-                      // previous_balance comes from Controller (Ledger Closing)
-                      const prevBal = parseFloat(res.previous_balance || 0).toFixed(2);
-                      // balance_range comes from Customer Model
-                      const rangeBal = parseFloat(res.balance_range || 0).toFixed(2);
-
-                      $('#previousBalance').val(prevBal);
-                      $('#rangeBalance').val(rangeBal);
-
-                      // Also update totals
-                      updateGrandTotals();
-                  }
-              }).fail(function() {
-                  console.error('Failed to load customer details');
-              });
           });
       </script>
   @endsection

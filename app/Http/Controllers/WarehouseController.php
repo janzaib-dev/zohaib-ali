@@ -12,28 +12,33 @@ class WarehouseController extends Controller
     public function getWarehouses(Request $request)
     {
         $productId = $request->input('product_id');
-        
-        // DEBUG LOGGING
-        \Log::info("Warehouse Fetch Request for Product: " . $productId);
 
-        $warehouseStocks = WarehouseStock::with('stockWarehouse')
+        // Allow fetching if either pieces OR boxes exist
+        $warehouseStocks = WarehouseStock::with(['stockWarehouse', 'product'])
             ->where('product_id', $productId)
-            ->where('quantity', '>', 0)
+            ->where(function ($q) {
+                $q->where('total_pieces', '>', 0)
+                  ->orWhere('quantity', '>', 0);
+            })
             ->get();
-            
-        \Log::info("Found Stocks: " . $warehouseStocks->count());
-        
+
         $response = $warehouseStocks->map(function ($ws) {
+            // Self-healing for display: if pieces missing but boxes exist, calculate
+            $stockVal = $ws->total_pieces;
+            if ($stockVal <= 0 && $ws->quantity > 0) {
+                $ppb = ($ws->product && $ws->product->pieces_per_box > 0) ? $ws->product->pieces_per_box : 1;
+                $stockVal = $ws->quantity * $ppb;
+            }
+
             return [
                 'warehouse_id' => $ws->warehouse_id,
                 'warehouse_name' => optional($ws->stockWarehouse)->warehouse_name,
-                'stock' => $ws->quantity,
+                'stock' => $stockVal,
             ];
         });
 
         return response()->json($response);
     }
-
 
     // VendorController.php aur WarehouseController.php same hoga
     public function index()

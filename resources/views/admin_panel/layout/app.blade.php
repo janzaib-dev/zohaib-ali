@@ -265,6 +265,7 @@
                                             <div class="col-group col-md-3">
                                                 <p class="category-heading">Products & Categories</p>
                                                 <ul class="submenu-item">
+                                                    
                                                     @can('products.view')
                                                         <li><a href="{{ route('product') }}"><i class="fas fa-box"></i>
                                                                 Products</a></li>

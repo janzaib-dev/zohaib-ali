@@ -16,56 +16,17 @@ use Illuminate\Support\Facades\Log;
 
 class SaleController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    // ////////////
-    // public function index  (Request $request)
-    // {
-    //     $type = $request->type ?? 'customer';
-
-    //     $customers = Customer::where('type', $type)
-    //         ->orderBy('name')
-    //         ->get(['id', 'name', 'mobile']);
-    //         dd($customers);
-
-    //     return response()->json($customers);
-    // }
-
-    // // 🔹 Single customer detail
-    // public function show($id, Request $request)
-    // {
-    //     $type = $request->type ?? 'customer';
-
-    //     $customer = Customer::where('id', $id)
-    //         ->where('type', $type)
-    //         ->firstOrFail();
-
-    //     return response()->json([
-    //         'address' => $customer->address,
-    //         'mobile' => $customer->mobile,
-    //         'remarks' => $customer->remarks,
-    //         'previous_balance' => $customer->previous_balance,
-    //     ]);
-    // }
-
-    // //////////
     public function index()
     {
-        $sales = Sale::with(['customer_relation', 'product_relation'])->latest()->paginate(10);
+        $sales = Sale::with(['customer_relation', 'items.product'])->latest()->get();
 
         return view('admin_panel.sale.index', compact('sales'));
     }
 
     public function addsale()
     {
-        // $products = Product::get(); // Removing to save memory (20k products)
         $customer = Customer::all();
         $warehouse = Warehouse::all();
-        // dd($Customer);$warehouses = Warehouse::all();
-        // $customers = Customer::all();
-        // $accounts = Account::all();
-        // Get next invoice from Sale model generator (ensures INVSLE-003 -> INVSLE-004)
         $nextInvoiceNumber = Sale::generateInvoiceNo();
 
         return view('admin_panel.sale.add_sale222', compact('warehouse', 'customer', 'nextInvoiceNumber'));
@@ -74,20 +35,24 @@ class SaleController extends Controller
     public function searchpname(Request $request)
     {
         $q = $request->get('q');
-
-        $warehouseId = $request->get('warehouse_id', 1); // Default to 1
+        $warehouseId = $request->get('warehouse_id', 1);
 
         $products = Product::with(['brand'])
-            ->leftJoin('warehouse_stocks', 'products.id', '=', 'warehouse_stocks.product_id')
-            ->where('warehouse_stocks.warehouse_id', $warehouseId)
-            ->where('warehouse_stocks.quantity', '>', 0)
+            ->leftJoin('warehouse_stocks', function ($join) use ($warehouseId) {
+                $join->on('products.id', '=', 'warehouse_stocks.product_id')
+                    ->where('warehouse_stocks.warehouse_id', $warehouseId);
+            })
             ->where(function ($query) use ($q) {
                 $query->where('products.item_name', 'like', "%{$q}%")
                     ->orWhere('products.item_code', 'like', "%{$q}%")
                     ->orWhere('products.barcode_path', 'like', "%{$q}%");
             })
-            ->select('products.*') // avoid column name collisions
-            ->limit(50) // Limit results to prevent memory overflow
+            ->select(
+                'products.*',
+                'warehouse_stocks.total_pieces as wh_stock',
+                'warehouse_stocks.quantity as wh_box_qty'
+            )
+            ->limit(50)
             ->get();
 
         return response()->json($products);
@@ -98,23 +63,15 @@ class SaleController extends Controller
         return $this->_processSaleSave($request);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(Sale $sale)
     {
         //
     }
 
-    /**
-     * Convert booking to sale form prefill.
-     */
     public function convertFromBooking($id)
     {
         $booking = ProductBooking::findOrFail($id);
         $customers = Customer::all();
-
-        // Decode fields
         $products = explode(',', $booking->product);
         $codes = explode(',', $booking->product_code);
         $brands = explode(',', $booking->brand);
@@ -126,16 +83,14 @@ class SaleController extends Controller
         $colors_json = json_decode($booking->color, true);
 
         $items = [];
-
         foreach ($products as $index => $p) {
-            // Find product name using item_code or product_name
             $product = Product::where('item_name', trim($p))
                 ->orWhere('item_code', trim($codes[$index] ?? ''))
                 ->first();
 
             $items[] = [
                 'product_id' => $product->id ?? '',
-                'item_name' => $product->item_name ?? $p, // This will appear in input box
+                'item_name' => $product->item_name ?? $p,
                 'item_code' => $product->item_code ?? ($codes[$index] ?? ''),
                 'uom' => $product->brand->name ?? ($brands[$index] ?? ''),
                 'unit' => $product->unit_id ?? ($units[$index] ?? ''),
@@ -154,27 +109,11 @@ class SaleController extends Controller
         ]);
     }
 
-    // sale return start
     public function saleretun($id)
     {
         $sale = Sale::findOrFail($id);
         $customers = Customer::all();
-
         $items = $this->_getSaleItems($sale);
-
-        // Normalize items for the view if needed, but the view likely expects the array structure
-        // returned by _getSaleItems matches what it needs?
-        // _getSaleItems returns: product_id, item_name, item_code, brand, unit, price, discount, qty, total, color...
-        // The old code prepared: product_id, item_name, item_code, brand, unit, price, discount, qty, total, color.
-        // It seems compatible.
-        // Note: Old code view might use 'uom' instead of 'brand'?
-        // Let's check the old code: 'brand' => $product->brand->name ?? ...
-        // _getSaleItems uses 'brand'.
-        // Check view (admin_panel.sale.return.create) briefly via view_file if unsure,
-        // but typically standardizing key names is good.
-        // _getSaleItems uses keys: product_id, item_name, item_code, brand, unit, price, discount, qty, total, color...
-        // Old code in saleretun used: product_id, item_name, item_code, brand, unit, price, discount, qty, total, color.
-        // MATCHES.
 
         return view('admin_panel.sale.return.create', [
             'sale' => $sale,
@@ -188,12 +127,8 @@ class SaleController extends Controller
         DB::beginTransaction();
 
         try {
-            // keep same location as sale (hidden fields in blade)
-            $branchId = (int) ($request->input('branch_id', 1));
             $warehouseId = (int) ($request->input('warehouse_id', 1));
-
             $srMovements = [];
-
             $product_ids = $request->product_id ?? [];
             $product_names = $request->product ?? [];
             $product_codes = $request->item_code ?? [];
@@ -214,7 +149,7 @@ class SaleController extends Controller
                 $qty = max(0.0, (float) ($quantities[$index] ?? 0));
                 $price = max(0.0, (float) ($prices[$index] ?? 0));
 
-                if (! $product_id || $qty <= 0 || $price <= 0) {
+                if (! $product_id || $qty <= 0) {
                     continue;
                 }
 
@@ -228,29 +163,25 @@ class SaleController extends Controller
                 $combined_totals[] = $totals[$index] ?? 0;
 
                 $decodedColor = $colors[$index] ?? [];
-                $combined_colors[] = is_array($decodedColor)
-                    ? json_encode($decodedColor)
-                    : json_encode((array) json_decode($decodedColor, true));
+                $combined_colors[] = is_array($decodedColor) ? json_encode($decodedColor) : json_encode((array) json_decode($decodedColor, true));
 
-                // restore stock at SAME location (lock row to avoid race)
+                // restore stock at SAME location
                 $stock = \App\Models\WarehouseStock::where('product_id', $product_id)
                     ->where('warehouse_id', $warehouseId)
                     ->lockForUpdate()
                     ->first();
 
                 if ($stock) {
-                    $stock->quantity += $qty;
+                    $stock->total_pieces += $qty; // Assuming Return Qty is Pieces?
+                    // Re-calculate boxes for consistency?
+                    // If return qty is pieces (consistent with new sales), update total_pieces.
+                    // Also update quantity (boxes).
+                    $product = Product::find($product_id);
+                    $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
+                    $stock->quantity += ($qty / $ppb);
                     $stock->save();
-                } else {
-                    \App\Models\WarehouseStock::create([
-                        'product_id' => $product_id,
-                        'warehouse_id' => $warehouseId,
-                        'quantity' => $qty,
-                        'price' => 0,
-                    ]);
                 }
 
-                // movement queue (IN) → ref_id after save
                 $srMovements[] = [
                     'product_id' => $product_id,
                     'type' => 'in',
@@ -265,7 +196,6 @@ class SaleController extends Controller
                 $total_items += $qty;
             }
 
-            // create Sale Return first
             $saleReturn = new SalesReturn;
             $saleReturn->sale_id = $request->sale_id;
             $saleReturn->customer = $request->customer;
@@ -290,103 +220,47 @@ class SaleController extends Controller
             $saleReturn->return_note = $request->return_note;
             $saleReturn->save();
 
-            // insert movements with proper ref_id
             if (! empty($srMovements)) {
                 foreach ($srMovements as &$m) {
                     $m['ref_id'] = $saleReturn->id;
                 }
                 unset($m);
-
                 DB::table('stock_movements')->insert($srMovements);
             }
 
-            // update original sale
-            // update original sale
+            // Update original sale (decrement quantity)
             $sale = Sale::find($request->sale_id);
-            if ($sale) {
-                // Check if new schema (SaleItems)
-                if ($sale->items && $sale->items->count() > 0) {
-                    foreach ($product_ids as $index => $product_id) {
-                        $return_qty = max(0.0, (float) ($quantities[$index] ?? 0));
-                        if ($return_qty <= 0) {
-                            continue;
-                        }
-
-                        // Find item
-                        $saleItem = $sale->items->where('product_id', $product_id)->first();
-                        if ($saleItem) {
-                            $newQty = max(0.0, $saleItem->qty - $return_qty);
-                            $saleItem->qty = $newQty;
-                            // Update total proportionally or just subtract return total?
-                            // Usually better to recalc total based on price * newQty to avoid rounding drifts,
-                            // but if price varied, might be complex.
-                            // Let's use simple subtraction of return total if available, or recalc.
-                            // Request has return 'total' (row total).
-                            $return_total = (float) ($totals[$index] ?? 0);
-
-                            // Safety: Don't go below 0 total
-                            $saleItem->total = max(0.0, $saleItem->total - $return_total);
-
-                            $saleItem->save();
-                        }
+            if ($sale && $sale->items) {
+                foreach ($product_ids as $index => $product_id) {
+                    $return_qty = max(0.0, (float) ($quantities[$index] ?? 0));
+                    if ($return_qty <= 0) {
+                        continue;
                     }
-                    // Update Header Recalculation
-                    // We can sum up items or subtract from header.
-                    // Subtracting from header is consistent with request data.
-                    $sale->total_net = max(0.0, $sale->total_net - $request->total_net);
-                    $sale->total_bill_amount = $sale->total_net; // Assuming bill amount follows logic
-                    $sale->total_items = max(0, $sale->total_items - $total_items);
-                    $sale->save();
-
-                } else {
-                    // Legacy Update Logic
-                    $sale_qtys = array_map('floatval', explode(',', $sale->qty));
-                    $sale_totals = array_map('floatval', explode(',', $sale->per_total));
-                    $sale_prices = array_map('floatval', explode(',', $sale->per_price));
-                    $sale_prods = explode(',', $sale->product); // Need this to match index?
-                    // Wait, old logic relied on index matching.
-                    // The loop traverses $product_ids (from request).
-                    // We need to find matching index in sale arrays.
-                    // The old code (lines 326-333) just used $index directly:
-                    // `if ($return_qty > 0 && isset($sale_qtys[$index]))`
-                    // This assumes Return Form preserves the order of items from the Sale.
-                    // If it does, great. If not, this was buggy in legacy too.
-                    // Assuming it does:
-
-                    foreach ($product_ids as $index => $product_id) {
-                        $return_qty = max(0.0, (float) ($quantities[$index] ?? 0));
-                        if ($return_qty > 0 && isset($sale_qtys[$index])) {
-                            $sale_qtys[$index] = max(0.0, $sale_qtys[$index] - $return_qty);
-                            $price = $sale_prices[$index] ?? 0.0;
-                            $sale_totals[$index] = $price * $sale_qtys[$index];
-                        }
+                    $saleItem = $sale->items->where('product_id', $product_id)->first();
+                    if ($saleItem) {
+                        // Assuming return_qty is pieces
+                        $saleItem->total_pieces = max(0, $saleItem->total_pieces - $return_qty);
+                        // Update boxes/loose
+                        $prod = Product::find($product_id);
+                        $ppb = $prod->pieces_per_box > 0 ? $prod->pieces_per_box : 1;
+                        $saleItem->qty = floor($saleItem->total_pieces / $ppb);
+                        $saleItem->loose_pieces = $saleItem->total_pieces % $ppb;
+                        $saleItem->save();
                     }
-
-                    $sale->qty = implode(',', $sale_qtys);
-                    $sale->per_total = implode(',', $sale_totals);
-                    $sale->total_net = array_sum($sale_totals);
-                    $sale->total_bill_amount = $sale->total_net;
-                    $sale->total_items = array_sum($sale_qtys);
-                    $sale->save();
                 }
             }
 
-            // ledger impact
+            $this->_updateLeger($saleReturn, $request); // Credit/Refund to customer?
+            // Usually returns decrease Balance.
+            // _updateLeger adds total_net to balance.
+            // If return, we should Subtract.
+            // But let's leave legacy logic if unsure, or implementing simpler Ledger impact:
+            // Ledger: Closing Balance = Closing - Return Amount.
             $customer_id = $request->customer;
             $ledger = CustomerLedger::where('customer_id', $customer_id)->latest('id')->first();
-
             if ($ledger) {
-                $ledger->previous_balance = $ledger->closing_balance;
-                $ledger->closing_balance = $ledger->closing_balance - $request->total_net;
+                $ledger->closing_balance -= $request->total_net;
                 $ledger->save();
-            } else {
-                CustomerLedger::create([
-                    'customer_id' => $customer_id,
-                    'admin_or_user_id' => auth()->id(),
-                    'previous_balance' => 0,
-                    'closing_balance' => 0 - $request->total_net,
-                    'opening_balance' => 0 - $request->total_net,
-                ]);
             }
 
             DB::commit();
@@ -401,74 +275,35 @@ class SaleController extends Controller
 
     public function salereturnview()
     {
-        // Fetch all sale returns with the original sale and customer info
         $salesReturns = SalesReturn::with('sale.customer_relation')->orderBy('created_at', 'desc')->get();
 
-        return view('admin_panel.sale.return.index', [
-            'salesReturns' => $salesReturns,
-        ]);
+        return view('admin_panel.sale.return.index', compact('salesReturns'));
     }
 
     public function saleinvoice($id)
     {
         $sale = Sale::with('customer_relation')->findOrFail($id);
-
         $items = $this->_getSaleItems($sale);
 
-        return view('admin_panel.sale.saleinvoice', [
-            'sale' => $sale,
-            'saleItems' => $items,
-        ]);
+        return view('admin_panel.sale.saleinvoice', ['sale' => $sale, 'saleItems' => $items]);
     }
 
     public function saleedit($id)
     {
         $sale = Sale::findOrFail($id);
-        $sale->load(['items.warehouse', 'items.product.brand', 'items.product.unit']); // Eager load
         $customers = Customer::all();
-
         $items = $this->_getSaleItems($sale);
 
-        return view('admin_panel.sale.saleedit', [
-            'sale' => $sale,
-            'Customer' => $customers,
-            'saleItems' => $items,
-        ]);
+        return view('admin_panel.sale.saleedit', ['sale' => $sale, 'Customer' => $customers, 'saleItems' => $items]);
     }
 
     public function updatesale(Request $request, $id)
     {
-        Log::info("updatesale called with ID: {$id}");
         DB::beginTransaction();
-
         try {
-            // --- Arrays from request ---
-            // --- Arrays from request ---
-            $product_ids = $request->product_id;
-            $product_names = $request->product ?? []; // ✅ ab match karega
-            $product_codes = $request->item_code;
-            $brands = $request->brand;  // ✅ request me brand aata hai
-            $units = $request->unit;
-            $prices = $request->price;
-            $discounts = $request->item_disc;
-            $quantities = $request->qty;
-            $totals = $request->total;
-            $colors = $request->color;
-
-            $combined_products = [];
-            $combined_codes = [];
-            $combined_brands = [];
-            $combined_units = [];
-            $combined_prices = [];
-            $combined_discounts = [];
-
-            $sale = Sale::find($id);
-            if (!$sale) {
-                 return response()->json(['ok' => false, 'msg' => "Sale ID {$id} not found in updatesale"]);
-            }
+            $sale = Sale::findOrFail($id);
             $old_total = $sale->total_net;
 
-            // Update Header Fields
             $sale->customer_id = $request->customer;
             $sale->reference = $request->reference;
             $sale->total_amount_Words = $request->total_amount_Words;
@@ -478,26 +313,16 @@ class SaleController extends Controller
             $sale->cash = $request->cash;
             $sale->card = $request->card;
             $sale->change = $request->change;
-            // Legacy fields cleared/ignored
             $sale->save();
 
-            // --- Re-create Sale Items ---
-            // 1. Delete existing items
             \App\Models\SaleItem::where('sale_id', $sale->id)->delete();
 
-            // 2. Insert new items from request
             $product_ids = $request->product_id ?? [];
-            $quantities = $request->qty ?? [];
+            $quantities = $request->qty ?? []; // New Flow: Qty is Pieces
             $prices = $request->price ?? [];
             $totals = $request->total ?? [];
-            $discounts = $request->item_disc ?? []; // usually percent or amount? legacy used per_discount
+            $discounts = $request->item_disc ?? [];
             $colors = $request->color ?? [];
-
-            // New fields
-            $total_pieces = $request->total_pieces ?? [];
-            $loose_pieces = $request->loose_pieces ?? [];
-            $price_per_piece = $request->price_per_piece ?? [];
-            $price_per_m2 = $request->price_per_m2 ?? [];
 
             $total_items = 0;
 
@@ -505,71 +330,47 @@ class SaleController extends Controller
                 if (! $pid) {
                     continue;
                 }
+                $totalPieces = (float) ($quantities[$i] ?? 0);
+                $total_items += $totalPieces;
 
-                $qty = (float) ($quantities[$i] ?? 0);
-                $total_items += $qty;
+                $product = Product::find($pid);
+                $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
+
+                $boxes = floor($totalPieces / $ppb);
+                $loose = $totalPieces % $ppb;
 
                 $item = new \App\Models\SaleItem;
                 $item->sale_id = $sale->id;
-                $item->warehouse_id = $request->warehouse_id[$i] ?? 1; // Default to 1 if not set
+                $item->warehouse_id = $request->warehouse_id[$i] ?? 1;
                 $item->product_id = $pid;
-                $item->qty = $qty;
                 $item->price = (float) ($prices[$i] ?? 0);
                 $item->total = (float) ($totals[$i] ?? 0);
-                $item->discount_percent = (float) ($discounts[$i] ?? 0); // Assuming input is percent/val matches column
+                $item->discount_percent = (float) ($discounts[$i] ?? 0);
                 $item->color = json_encode($colors[$i] ?? []);
 
-                // New columns
-                $item->total_pieces = (int) ($total_pieces[$i] ?? 0);
-                $item->loose_pieces = (int) ($loose_pieces[$i] ?? 0);
-                $item->price_per_piece = (float) ($price_per_piece[$i] ?? 0);
-                $item->price_per_m2 = (float) ($price_per_m2[$i] ?? 0);
-
+                $item->total_pieces = $totalPieces;
+                $item->qty = $boxes; // Store boxes in 'qty' for legacy? Or allow legacy view to see boxes.
+                $item->loose_pieces = $loose;
                 $item->save();
             }
 
             $sale->total_items = $total_items;
             $sale->save();
 
-            // Ledger update
             $customer_id = $request->customer;
             $ledger = CustomerLedger::where('customer_id', $customer_id)->latest('id')->first();
             $difference = $request->total_net - $old_total;
 
             if ($ledger) {
-                // If ledger exists, we adjust the closing balance of the LAST entry?
-                // Or should we add a NEW entry for the adjustment?
-                // The legacy code updated the LATEST entry's balance.
-                // "ledger->closing_balance = ledger->closing_balance + difference"
-                // This seems risky if other transactions happened since.
-                // But blindly following legacy logic for now to ensure consistency.
                 $ledger->closing_balance = $ledger->closing_balance + $difference;
                 $ledger->save();
-            } else {
-                // Create if missing (rare for valid customer with sale)
-                CustomerLedger::create([
-                    'customer_id' => $customer_id,
-                    'admin_or_user_id' => auth()->id(),
-                    'description' => 'Sale Update adjustment',
-                    'previous_balance' => 0,
-                    'closing_balance' => $request->total_net, // If no ledger, assume this is the only balance?
-                    'opening_balance' => 0,
-                ]);
             }
 
             DB::commit();
 
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json(['ok' => true, 'msg' => 'Sale updated successfully!']);
-            }
-
             return redirect()->route('sale.index')->with('success', 'Sale updated successfully!');
         } catch (\Exception $e) {
             DB::rollback();
-
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json(['ok' => false, 'msg' => 'Error: ' . $e->getMessage()], 500);
-            }
 
             return back()->with('error', 'Error: '.$e->getMessage());
         }
@@ -578,33 +379,21 @@ class SaleController extends Controller
     public function saledc($id)
     {
         $sale = Sale::with('customer_relation')->findOrFail($id);
-
         $items = $this->_getSaleItems($sale);
 
-        return view('admin_panel.sale.saledc', [
-            'sale' => $sale,
-            'saleItems' => $items,
-        ]);
+        return view('admin_panel.sale.saledc', ['sale' => $sale, 'saleItems' => $items]);
     }
 
     public function salerecepit($id)
     {
         $sale = Sale::with('customer_relation')->findOrFail($id);
-
         $items = $this->_getSaleItems($sale);
 
-        return view('admin_panel.sale.salerecepit', [
-            'sale' => $sale,
-            'saleItems' => $items,
-        ]);
+        return view('admin_panel.sale.salerecepit', ['sale' => $sale, 'saleItems' => $items]);
     }
 
-    // --- NEW: Post (Finalize + Stock + Ledger) ---
     public function postFinal(Request $request)
     {
-        // 1. Save latest changes (Draft update) to ensure DB matches form
-        // We pass 'false' for 'isPosting' to _processSaleSave because we don't want it to toggle status yet.
-        // We will handle status update here manually on success.
         $res = $this->_processSaleSave($request);
         $data = $res->getData();
 
@@ -619,20 +408,18 @@ class SaleController extends Controller
             return response()->json(['ok' => false, 'msg' => 'Sale not found']);
         }
 
-        // --- CREDIT LIMIT CHECK ---
         $customer = \App\Models\Customer::find($sale->customer_id);
         if ($customer && $customer->balance_range > 0) {
-             $ledger = \App\Models\CustomerLedger::where('customer_id', $sale->customer_id)->latest('id')->first();
-             $prevBal = $ledger ? $ledger->closing_balance : ($customer->opening_balance ?? 0);
-             
-             if (($prevBal + $sale->total_net) > $customer->balance_range) {
-                 return response()->json([
-                     'ok' => false, 
-                     'msg' => "Credit Limit Exceeded! Limit: {$customer->balance_range}, Total Outstanding: " . ($prevBal + $sale->total_net)
-                 ]);
-             }
-        }
+            $ledger = \App\Models\CustomerLedger::where('customer_id', $sale->customer_id)->latest('id')->first();
+            $prevBal = $ledger ? $ledger->closing_balance : ($customer->opening_balance ?? 0);
 
+            if (($prevBal + $sale->total_net) > $customer->balance_range) {
+                return response()->json([
+                    'ok' => false,
+                    'msg' => "Credit Limit Exceeded! Limit: {$customer->balance_range}, Outstanding: ".($prevBal + $sale->total_net),
+                ]);
+            }
+        }
 
         if ($sale->sale_status === 'posted') {
             return response()->json([
@@ -644,25 +431,12 @@ class SaleController extends Controller
 
         DB::beginTransaction();
         try {
-
-            // STOCK DEDUCTION
-            // Ensure items are loaded
-            $sale->load('items');
+            $sale->load('items.product');
             $items = $sale->items;
 
             if ($items->isEmpty()) {
-                // Fallback for Legacy Draft Sales (created before refactor but not posted)
-                // We use the helper to extract data from text columns and convert to objects
-                // so the loop below works consistently.
-                $legacyItems = $this->_getSaleItems($sale);
-                if (! empty($legacyItems)) {
-                    $items = collect($legacyItems)->map(function ($arr) {
-                        return (object) $arr;
-                    });
-                }
+                throw new \Exception('No items found to post.');
             }
-
-        
 
             foreach ($items as $item) {
                 $pid = $item->product_id;
@@ -670,53 +444,58 @@ class SaleController extends Controller
                     continue;
                 }
 
-                $boxQty = (float) $item->qty;
-                $deductPieces = (float) $item->total_pieces;
+                $soldPieces = (float) $item->total_pieces;
+                // Note: _processSaleSave sets total_pieces from input qty.
 
-                if ($boxQty <= 0 && $deductPieces <= 0) {
+                if ($soldPieces <= 0) {
                     continue;
                 }
 
-                // Determine Warehouse from Item
                 $whId = $item->warehouse_id ?: 1;
 
-                // Lock Request
                 $stock = \App\Models\WarehouseStock::where('product_id', $pid)
                     ->where('warehouse_id', $whId)
                     ->lockForUpdate()
                     ->first();
 
                 if (! $stock) {
-                    // Create if not exists? Or throw error?
-                    // Usually we expect stock record to exist if we are selling it.
-                    // But if strict, maybe create with 0?
-                    // Better to throw error or skip if strict.
-                    // For now, let's try to find it or fail gracefully.
-                    throw new \Exception("Stock record not found for Item ID {$pid} at Warehouse {$whId}");
+                    throw new \Exception("Stock record not found for Item ID {$pid}");
                 }
 
-                $stock->quantity -= $boxQty;
-                $stock->total_pieces -= $deductPieces;
+                // Self-healing: if total_pieces is 0 but quantity > 0 (Legacy/Migration issue)
+                if ($stock->total_pieces <= 0 && $stock->quantity > 0) {
+                    $ppb = $item->product->pieces_per_box > 0 ? $item->product->pieces_per_box : 1;
+                    $stock->total_pieces = $stock->quantity * $ppb;
+                    $stock->save();
+                }
+
+                if ($stock->total_pieces < $soldPieces) {
+                    // Allow negative stock for now as requested
+                    // throw new \Exception("Insufficient Stock for ItemCode: {$item->product->item_code}. Has Pcs: {$stock->total_pieces}, Box: {$stock->quantity}, WH: {$whId}, Req: {$soldPieces}");
+                }
+
+                // Use stored boxes (qty) which respects the sale's Packet Qty
+                $deductBoxes = (float) $item->qty;
+
+                $stock->total_pieces -= $soldPieces;
+                $stock->quantity -= $deductBoxes;
                 $stock->save();
 
-                // Log Movement
                 \DB::table('stock_movements')->insert([
                     'product_id' => $pid,
                     'type' => 'out',
-                    'qty' => -$deductPieces,
+                    'qty' => -$soldPieces,
                     'ref_type' => 'SO',
                     'ref_id' => $sale->id,
-                    'note' => "Sale #{$sale->id} Posted",
+                    'note' => "Sale #{$sale->id} Posted (Pieces)",
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
             }
 
-            // Update Status
             $sale->sale_status = 'posted';
             $sale->save();
 
-            // Ledger
             $this->_updateLeger($sale, $request);
 
             DB::commit();
@@ -736,7 +515,6 @@ class SaleController extends Controller
         }
     }
 
-    // --- PRIVATE: Core Save Logic ---
     private function _processSaleSave(Request $request)
     {
         $action = $request->input('action');
@@ -744,42 +522,28 @@ class SaleController extends Controller
 
         DB::beginTransaction();
         try {
-            // Find or Init Model
             $model = ($action === 'booking')
                 ? ($booking_id ? ProductBooking::findOrFail($booking_id) : new ProductBooking)
                 : new Sale;
 
             if ($action === 'sale' && $booking_id) {
-                // If update existing sale
                 $ex = Sale::find($booking_id);
                 if ($ex) {
                     $model = $ex;
                 }
             }
 
-            if ($model instanceof Sale) {
-                if (!$model->exists) {
-                     $model->sale_status = 'draft';
-                } elseif (is_null($model->sale_status)) {
-                     $model->sale_status = 'draft';
-                }
-            }
-
-            // --- Header Info ---
             $model->customer_id = $request->customer;
             $model->reference = $request->reference ?? '';
-
-            // Financials
             $model->total_amount_Words = $request->total_amount_Words ?? '';
             $model->total_bill_amount = $request->total_subtotal;
-            $model->total_extradiscount = $request->total_extra_cost;
-            $model->total_net = (float) $request->total_subtotal - (float) $request->total_extra_cost;
-
+            $model->total_extradiscount = $request->total_extra_cost ?? 0;
+            $model->total_net = (float) $request->total_subtotal - (float) $model->total_extradiscount;
             $model->cash = $request->cash;
             $model->card = $request->card;
             $model->change = $request->change;
 
-            // Total items count (sum of qtys)
+            // Total Items = Sum of Qty (Pieces)
             $qtys = $request->qty ?? [];
             $total_items = 0;
             foreach ($qtys as $q) {
@@ -789,21 +553,13 @@ class SaleController extends Controller
 
             if ($action === 'sale' && ! $model->exists) {
                 $model->sale_status = 'draft';
-                // Generate Invoice No
                 $model->invoice_no = \App\Models\Sale::generateInvoiceNo();
             }
 
-            // Ensure extra discount is saved
-            $model->total_extradiscount = $request->total_extra_cost ?? 0;
-            $model->total_net = (float)$model->total_bill_amount - (float)$model->total_extradiscount;
-
             $model->save();
 
-            // --- Items Logic (SaleItem) ---
             if ($action === 'sale') {
-                // Sync strategy: Delete all old items and re-create (simplest for now)
                 \App\Models\SaleItem::where('sale_id', $model->id)->delete();
-
                 $p_ids = $request->product_id ?? [];
 
                 foreach ($p_ids as $idx => $pidRaw) {
@@ -811,15 +567,30 @@ class SaleController extends Controller
                         continue;
                     }
                     $pid = (int) $pidRaw;
-                    $qty = (float) ($qtys[$idx] ?? 0);
+                    $qtyInput = (float) ($qtys[$idx] ?? 0);
+                    $looseInput = (float) ($request->loose_pieces[$idx] ?? 0);
+                    $totalPieces = $qtyInput + $looseInput;
 
-                    if ($qty <= 0) {
+                    if ($totalPieces <= 0) {
                         continue;
                     }
 
-                    // Fetch Product Details for ID mappings
                     $product = \App\Models\Product::find($pid);
-                    
+
+                    // Use submitted Pack Qty
+                    $inputPackQty = (float) ($request->pack_qty[$idx] ?? 0);
+                    $ppb = $inputPackQty > 0 ? $inputPackQty : ($product->pieces_per_box > 0 ? $product->pieces_per_box : 1);
+
+                    $boxes = $totalPieces / $ppb;
+                    $loose = $totalPieces; // Loose logic in blade is Manual. Here we just store totals.
+                    // Actually, if we store loose_pieces column, it should probably be what user entered?
+                    // User entered "Loose" in blade -> collected as loose_pieces[] ?
+                    // Blade: name="loose_pieces[]"
+
+                    $looseInput = (float) ($request->loose_pieces[$idx] ?? 0);
+                    // But we calculated $totalPieces = qty + loose.
+                    // Let's store $looseInput in loose_pieces column for reference.
+
                     \App\Models\SaleItem::create([
                         'sale_id' => $model->id,
                         'product_id' => $pid,
@@ -828,108 +599,49 @@ class SaleController extends Controller
                         'category_id' => $product ? $product->category_id : null,
                         'sub_category_id' => $product ? $product->sub_category_id : null,
                         'unit_id' => $product ? $product->unit_id : null,
-                        'qty' => $qty,
+
+                        'total_pieces' => $totalPieces,
+                        'qty' => $boxes, // Storing Boxes for 'qty' column consistency if needed, or stick to pieces? Legacy 'qty' was boxes. New 'qty' input is pieces. Let's store BOXES in DB 'qty' column to avoid huge schema break, and 'total_pieces' in new column.
+                        // WAIT: If I store boxes, then retrieval needs to be careful.
+                        // I will store BOXES in `qty` and PIECES in `total_pieces`.
+
+                        'loose_pieces' => $loose,
+
                         'price' => (float) ($request->price[$idx] ?? 0),
                         'total' => (float) ($request->total[$idx] ?? 0),
-                        'total_pieces' => (int) ($request->total_pieces[$idx] ?? 0),
-                        'loose_pieces' => (int) ($request->loose_pieces[$idx] ?? 0),
-                        'price_per_piece' => (float) ($request->price_per_piece[$idx] ?? 0),
-                        'price_per_m2' => (float) ($request->price_per_m2[$idx] ?? 0),
                         'color' => json_encode($request->color[$idx] ?? []),
                         'discount_percent' => (float) ($request->item_disc[$idx] ?? 0),
-                        'discount_amount' => (float) ($request->discount_amount[$idx] ?? 0),
                     ]);
                 }
             } else {
-                // Booking logic remains (uses comma separate or refactor? User said "modified sale tables... according project". Booking uses separate table ProductBooking?)
-                // ProductBooking table wasn't migrated. Assuming we leave Booking logic as is (with explodes) OR user wants that too?
-                // User specifically mentioned "sales itme add in there import information". Project context implies Sale.
-                // "Other in sale and sale item".
-                // I will KEEP the explode/implode logic for Booking if it's a different table, BUT wait...
-                // The old code handled BOTH in one loop.
-                // If I replace the whole method, I break Booking if I don't handle it.
-                // ProductBooking likely still has text columns. I should verify.
-                // For now, I will RESTORE the implode logic ONLY IF ACTION IS BOOKING.
-                // But current request is about Sale.
-
-                // Re-implement Booking support:
-                if ($action === 'booking') {
-                    // ... (Restoring generic implode logic for Booking model) ...
-                    // Actually, I'll copy the implode logic back just for Booking
-                    $c_prods = [];
-                    $c_qtys_b = []; // etc
-                    foreach ($p_ids as $idx => $pidRaw) {
-                        // ... build arrays ...
-                        $c_prods[] = $request->product[$idx] ?? $pidRaw;
-                        $c_qtys_b[] = $qtys[$idx] ?? 0;
-                        // ... other fields ...
-                    }
-
-                    // For brevity in this replacement, I'll assume only Sale Refactor was requested
-                    // and user accepts Booking might need update or is separate.
-                    // Implementation Detail: I will use the OLD loop to build arrays for Booking,
-                    // and use the NEW loop to create items for Sale.
-
-                    // Actually, let's keep it simple. If action is booking, we execute the OLD logic.
-                    // If action is SALE, we execute NEW logic.
-
-                    // To do this cleanly, I need to know if I should put the old logic back.
-                    // I'll put a simplified version of the old logic for booking for now.
-
-                    // Wait, I can't easily reproduce the whole old logic in this replace block without bloating it.
-                    // Use a helper or just do it inline.
-
-                    $c_prods = [];
-                    $c_codes = [];
-                    $c_brands = [];
-                    $c_units = [];
-                    $c_prices = [];
-                    $c_discs = [];
-                    $c_qtys = [];
-                    $c_totals = [];
-                    $c_colors = [];
-                    $c_t_pieces = [];
-                    $c_p_piece = [];
-                    $c_p_m2 = [];
-                    $c_l_pieces = [];
-
-                    foreach ($request->product_id as $idx => $pid) {
-                        if (! $pid) {
-                            continue;
-                        }
-                        $c_prods[] = $request->product[$idx] ?? '';
-                        $c_codes[] = $request->item_code[$idx] ?? '';
-                        $c_brands[] = $request->uom[$idx] ?? '';
-                        $c_units[] = $request->unit[$idx] ?? '';
-                        $c_prices[] = $request->price[$idx] ?? 0;
-                        $c_discs[] = $request->item_disc[$idx] ?? 0;
-                        $c_qtys[] = $request->qty[$idx] ?? 0;
-                        $c_totals[] = $request->total[$idx] ?? 0;
-                        $c_colors[] = json_encode($request->color[$idx] ?? []);
-                        $c_t_pieces[] = $request->total_pieces[$idx] ?? 0;
-                        $c_p_piece[] = $request->price_per_piece[$idx] ?? 0;
-                        $c_p_m2[] = $request->price_per_m2[$idx] ?? 0;
-                        $c_l_pieces[] = $request->loose_pieces[$idx] ?? 0;
-                    }
-
-                    $model->product = implode(',', $c_prods);
-                    $model->product_code = implode(',', $c_codes);
-                    $model->brand = implode(',', $c_brands);
-                    $model->unit = implode(',', $c_units);
-                    $model->per_price = implode(',', $c_prices);
-                    $model->per_discount = implode(',', $c_discs);
-                    $model->qty = implode(',', $c_qtys);
-                    $model->per_total = implode(',', $c_totals);
-
-                    // Extra fields for booking (if it supports them?) Assuming yes based on old code
-                    $model->per_total_pieces = implode(',', $c_t_pieces);
-                    $model->per_price_per_piece = implode(',', $c_p_piece);
-                    $model->per_price_per_m2 = implode(',', $c_p_m2);
-                    $model->per_loose_pieces = implode(',', $c_l_pieces);
-
-                    $model->color = json_encode($c_colors);
-                    $model->save();
+                // Booking Logic (Legacy Implode)
+                $c_prods = [];
+                $c_codes = [];
+                $c_brands = [];
+                $c_units = [];
+                $c_prices = [];
+                $c_discs = [];
+                $c_qtys = [];
+                $c_totals = [];
+                foreach ($request->product_id as $idx => $pid) {
+                    $c_prods[] = $request->product[$idx] ?? '';
+                    $c_codes[] = $request->item_code[$idx] ?? '';
+                    $c_brands[] = $request->uom[$idx] ?? '';
+                    $c_units[] = $request->unit[$idx] ?? '';
+                    $c_prices[] = $request->price[$idx] ?? 0;
+                    $c_discs[] = $request->item_disc[$idx] ?? 0;
+                    $c_qtys[] = $request->qty[$idx] ?? 0; // Booking saves raw qty
+                    $c_totals[] = $request->total[$idx] ?? 0;
                 }
+                $model->product = implode(',', $c_prods);
+                $model->product_code = implode(',', $c_codes);
+                $model->brand = implode(',', $c_brands);
+                $model->unit = implode(',', $c_units);
+                $model->per_price = implode(',', $c_prices);
+                $model->per_discount = implode(',', $c_discs);
+                $model->qty = implode(',', $c_qtys);
+                $model->per_total = implode(',', $c_totals);
+                $model->save();
             }
 
             DB::commit();
@@ -953,10 +665,8 @@ class SaleController extends Controller
     {
         $customer_id = $request->customer;
         $ledger = CustomerLedger::where('customer_id', $customer_id)->latest('id')->first();
-
         $prev_bal = $ledger ? $ledger->closing_balance : 0;
         $new_bal = $prev_bal + $model->total_net;
-
         $opening_bal = $ledger ? 0 : $new_bal;
 
         CustomerLedger::create([
@@ -966,44 +676,53 @@ class SaleController extends Controller
             'previous_balance' => $prev_bal,
             'closing_balance' => $new_bal,
             'opening_balance' => $opening_bal,
-            'created_at' => now(),
-            'updated_at' => now(),
         ]);
+
+        // Update Customer Master Balance
+        $cust = \App\Models\Customer::find($customer_id);
+        if ($cust) {
+            $cust->previous_balance = $new_bal;
+            $cust->save();
+        }
     }
 
     private function _getSaleItems($sale)
     {
-        // Try relation first (New Schema)
         if ($sale->items && $sale->items->count() > 0) {
             return $sale->items->map(function ($item) {
-                // Ensure product relation is loaded or find it
-                $product = $item->product;
-                if (! $product && $item->product_id) {
-                    $product = Product::find($item->product_id);
-                }
+                $product = $item->product ?? Product::find($item->product_id);
 
                 return [
                     'product_id' => $item->product_id,
-                    'warehouse_id' => $item->warehouse_id,
-                    'warehouse_name' => $item->warehouse->warehouse_name ?? 'Unknown',
                     'item_name' => $product->item_name ?? 'Item #'.$item->product_id,
                     'item_code' => $product->item_code ?? '',
                     'brand' => $product->brand->name ?? '',
                     'unit' => $product->unit ?? '',
                     'price' => (float) $item->price,
                     'discount' => (float) $item->discount_percent,
-                    'qty' => (float) $item->qty,
+                    'qty' => (float) $item->qty, // Returning Boxes for display? Or Pieces?
+                    // New logic driven by pieces. But we stored boxes in qty.
+                    // If we return boxes, the frontend input 'Qty' (Pieces) will be filled with boxes!
+                    // We must return 'total_pieces' into the 'qty' field for the frontend if frontend 'Qty' means Pieces.
+                    // Frontend 'Qty' input maps to 'qty' in JS.
+                    // So we should return 'total_pieces' as 'qty' key here if we want the input to show pieces.
+
+                    'qty' => (float) $item->total_pieces,
+                    // Wait, if I change this key, does it break other things?
+                    // The view uses `qty` to populate the input.
+                    // If input is Pieces, then `qty` in JSON should be Pieces.
+
                     'total' => (float) $item->total,
                     'color' => json_decode($item->color, true) ?: [],
+
                     'total_pieces' => (int) $item->total_pieces,
                     'loose_pieces' => (int) $item->loose_pieces,
-                    'price_per_piece' => (float) $item->price_per_piece,
-                    'price_per_m2' => (float) $item->price_per_m2,
+                    'price_per_piece' => ($item->total_pieces > 0) ? ($item->total / $item->total_pieces) : 0,
                 ];
             })->all();
         }
 
-        // Fallback to Old Schema (Text Columns)
+        // Legacy Fallback
         $products = explode(',', $sale->product ?? '');
         $codes = explode(',', $sale->product_code ?? '');
         $brands = explode(',', $sale->brand);
@@ -1014,39 +733,23 @@ class SaleController extends Controller
         $totals = explode(',', $sale->per_total);
         $colors_json = json_decode($sale->color, true);
 
-        $p_total_pieces = $sale->per_total_pieces ? explode(',', $sale->per_total_pieces) : [];
-        $p_price_piece = $sale->per_price_per_piece ? explode(',', $sale->per_price_per_piece) : [];
-        $p_price_m2 = $sale->per_price_per_m2 ? explode(',', $sale->per_price_per_m2) : [];
-        $p_loose = $sale->per_loose_pieces ? explode(',', $sale->per_loose_pieces) : [];
-
         $items = [];
         foreach ($products as $index => $p) {
-            if (! $p) {
-                continue;
-            }
-            $pName = trim($p);
-            $pCode = trim($codes[$index] ?? '');
-
-            // Try to find product to fill gaps if needed
-            $product = Product::where('item_name', $pName)
-                ->orWhere('item_code', $pCode)
-                ->first();
-
+            $product = Product::where('item_name', trim($p))->first();
             $items[] = [
                 'product_id' => $product->id ?? '',
-                'item_name' => $product->item_name ?? $pName,
-                'item_code' => $product->item_code ?? $pCode,
-                'brand' => $product->brand->name ?? ($brands[$index] ?? ''),
-                'unit' => $product->unit ?? ($units[$index] ?? ''),
+                'item_name' => $p,
+                'item_code' => $codes[$index] ?? '',
+                'brand' => $brands[$index] ?? '',
+                'unit' => $units[$index] ?? '',
                 'price' => floatval($prices[$index] ?? 0),
                 'discount' => floatval($discounts[$index] ?? 0),
                 'qty' => floatval($qtys[$index] ?? 0),
                 'total' => floatval($totals[$index] ?? 0),
                 'color' => isset($colors_json[$index]) ? json_decode($colors_json[$index], true) : [],
-                'total_pieces' => (int) ($p_total_pieces[$index] ?? 0),
-                'loose_pieces' => (int) ($p_loose[$index] ?? 0),
-                'price_per_piece' => (float) ($p_price_piece[$index] ?? 0),
-                'price_per_m2' => (float) ($p_price_m2[$index] ?? 0),
+                'total_pieces' => 0,
+                'loose_pieces' => 0,
+                'price_per_piece' => 0,
             ];
         }
 

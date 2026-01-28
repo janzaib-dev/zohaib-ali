@@ -40,6 +40,7 @@ class ProductController extends Controller
             'pieces_per_box' => $product->pieces_per_box,
             'price_per_m2' => $product->price_per_m2,
             'sale_price_per_box' => $product->sale_price_per_box,
+            'sale_price_per_piece' => $product->sale_price_per_piece,
             'height' => $product->height,
             'width' => $product->width,
         ]);
@@ -79,7 +80,7 @@ class ProductController extends Controller
 
         $query = Product::query()
             ->select('id', 'item_name', 'item_code', 'barcode_path')
-            ->withSum('warehouseStocks', 'quantity') /* Efficient Stock Sum */
+            ->withSum('warehouseStocks', 'total_pieces') /* Efficient Stock Sum */
             ->where(function ($q) use ($term) {
                 $q->where('item_name', 'like', "%{$term}%")
                     ->orWhere('item_code', 'like', "%{$term}%")
@@ -89,7 +90,7 @@ class ProductController extends Controller
         $products = $query->paginate(10); // Lazy loading (10 per request)
 
         $results = $products->map(function ($p) {
-            $stock = (float) ($p->warehouse_stocks_sum_quantity ?? 0);
+            $stock = (float) ($p->warehouse_stocks_sum_total_pieces ?? 0);
 
             return [
                 'id' => $p->id,

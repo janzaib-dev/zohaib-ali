@@ -24,12 +24,12 @@ class CustomerController extends Controller
     
     $customers = Customer::where('customer_type', $type)->get();
 
-    // Attach latest ledger balance
-    $customers->map(function($c) {
-        $ledger = CustomerLedger::where('customer_id', $c->id)->latest('id')->first();
-        $c->previous_balance = $ledger ? $ledger->closing_balance : ($c->opening_balance ?? 0);
-        return $c;
-    });
+    // Attach latest ledger balance - DISABLED to respect DB column
+    // $customers->map(function($c) {
+    //     $ledger = CustomerLedger::where('customer_id', $c->id)->latest('id')->first();
+    //     $c->previous_balance = $ledger ? $ledger->closing_balance : ($c->opening_balance ?? 0);
+    //     return $c;
+    // });
     
     return response()->json($customers);
 }
@@ -38,8 +38,8 @@ class CustomerController extends Controller
     public function show($id)
     {
         $customer = Customer::findOrFail($id);
-        $ledger = CustomerLedger::where('customer_id', $id)->latest('id')->first();
-        $customer->previous_balance = $ledger ? $ledger->closing_balance : ($customer->opening_balance ?? 0);
+        // $ledger = CustomerLedger::where('customer_id', $id)->latest('id')->first();
+        // $customer->previous_balance = $ledger ? $ledger->closing_balance : ($customer->opening_balance ?? 0);
         return $customer;
     }
 
