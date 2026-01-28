@@ -17,29 +17,27 @@ use Illuminate\Support\Facades\Auth;
 class PurchaseController extends Controller
 {
     /** Keep stocks table in sync for a (branch,warehouse,product) */
-private function upsertStocks(int $productId, float $qtyDelta, int $branchId, int $warehouseId): void
-{
-    $affected = DB::table('stocks')
-        ->where('product_id', $productId)
-        ->where('branch_id', $branchId)
-        ->where('warehouse_id', $warehouseId)
-        ->update([
-            'qty'        => DB::raw('qty + ' . ($qtyDelta + 0)),
-            'updated_at' => now(),
-        ]);
+    /** Keep warehouse_stocks table in sync for a (warehouse,product) */
+    private function upsertStocks(int $productId, float $qtyDelta, int $branchId, int $warehouseId): void
+    {
+        // We ignore $branchId as WarehouseStock is warehouse-specific
+        $stock = \App\Models\WarehouseStock::where('warehouse_id', $warehouseId)
+            ->where('product_id', $productId)
+            ->lockForUpdate()
+            ->first();
 
-    if ($affected === 0) {
-        DB::table('stocks')->insert([
-            'product_id'   => $productId,
-            'branch_id'    => $branchId,
-            'warehouse_id' => $warehouseId,
-            'qty'          => $qtyDelta,
-            'reserved_qty' => 0,
-            'created_at'   => now(),
-            'updated_at'   => now(),
-        ]);
+        if ($stock) {
+            $stock->quantity += $qtyDelta;
+            $stock->save();
+        } else {
+            \App\Models\WarehouseStock::create([
+                'warehouse_id' => $warehouseId,
+                'product_id'   => $productId,
+                'quantity'     => $qtyDelta,
+                'price'        => 0,
+            ]);
+        }
     }
-}
 
     public function index()
     {

@@ -44,36 +44,46 @@
                                 <td>{{ $sale->per_total }}</td>
                                 <td>{{ $sale->created_at->format('d-m-Y') }}</td>
                                 <td>
-                                    @if ($sale->sale_status === null)
-                                        <span class="badge bg-success">Sale</span>
+                                    @if ($sale->sale_status === 'posted')
+                                        <span class="badge bg-success">Posted</span>
+                                    @elseif($sale->sale_status === 'draft')
+                                        <span class="badge bg-primary">Saved (Draft)</span>
                                     @elseif($sale->sale_status == 1)
                                         <span class="badge bg-danger">Return</span>
                                     @else
-                                        <span class="badge bg-secondary">Unknown</span>
+                                        <span class="badge bg-warning text-dark">Draft (Legacy)</span>
                                     @endif
                                 </td>
                                 <td>
                                     <div class="btn-group" role="group" aria-label="Actions">
-                                        @can('sales.create')
-                                            <a href="{{ route('sales.return.create', $sale->id) }}"
-                                                class="btn btn-sm btn-warning">Return</a>
-                                        @endcan
-                                        @can('sales.edit')
-                                            <a href="{{ route('sales.edit', $sale->id) }}"
-                                                class="btn btn-sm btn-primary">Edit</a>
-                                        @endcan
-                                        @can('sales.view')
-                                            <a href="{{ route('sales.invoice', $sale->id) }}"
-                                                class="btn btn-sm btn-info text-white">Invoice</a>
-                                        @endcan
-                                        @can('sales.view')
-                                            <a href="{{ route('sales.recepit', $sale->id) }}"
-                                                class="btn btn-sm btn-danger text-white">Recepit</a>
-                                        @endcan
-                                        @can('sales.view')
-                                            <a href="{{ route('sales.dc', $sale->id) }}"
-                                                class="btn btn-sm btn-success text-white">DC</a>
-                                        @endcan
+                                        @if ($sale->sale_status === 'posted')
+                                            @can('sales.create')
+                                                <a href="{{ route('sales.return.create', $sale->id) }}"
+                                                    class="btn btn-sm btn-warning">Return</a>
+                                            @endcan
+                                            @can('sales.view')
+                                                <a href="{{ route('sales.invoice', $sale->id) }}"
+                                                    class="btn btn-sm btn-info text-white">Invoice</a>
+                                            @endcan
+                                            @can('sales.view')
+                                                <a href="{{ route('sales.recepit', $sale->id) }}"
+                                                    class="btn btn-sm btn-danger text-white">Receipt</a>
+                                            @endcan
+                                            @can('sales.view')
+                                                <a href="{{ route('sales.dc', $sale->id) }}"
+                                                    class="btn btn-sm btn-success text-white">DC</a>
+                                            @endcan
+                                        @else
+                                            {{-- Draft / Saved --}}
+                                            @can('sales.edit')
+                                                <a href="{{ route('sales.edit', $sale->id) }}"
+                                                    class="btn btn-sm btn-primary">Edit</a>
+                                            @endcan
+                                            @can('sales.edit')
+                                                <a href="{{ route('sales.edit', $sale->id) }}"
+                                                    class="btn btn-sm btn-success text-white">Confirm</a>
+                                            @endcan
+                                        @endif
                                     </div>
                                 </td>
                             </tr>
@@ -81,6 +91,9 @@
                     </tbody>
 
                 </table>
+                <div class="d-flex justify-content-center">
+                    {{ $sales->links() }}
+                </div>
             </div>
 
         </div>

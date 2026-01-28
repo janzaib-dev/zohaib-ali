@@ -60,7 +60,7 @@ class CategoryController extends Controller
     $obj = Category::all();
     if ($request->page === 'product_page') {
         
-       return redirect()->route('store')->with('success', 'Category saved successfully');
+       return redirect()->back()->with('success', 'Category saved successfully');
     }
 
     /**

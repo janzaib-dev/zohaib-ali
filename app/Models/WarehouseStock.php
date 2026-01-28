@@ -13,36 +13,35 @@ class WarehouseStock extends Model
         'warehouse_id',
         'product_id',
         'quantity',
-        'price',
-        'remarks'
+        'boxes_quantity',
+        'total_pieces',
+        'remarks',
     ];
 
-    public function warehouse() {
+    public function warehouse()
+    {
         return $this->belongsTo(Warehouse::class);
     }
+
     // App\Models\WarehouseStock.php
- //  Rename relation
+    //  Rename relation
     public function stockWarehouse()
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
-
     // public function product() {
     //     return $this->belongsTo(Product::class);
     // }
 
-     public function product()
+    public function product()
     {
         return $this->belongsTo(Product::class, 'product_id');
     }
 
-
-  public function products()
+    public function products()
     {
         return $this->belongsToMany(Product::class, 'warehouse_stocks', 'warehouse_id', 'product_id')
-                    ->withPivot('quantity', 'price', 'remarks');
+            ->withPivot('quantity', 'price', 'remarks');
     }
-
-
 }

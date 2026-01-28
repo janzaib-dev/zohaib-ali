@@ -72,8 +72,8 @@
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                 @endif
-<input type="hidden" name="branch_id" value="1">
-<input type="hidden" name="warehouse_id" value="1">
+                <input type="hidden" name="branch_id" value="1">
+                <input type="hidden" name="warehouse_id" value="1">
 
                 @if (session('error'))
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -89,12 +89,11 @@
                             <select name="customer" class="form-control form-control-sm">
                                 <option value="">Select Customer</option>
                                 @php
-                                    
-                                   print_r($Customer);
-                                    
+
+                                    print_r($Customer);
+
                                 @endphp
                                 @foreach ($Customer as $c)
-                                
                                     <option value="{{ $c->id }}">{{ $c->customer_name }}</option>
                                 @endforeach
                             </select>
@@ -124,32 +123,32 @@
                                     <th>Action</th>
                                 </tr>
                             </thead>
-<style>
-/* Select2: make selection stay in one line and scroll horizontally */
-.select2-container--default .select2-selection--multiple {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    min-height: 38px !important;
-    max-height: 38px !important;
-    white-space: nowrap !important;
-    scrollbar-width: thin;
-}
+                            <style>
+                                /* Select2: make selection stay in one line and scroll horizontally */
+                                .select2-container--default .select2-selection--multiple {
+                                    display: flex !important;
+                                    flex-wrap: nowrap !important;
+                                    overflow-x: auto !important;
+                                    overflow-y: hidden !important;
+                                    min-height: 38px !important;
+                                    max-height: 38px !important;
+                                    white-space: nowrap !important;
+                                    scrollbar-width: thin;
+                                }
 
-/* Each tag styling */
-.select2-selection__choice {
-    white-space: nowrap !important;
-    margin-right: 3px !important;
-    font-size: 11px;
-    padding: 2px 5px !important;
-}
+                                /* Each tag styling */
+                                .select2-selection__choice {
+                                    white-space: nowrap !important;
+                                    margin-right: 3px !important;
+                                    font-size: 11px;
+                                    padding: 2px 5px !important;
+                                }
 
-/* Remove unwanted spacing */
-.select2-search--inline {
-    flex: none !important;
-}
-</style>
+                                /* Remove unwanted spacing */
+                                .select2-search--inline {
+                                    flex: none !important;
+                                }
+                            </style>
 
 
 
@@ -165,11 +164,13 @@
 
                                     <td class="item_code border">
                                         <input type="text" name="item_code[]" class="form-control" readonly>
- <td class="color border" style="min-width: 180px; max-width: 200px; overflow-x: auto; white-space: nowrap;">
-    <div style="overflow-x: auto;">
-        <select class="form-control form-control-sm select2-color" name="color[][]" multiple></select>
-    </div>
-</td>
+                                    <td class="color border"
+                                        style="min-width: 180px; max-width: 200px; overflow-x: auto; white-space: nowrap;">
+                                        <div style="overflow-x: auto;">
+                                            <select class="form-control form-control-sm select2-color" name="color[][]"
+                                                multiple></select>
+                                        </div>
+                                    </td>
 
 
 
@@ -231,8 +232,8 @@
                                     id="amountInWords" readonly></td>
                             <td><input type="text" name="total_subtotal" class="form-control form-control-sm text-center"
                                     id="billAmount" readonly></td>
-                            <td><input type="text" name="total_discount" class="form-control form-control-sm text-center"
-                                    id="itemDiscount" readonly></td>
+                            <td><input type="text" name="total_discount"
+                                    class="form-control form-control-sm text-center" id="itemDiscount" readonly></td>
                             <td><input type="number" name="total_extra_cost"
                                     class="form-control form-control-sm text-center" id="extraDiscount" value="0">
                             </td>
@@ -250,101 +251,102 @@
 
 
                     {{-- Footer Buttons --}}
-                <div class="d-flex justify-content-between align-items-center mt-4">
-    <div>
-        <strong>TOTAL PIECES : </strong> <span>0</span>
-    </div>
-    <div>
-        <button type="submit" name="action" value="booking" class="btn btn-warning">Book</button>
-        <button type="submit" name="action" value="sale" class="btn btn-success">Sale</button>
-        <button type="button" class="btn btn-secondary">Close</button>
-    </div>
-</div>
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <div>
+                            <strong>TOTAL PIECES : </strong> <span>0</span>
+                        </div>
+                        <div>
+                            <button type="submit" name="action" value="booking" class="btn btn-warning">Book</button>
+                            <button type="submit" name="action" value="sale" class="btn btn-success">Sale</button>
+                            <button type="button" class="btn btn-secondary">Close</button>
+                        </div>
                     </div>
                 </div>
-            </form>
         </div>
+        </form>
+    </div>
     </div>
 @endsection
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-$(document).ready(function () {
-    function num(n) {
-        return isNaN(parseFloat(n)) ? 0 : parseFloat(n);
-    }
+    $(document).ready(function() {
+        function num(n) {
+            return isNaN(parseFloat(n)) ? 0 : parseFloat(n);
+        }
 
-    function numberToWords(num) {
-        const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
-            "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
-            "Eighteen", "Nineteen"];
-        const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-        if ((num = num.toString()).length > 9) return "Overflow";
-        const n = ("000000000" + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{3})$/);
-        if (!n) return;
-        let str = "";
-        str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + " " + a[n[1][1]]) + " Crore " : "";
-        str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + " " + a[n[2][1]]) + " Lakh " : "";
-        str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + " " + a[n[3][1]]) + " Thousand " : "";
-        str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + " " + a[n[4][1]]) + " " : "";
-        return str.trim() + " Rupees Only";
-    }
+        function numberToWords(num) {
+            const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+                "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
+                "Eighteen", "Nineteen"
+            ];
+            const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+            if ((num = num.toString()).length > 9) return "Overflow";
+            const n = ("000000000" + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{3})$/);
+            if (!n) return;
+            let str = "";
+            str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + " " + a[n[1][1]]) + " Crore " : "";
+            str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + " " + a[n[2][1]]) + " Lakh " : "";
+            str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + " " + a[n[3][1]]) + " Thousand " : "";
+            str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + " " + a[n[4][1]]) + " " : "";
+            return str.trim() + " Rupees Only";
+        }
 
-    function recalcRow($row) {
-        const qty = num($row.find('.quantity').val());
-        const price = num($row.find('.price').val());
-        const disc = num($row.find('.item_disc').val());
-        let total = (qty * price) - disc;
-        if (total < 0) total = 0;
-        $row.find('.row-total').val(total.toFixed(2));
-    }
+        function recalcRow($row) {
+            const qty = num($row.find('.quantity').val());
+            const price = num($row.find('.price').val());
+            const disc = num($row.find('.item_disc').val());
+            let total = (qty * price) - disc;
+            if (total < 0) total = 0;
+            $row.find('.row-total').val(total.toFixed(2));
+        }
 
-    function recalcSummary() {
-        let billAmount = 0;
-        let itemDiscount = 0;
-        let totalQty = 0;
+        function recalcSummary() {
+            let billAmount = 0;
+            let itemDiscount = 0;
+            let totalQty = 0;
 
-        $('#purchaseItems tr').each(function () {
-            const rowTotal = num($(this).find('.row-total').val());
-            const disc = num($(this).find('.item_disc').val());
-            const qty = num($(this).find('.quantity').val());
+            $('#purchaseItems tr').each(function() {
+                const rowTotal = num($(this).find('.row-total').val());
+                const disc = num($(this).find('.item_disc').val());
+                const qty = num($(this).find('.quantity').val());
 
-            billAmount += rowTotal;
-            itemDiscount += disc;
-            totalQty += qty;
+                billAmount += rowTotal;
+                itemDiscount += disc;
+                totalQty += qty;
+            });
+
+            const extraDiscount = num($('#extraDiscount').val());
+            const cash = num($('#cash').val());
+            const card = num($('#card').val());
+
+            const net = billAmount - itemDiscount - extraDiscount;
+            const change = (cash + card) - net;
+
+            $('#billAmount').val(billAmount.toFixed(2));
+            $('#itemDiscount').val(itemDiscount.toFixed(2));
+            $('#netAmount').val(net.toFixed(2));
+            $('#change').val(change.toFixed(2));
+            $('#amountInWords').val(numberToWords(Math.round(net)));
+
+            $('strong:contains("TOTAL PIECES")').next().text(totalQty);
+        }
+
+        // Events
+        $(document).on('input', '.quantity, .price, .item_disc, #extraDiscount, #cash, #card', function() {
+            const $row = $(this).closest('tr');
+            if ($row.length) {
+                recalcRow($row);
+            }
+            recalcSummary();
         });
 
-        const extraDiscount = num($('#extraDiscount').val());
-        const cash = num($('#cash').val());
-        const card = num($('#card').val());
-
-        const net = billAmount - itemDiscount - extraDiscount;
-        const change = (cash + card) - net;
-
-        $('#billAmount').val(billAmount.toFixed(2));
-        $('#itemDiscount').val(itemDiscount.toFixed(2));
-        $('#netAmount').val(net.toFixed(2));
-        $('#change').val(change.toFixed(2));
-        $('#amountInWords').val(numberToWords(Math.round(net)));
-
-        $('strong:contains("TOTAL PIECES")').next().text(totalQty);
-    }
-
-    // Events
-    $(document).on('input', '.quantity, .price, .item_disc, #extraDiscount, #cash, #card', function () {
-        const $row = $(this).closest('tr');
-        if ($row.length) {
-            recalcRow($row);
-        }
+        // Initialize
+        $('#purchaseItems tr').each(function() {
+            recalcRow($(this));
+        });
         recalcSummary();
     });
-
-    // Initialize
-    $('#purchaseItems tr').each(function () {
-        recalcRow($(this));
-    });
-    recalcSummary();
-});
 </script>
 
 <script>
@@ -447,7 +449,8 @@ $(document).ready(function () {
                 url: "{{ route('search-product-name') }}",
                 type: 'GET',
                 data: {
-                    q
+                    q,
+                    warehouse_id: $('input[name="warehouse_id"]').val()
                 },
                 success: function(data) {
                     let html = '';
@@ -548,26 +551,26 @@ $(document).ready(function () {
         recalcSummary();
 
         // Select2 Color Init on focus
-    $(document).ready(function () {
-    // 1️⃣ Page load par saare color select2 initialize karo
-    $('.select2-color').each(function () {
-        $(this).select2({
-            placeholder: "Select Color",
-            tags: true,
-            width: '100%'
-        });
-    });
-
-    // 2️⃣ Jab naye row aaye to tab bhi initialize karo
-    $('#purchaseItems').on('focus', '.select2-color', function () {
-        if (!$(this).hasClass("select2-hidden-accessible")) {
-            $(this).select2({
-                placeholder: "Select Color",
-                tags: true,
-                width: '100%'
+        $(document).ready(function() {
+            // 1️⃣ Page load par saare color select2 initialize karo
+            $('.select2-color').each(function() {
+                $(this).select2({
+                    placeholder: "Select Color",
+                    tags: true,
+                    width: '100%'
+                });
             });
-        }
-    });
-});
+
+            // 2️⃣ Jab naye row aaye to tab bhi initialize karo
+            $('#purchaseItems').on('focus', '.select2-color', function() {
+                if (!$(this).hasClass("select2-hidden-accessible")) {
+                    $(this).select2({
+                        placeholder: "Select Color",
+                        tags: true,
+                        width: '100%'
+                    });
+                }
+            });
+        });
     });
 </script>

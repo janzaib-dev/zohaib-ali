@@ -223,27 +223,50 @@ $balance = (float) (DB::table('v_stock_onhand')
         $end = $request->end_date;
         $customer = DB::table('customers')->where('id', $customerId)->first();
 
-        $opening = $customer->opening_balance ?? 0;
+        if (!$customer || !$start || !$end) {
+            return response()->json(['error' => 'Invalid parameters'], 400);
+        }
 
-        // Sales = Debit
-        $end = $end . " 23:59:59";
+        $staticOpening = $customer->opening_balance ?? 0;
+
+        // 1. Calculate History BEFORE Start Date
+        // Sales Before
+        $salesBefore = DB::table('sales')
+            ->where('customer_id', $customerId)
+            ->where('created_at', '<', $start)
+            ->sum('total_net');
+
+        // Payments Before
+        $paymentsBefore = DB::table('customer_payments')
+            ->where('customer_id', $customerId)
+            ->where('payment_date', '<', $start)
+            ->sum('amount');
+        
+        // Dynamic Opening Balance for this period
+        $periodOpeningBalance = $staticOpening + $salesBefore - $paymentsBefore;
+
+        // 2. Fetch Transactions WITHIN Date Range
+        $endDateTime = $end . " 23:59:59";
 
         $sales = DB::table('sales')
-            ->where('customer', $customerId)
-            ->whereBetween('created_at', [$start, $end])
+            ->where('customer_id', $customerId)
+            ->whereBetween('created_at', [$start, $endDateTime])
             ->get()
             ->map(function ($s) {
                 return [
                     'date' => $s->created_at,
                     'invoice' => "INV-" . $s->id,
-                    'description' => "To Sale A/c",
+                    'description' => $s->sale_status == 'posted' ? "Sale (Posted)" : "Sale (Draft)",
                     'debit' => $s->total_net,
-                    'credit' => 0
+                    'credit' => 0,
+                    'type' => 'sale',
+                    'ref_id' => $s->id
                 ];
             });
+
         $payments = DB::table('customer_payments')
             ->where('customer_id', $customerId)
-            ->whereBetween('payment_date', [$start, $end])
+            ->whereBetween('payment_date', [$start, $endDateTime])
             ->get()
             ->map(function ($p) {
                 return [
@@ -251,14 +274,17 @@ $balance = (float) (DB::table('v_stock_onhand')
                     'invoice' => "-",
                     'description' => $p->note ?? "Payment Received",
                     'debit' => 0,
-                    'credit' => $p->amount
+                    'credit' => $p->amount,
+                    'type' => 'payment',
+                    'ref_id' => $p->id
                 ];
             });
 
+        // Merge and Sort
         $transactions = $sales->merge($payments)->sortBy('date')->values()->all();
 
-        // Running balance calculation
-        $balance = $opening;
+        // 3. Calculate Running Balance
+        $balance = $periodOpeningBalance;
         foreach ($transactions as $key => $t) {
             $balance = $balance + $t['debit'] - $t['credit'];
             $transactions[$key]['balance'] = $balance;
@@ -266,8 +292,9 @@ $balance = (float) (DB::table('v_stock_onhand')
 
         return response()->json([
             'customer' => $customer,
-            'opening_balance' => $opening,
-            'transactions' => $transactions
+            'opening_balance' => $periodOpeningBalance,
+            'transactions' => $transactions,
+            'report_period' => "$start to $end"
         ]);
     }
 }

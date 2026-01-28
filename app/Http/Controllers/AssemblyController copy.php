@@ -15,130 +15,132 @@ class AssemblyController extends Controller
 
     // ========== NEW: choose best FG to borrow part from ==========
     // App\Http\Controllers\AssemblyController.php (or similar)
-// App\Http\Controllers\AssemblyController.php (or similar)
-// App\Http\Controllers\AssemblyController.php
-public function borrowPartFromBestFg(int $partId, float $shortQty, int $branchId, int $warehouseId)
-{
-    if ($shortQty <= 0) return;
-
-    DB::beginTransaction();
-    try {
-        $candidates = DB::table('product_boms as pb')
-            ->leftJoin('stocks as s', function($join) use ($branchId, $warehouseId) {
-                $join->on('s.product_id', '=', 'pb.product_id')
-                     ->where('s.branch_id', '=', $branchId)
-                     ->where('s.warehouse_id', '=', $warehouseId);
-            })
-            ->select('pb.product_id as fg_id', 'pb.qty_per_unit', DB::raw('COALESCE(s.qty,0) as fg_stock'))
-            ->where('pb.part_id', $partId)
-            ->orderByDesc('fg_stock')
-            ->get();
-
-        if ($candidates->isEmpty()) {
-            throw new \Exception("No FG contains part {$partId}");
+    // App\Http\Controllers\AssemblyController.php (or similar)
+    // App\Http\Controllers\AssemblyController.php
+    public function borrowPartFromBestFg(int $partId, float $shortQty, int $branchId, int $warehouseId)
+    {
+        if ($shortQty <= 0) {
+            return;
         }
 
-        $remaining = $shortQty;
+        DB::beginTransaction();
+        try {
+            $candidates = DB::table('product_boms as pb')
+                ->leftJoin('warehouse_stocks as s', function ($join) use ($warehouseId) {
+                    $join->on('s.product_id', '=', 'pb.product_id')
+                        ->where('s.warehouse_id', '=', $warehouseId);
+                })
+                ->select('pb.product_id as fg_id', 'pb.qty_per_unit', DB::raw('COALESCE(s.quantity,0) as fg_stock'))
+                ->where('pb.part_id', $partId)
+                ->orderByDesc('fg_stock')
+                ->get();
 
-        foreach ($candidates as $cand) {
-            if ($remaining <= 0) break;
-
-            $fgId = (int)$cand->fg_id;
-            $perFg = (float)$cand->qty_per_unit;
-            if ($perFg <= 0) continue;
-
-            // lock fg stock
-            $fgStock = \App\Models\Stock::where('product_id', $fgId)
-                ->where('branch_id', $branchId)
-                ->where('warehouse_id', $warehouseId)
-                ->lockForUpdate()
-                ->first();
-
-            $fgOnHand = (float)($fgStock->qty ?? 0);
-            if ($fgOnHand <= 0) continue;
-
-            $fgNeeded = (int) ceil($remaining / $perFg);
-            $fgToConsume = min($fgNeeded, (int)$fgOnHand);
-            if ($fgToConsume <= 0) continue;
-
-            // decrement FG
-            $fgStock->qty -= $fgToConsume;
-            $fgStock->save();
-
-            // increment only requested part
-            $partsObtained = $fgToConsume * $perFg;
-
-            // create or lock part stock
-            \DB::table('stocks')->insertOrIgnore([
-                'product_id' => $partId,
-                'branch_id' => $branchId,
-                'warehouse_id' => $warehouseId,
-                'qty' => 0,
-                'reserved_qty' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            $partStock = \App\Models\Stock::where('product_id', $partId)
-                ->where('branch_id', $branchId)
-                ->where('warehouse_id', $warehouseId)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $partStock) {
-                $partStock = \App\Models\Stock::create([
-                    'product_id' => $partId,
-                    'branch_id' => $branchId,
-                    'warehouse_id' => $warehouseId,
-                    'qty' => 0,
-                    'reserved_qty' => 0,
-                ]);
+            if ($candidates->isEmpty()) {
+                throw new \Exception("No FG contains part {$partId}");
             }
 
-            $partStock->qty += $partsObtained;
-            $partStock->save();
+            $remaining = $shortQty;
 
-            // write movements: FG out, PART in
-            DB::table('stock_movements')->insert([
-                [
-                    'product_id' => $fgId,
-                    'type' => 'out',
-                    'qty' => -1 * $fgToConsume,
-                    'ref_type' => 'AUTO_PLUCK',
-                    'ref_id' => null,
-                    'note' => "Auto-pluck: FG {$fgId} -> create part {$partId}",
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ],
-                [
+            foreach ($candidates as $cand) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $fgId = (int) $cand->fg_id;
+                $perFg = (float) $cand->qty_per_unit;
+                if ($perFg <= 0) {
+                    continue;
+                }
+
+                // lock fg stock
+                $fgStock = \App\Models\WarehouseStock::where('product_id', $fgId)
+                    ->where('warehouse_id', $warehouseId)
+                    ->lockForUpdate()
+                    ->first();
+
+                $fgOnHand = (float) ($fgStock->quantity ?? 0);
+                if ($fgOnHand <= 0) {
+                    continue;
+                }
+
+                $fgNeeded = (int) ceil($remaining / $perFg);
+                $fgToConsume = min($fgNeeded, (int) $fgOnHand);
+                if ($fgToConsume <= 0) {
+                    continue;
+                }
+
+                // decrement FG
+                $fgStock->quantity -= $fgToConsume;
+                $fgStock->save();
+
+                // increment only requested part
+                $partsObtained = $fgToConsume * $perFg;
+
+                // create or lock part stock
+                \DB::table('warehouse_stocks')->insertOrIgnore([
                     'product_id' => $partId,
-                    'type' => 'in',
-                    'qty' => (float) $partsObtained,
-                    'ref_type' => 'AUTO_PLUCK',
-                    'ref_id' => null,
-                    'note' => "Auto-pluck: FG {$fgId} -> part {$partId}",
+                    'warehouse_id' => $warehouseId,
+                    'quantity' => 0,
+                    'price' => 0,
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]
-            ]);
+                ]);
 
-            $remaining = max(0, $remaining - $partsObtained);
+                $partStock = \App\Models\WarehouseStock::where('product_id', $partId)
+                    ->where('warehouse_id', $warehouseId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $partStock) {
+                    $partStock = \App\Models\WarehouseStock::create([
+                        'product_id' => $partId,
+                        'warehouse_id' => $warehouseId,
+                        'quantity' => 0,
+                        'price' => 0,
+                    ]);
+                }
+
+                $partStock->quantity += $partsObtained;
+                $partStock->save();
+
+                // write movements: FG out, PART in
+                DB::table('stock_movements')->insert([
+                    [
+                        'product_id' => $fgId,
+                        'type' => 'out',
+                        'qty' => -1 * $fgToConsume,
+                        'ref_type' => 'AUTO_PLUCK',
+                        'ref_id' => null,
+                        'note' => "Auto-pluck: FG {$fgId} -> create part {$partId}",
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ],
+                    [
+                        'product_id' => $partId,
+                        'type' => 'in',
+                        'qty' => (float) $partsObtained,
+                        'ref_type' => 'AUTO_PLUCK',
+                        'ref_id' => null,
+                        'note' => "Auto-pluck: FG {$fgId} -> part {$partId}",
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ],
+                ]);
+
+                $remaining = max(0, $remaining - $partsObtained);
+            }
+
+            if ($remaining > 0) {
+                throw new \Exception("Unable to auto-cover {$shortQty} of part {$partId}, remaining {$remaining}");
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('borrowPartFromBestFg failed', ['part' => $partId, 'err' => $e->getMessage()]);
+            throw $e;
         }
-
-        if ($remaining > 0) {
-            throw new \Exception("Unable to auto-cover {$shortQty} of part {$partId}, remaining {$remaining}");
-        }
-
-        DB::commit();
-    } catch (\Exception $e) {
-        DB::rollBack();
-        \Log::error('borrowPartFromBestFg failed', ['part' => $partId, 'err' => $e->getMessage()]);
-        throw $e;
     }
-}
-
-
-
 
     // ========== NEW: ensure FG available by auto-assembling ==========
     // private function ensureFgForSale(int $fgId, float $saleUnitsNeeded, int $branchId, int $warehouseId): float
@@ -149,7 +151,7 @@ public function borrowPartFromBestFg(int $partId, float $shortQty, int $branchId
         }
 
         // How many FG currently on-hand?
-        $fgOnHand = (float) (DB::table('v_stock_onhand')->where('product_id', $fgId)->value('onhand_qty') ?? 0);
+        $fgOnHand = (float) (DB::table('warehouse_stocks')->where('product_id', $fgId)->where('warehouse_id', $warehouseId)->sum('quantity') ?? 0);
         $shortUnits = max(0.0, $saleUnitsNeeded - $fgOnHand);
         if ($shortUnits <= 0) {
             return 0.0;
@@ -157,9 +159,12 @@ public function borrowPartFromBestFg(int $partId, float $shortQty, int $branchId
 
         // How many units can we assemble now?
         $bom = DB::table('product_boms as pb')
-            ->leftJoin('v_stock_onhand as v', 'v.product_id', '=', 'pb.part_id')
+            ->leftJoin('warehouse_stocks as v', function ($join) use ($warehouseId) {
+                $join->on('v.product_id', '=', 'pb.part_id')
+                    ->where('v.warehouse_id', '=', $warehouseId);
+            })
             ->where('pb.product_id', $fgId)
-            ->select('pb.part_id', 'pb.qty_per_unit', DB::raw('COALESCE(v.onhand_qty,0) as avail'))
+            ->select('pb.part_id', 'pb.qty_per_unit', DB::raw('COALESCE(v.quantity,0) as avail'))
             ->get();
 
         if ($bom->isEmpty()) {
@@ -186,31 +191,22 @@ public function borrowPartFromBestFg(int $partId, float $shortQty, int $branchId
 
     private function upsertStocks(int $productId, float $qtyDelta, int $branchId = 1, int $warehouseId = 1): void
     {
-        DB::transaction(function () use ($productId, $qtyDelta, $branchId, $warehouseId) {
-            $row = DB::table('stocks')
-                ->where('product_id', $productId)
-                ->where('branch_id', $branchId)
-                ->where('warehouse_id', $warehouseId)
-                ->lockForUpdate()
-                ->first();
+        $stock = \App\Models\WarehouseStock::where('warehouse_id', $warehouseId)
+            ->where('product_id', $productId)
+            ->lockForUpdate()
+            ->first();
 
-            if ($row) {
-                DB::table('stocks')->where('id', $row->id)->update([
-                    'qty' => DB::raw('qty + '.($qtyDelta + 0)),
-                    'updated_at' => now(),
-                ]);
-            } else {
-                DB::table('stocks')->insert([
-                    'product_id' => $productId,
-                    'branch_id' => $branchId,
-                    'warehouse_id' => $warehouseId,
-                    'qty' => $qtyDelta,
-                    'reserved_qty' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-        }, 5);
+        if ($stock) {
+            $stock->quantity += $qtyDelta;
+            $stock->save();
+        } else {
+            \App\Models\WarehouseStock::create([
+                'warehouse_id' => $warehouseId,
+                'product_id' => $productId,
+                'quantity' => $qtyDelta,
+                'price' => 0,
+            ]);
+        }
     }
 
     // ===== List page of assembled products (uses snapshot) =====
@@ -326,9 +322,10 @@ public function borrowPartFromBestFg(int $partId, float $shortQty, int $branchId
         $qtyPerUnit = (float) $bomRow->qty_per_unit;
 
         // On-hand part
-        $partOnHand = (float) (DB::table('v_stock_onhand')
+        $partOnHand = (float) (DB::table('warehouse_stocks')
             ->where('product_id', $partId)
-            ->value('onhand_qty') ?? 0);
+            ->where('warehouse_id', $warehouseId)
+            ->sum('quantity') ?? 0);
 
         // Shortage against sale qty
         $shortage = max(0.0, $saleQty - $partOnHand);
@@ -342,9 +339,10 @@ public function borrowPartFromBestFg(int $partId, float $shortQty, int $branchId
 
         // How many FG units can be converted to cover shortage?
         $unitsNeeded = $shortage / $qtyPerUnit; // fractional units ok
-        $fgOnHand = (float) (DB::table('v_stock_onhand')
+        $fgOnHand = (float) (DB::table('warehouse_stocks')
             ->where('product_id', $productId)
-            ->value('onhand_qty') ?? 0);
+            ->where('warehouse_id', $warehouseId)
+            ->sum('quantity') ?? 0);
 
         if ($fgOnHand <= 0) {
             return response()->json([
@@ -402,21 +400,23 @@ public function borrowPartFromBestFg(int $partId, float $shortQty, int $branchId
     {
         $product = Product::findOrFail($productId);
 
-        $ready = (float) (DB::table('v_stock_onhand')
+        // Use global sum for snapshot overview or hardcode warehouse 1 (Assuming 1 for overview)
+        // Better: sum all warehouses
+        $ready = (float) (DB::table('warehouse_stocks')
             ->where('product_id', $productId)
-            ->value('onhand_qty') ?? 0);
+            ->sum('quantity') ?? 0);
 
         $parts = DB::table('product_boms as pb')
             ->join('products as p', 'p.id', '=', 'pb.part_id')
-            ->leftJoin('v_stock_onhand as v', 'v.product_id', '=', 'pb.part_id')
+            ->leftJoin('warehouse_stocks as v', 'v.product_id', '=', 'pb.part_id')
             ->where('pb.product_id', $productId)
-            ->groupBy('pb.id', 'pb.product_id', 'pb.part_id', 'pb.qty_per_unit', 'p.item_name', 'p.item_code', 'v.onhand_qty')
+            ->groupBy('pb.id', 'pb.product_id', 'pb.part_id', 'pb.qty_per_unit', 'p.item_name', 'p.item_code')
             ->selectRaw('
                 pb.part_id,
                 p.item_name,
                 p.item_code,
                 pb.qty_per_unit,
-                COALESCE(v.onhand_qty,0) as available_qty
+                COALESCE(SUM(v.quantity),0) as available_qty
             ')
             ->get();
 

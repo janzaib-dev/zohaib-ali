@@ -8,15 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 class Sale extends Model
 {
     protected $fillable = [
-        'customer', 'product', 'reference', 'product_code', 'brand', 'unit', 'per_price', 
-        'per_discount', 'qty', 'per_total', 'total_amount_Words', 'total_bill_amount',
-        'total_extradiscount', 'total_net', 'cash', 'card', 'change', 'total_discount',
-        'total_subtotal', 'total_items','color'
+        'customer_id', 'reference', 'total_amount_Words', 'total_bill_amount',
+        'total_extradiscount', 'total_net', 'cash', 'card', 'change',
+        'total_items', 'discount_type'
     ];
 
     public function customer_relation()
     {
-        return $this->belongsTo(Customer::class, 'customer', 'id');
+        return $this->belongsTo(Customer::class, 'customer_id', 'id');
     }
 
     public function product_relation()
@@ -36,5 +35,9 @@ class Sale extends Model
 
         // Increment + format
         return 'INV-' . str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
+    }
+    public function items()
+    {
+        return $this->hasMany(SaleItem::class);
     }
 }
