@@ -70,24 +70,26 @@ Route::middleware('auth')->group(function () {
 
     route::get('/category', [CategoryController::class, 'index'])->middleware('permission:categories.view')->name('Category.home');
     Route::get('/category/delete/{id}', [CategoryController::class, 'delete'])->middleware('permission:categories.delete')->name('delete.category');
-    route::post('/category/stote', [CategoryController::class, 'store'])->middleware('permission:categories.create|categories.edit')->name('store.category');
+    route::post('/category/store', [CategoryController::class, 'store'])->middleware('permission:categories.create|categories.edit')->name('store.category');
 
     route::get('/Brand', [BrandController::class, 'index'])->middleware('permission:brands.view')->name('Brand.home');
     Route::get('/Brand/delete/{id}', [BrandController::class, 'delete'])->middleware('permission:brands.delete')->name('delete.Brand');
-    route::post('/Brand/stote', [BrandController::class, 'store'])->middleware('permission:brands.create|brands.edit')->name('store.Brand');
+    route::post('/Brand/store', [BrandController::class, 'store'])->middleware('permission:brands.create|brands.edit')->name('store.Brand');
 
     route::get('/Unit', [UnitController::class, 'index'])->middleware('permission:units.view')->name('Unit.home');
     Route::get('/Unit/delete/{id}', [UnitController::class, 'delete'])->middleware('permission:units.delete')->name('delete.Unit');
-    route::post('/Unit/stote', [UnitController::class, 'store'])->middleware('permission:units.create|units.edit')->name('store.Unit');
+    route::post('/Unit/store', [UnitController::class, 'store'])->middleware('permission:units.create|units.edit')->name('store.Unit');
 
     route::get('/subcategory', [SubcategoryController::class, 'index'])->middleware('permission:subcategories.view')->name('subcategory.home');
     Route::get('/subcategory/delete/{id}', [SubcategoryController::class, 'delete'])->middleware('permission:subcategories.delete')->name('delete.subcategory');
-    route::post('/subcategory/stote', [SubcategoryController::class, 'store'])->middleware('permission:subcategories.create|subcategories.edit')->name('store.subcategory');
+    route::post('/subcategory/store', [SubcategoryController::class, 'store'])->middleware('permission:subcategories.create|subcategories.edit')->name('store.subcategory');
 
     Route::get('productget', [ProductController::class, 'productget'])->name('productget');
 
     Route::get('/product', [ProductController::class, 'Product'])->middleware('permission:products.view')->name('product');
     Route::get('/productview/{id}', [ProductController::class, 'productview'])->name('productview');
+    Route::get('/products/search', [ProductController::class, 'searchProducts'])->name('products.search');
+
     // //////////
     Route::get('/products/price', [ProductController::class, 'getPrice'])
         ->name('products.price');
@@ -199,11 +201,13 @@ Route::middleware('auth')->group(function () {
 
     route::get('/Purchase', [PurchaseController::class, 'index'])->middleware('permission:purchases.view')->name('Purchase.home');
     route::get('/add/Purchase', [PurchaseController::class, 'add_purchase'])->middleware('permission:purchases.create')->name('add_purchase');
-    route::post('/Purchase/stote', [PurchaseController::class, 'store'])->middleware('permission:purchases.create|purchases.edit')->name('store.Purchase');
+    route::post('/Purchase/store', [PurchaseController::class, 'store'])->middleware('permission:purchases.create|purchases.edit')->name('store.Purchase');
     Route::get('/purchase/{id}/edit', [PurchaseController::class, 'edit'])->middleware('permission:purchases.edit')->name('purchase.edit');
     Route::put('/purchase/{id}', [PurchaseController::class, 'update'])->middleware('permission:purchases.edit')->name('purchase.update');
     Route::delete('/purchase/{id}', [PurchaseController::class, 'destroy'])->middleware('permission:purchases.delete')->name('purchase.destroy');
     Route::get('/search-products', [ProductController::class, 'searchProducts'])->name('search-products');
+    Route::get('/products/ajax-search', [ProductController::class, 'ajaxSearch'])->name('products.ajax.search');
+    Route::get('/get-price', [ProductController::class, 'getPrice'])->name('get-price');
     Route::get('/purchase/{id}/invoice', [PurchaseController::class, 'Invoice'])->middleware('permission:purchases.view')->name('purchase.invoice');
 
     Route::get('purchase/return', [PurchaseController::class, 'purchaseReturnIndex'])->name('purchase.return.index');
@@ -242,9 +246,10 @@ Route::middleware('auth')->group(function () {
     // Route::get('booking/system', [SaleController::class,'booking-system'])->name('booking.index');
     Route::get('sale', [SaleController::class, 'index'])->middleware('permission:sales.view')->name('sale.index');
     Route::get('sale/create', [SaleController::class, 'addsale'])->middleware('permission:sales.create')->name('sale.add');
-    Route::get('/products/search', [SaleController::class, 'searchProducts'])->name('products.search');
+    Route::get('/products/search', [ProductController::class, 'searchProducts'])->name('products.search');
     Route::get('/search-product-name', [SaleController::class, 'searchpname'])->name('search-product-name');
     Route::post('/sales/store', [SaleController::class, 'store'])->middleware('permission:sales.create')->name('sales.store');
+    Route::post('/sales-actions/post-final', [SaleController::class, 'postFinal'])->middleware('permission:sales.create')->name('sales.post_final');
     Route::get('/sales/{id}/return', [SaleController::class, 'saleretun'])->middleware('permission:sales.create')->name('sales.return.create');
     Route::post('/sales-return/store', [SaleController::class, 'storeSaleReturn'])->middleware('permission:sales.create')->name('sales.return.store');
     Route::get('/sale-returns', [App\Http\Controllers\SaleController::class, 'salereturnview'])->middleware('permission:sales.view')->name('sale.returns.index');
@@ -264,6 +269,7 @@ Route::middleware('auth')->group(function () {
 
     // web.php
     Route::get('/warehouse-stock-quantity', [StockTransferController::class, 'getStockQuantity'])->middleware('permission:stock.transfer.view')->name('warehouse.stock.quantity');
+    Route::get('/get-products-by-warehouse', [StockTransferController::class, 'getProductsByWarehouse'])->middleware('permission:stock.transfer.view')->name('get.products.by.warehouse');
 
     // narratiions
     Route::get('/get-customers-by-type', [CustomerController::class, 'getByType'])->middleware('permission:customers.view');
@@ -274,6 +280,7 @@ Route::middleware('auth')->group(function () {
         ->name('get.stock');
     // ////////
     Route::get('/narrations', [NarrationController::class, 'index'])->name('narrations.index')->middleware('permission:narrations.view');
+    Route::get('/narrations/fetch', [NarrationController::class, 'fetch'])->name('narrations.fetch');
     Route::post('/narrations', [NarrationController::class, 'store'])->name('narrations.store')->middleware('permission:narrations.create');
     Route::delete('/narrations/{narration}', [NarrationController::class, 'destroy'])->name('narrations.destroy')->middleware('permission:narrations.delete');
     Route::get('vouchers/{type}', [VoucherController::class, 'index'])->name('vouchers.index');

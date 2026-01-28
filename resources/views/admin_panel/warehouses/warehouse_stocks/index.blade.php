@@ -23,7 +23,7 @@
                 <tbody>
                     @foreach ($stocks as $stock)
                         <tr>
-                            <td>{{ $loop->iteration }}</td>
+                            <td>{{ $stocks->firstItem() + $loop->index }}</td>
                             <td>{{ $stock->warehouse->warehouse_name }}</td>
                             <td>{{ $stock->product->item_name }}</td>
                             <td>{{ $stock->quantity }}</td>
@@ -48,14 +48,18 @@
                     @endforeach
                 </tbody>
             </table>
+
+            <div class="mt-3">
+                {{ $stocks->links('pagination::bootstrap-5') }}
+            </div>
         </div>
     </div>
 @endsection
 
-@section('scripts')
-    <script>
+@section('js')
+    {{-- <script>
         $(document).ready(function() {
             $('#stockTable').DataTable();
         });
-    </script>
+    </script> --}}
 @endsection

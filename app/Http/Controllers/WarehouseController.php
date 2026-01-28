@@ -12,13 +12,17 @@ class WarehouseController extends Controller
     public function getWarehouses(Request $request)
     {
         $productId = $request->input('product_id');
+        
+        // DEBUG LOGGING
+        \Log::info("Warehouse Fetch Request for Product: " . $productId);
 
         $warehouseStocks = WarehouseStock::with('stockWarehouse')
             ->where('product_id', $productId)
+            ->where('quantity', '>', 0)
             ->get();
-        // $warehouseStocks = WarehouseStock::where('product_id', $productId)
-        //     ->get();
-
+            
+        \Log::info("Found Stocks: " . $warehouseStocks->count());
+        
         $response = $warehouseStocks->map(function ($ws) {
             return [
                 'warehouse_id' => $ws->warehouse_id,
@@ -26,13 +30,10 @@ class WarehouseController extends Controller
                 'stock' => $ws->quantity,
             ];
         });
-        //    echo "<pre>";
-        //     print_r($response);
-        //     echo "</pre>";
-        // dd();
 
         return response()->json($response);
     }
+
 
     // VendorController.php aur WarehouseController.php same hoga
     public function index()

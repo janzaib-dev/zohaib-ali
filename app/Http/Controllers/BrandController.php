@@ -59,7 +59,7 @@ class BrandController extends Controller
     if ($request->page === 'product_page') {
         
         $msg = 'Brand Created Successfully';
-         return redirect()->route('store')->with('success',$msg);
+         return redirect()->back()->with('success',$msg);
         //response()->json([
         //     'status' => 'success',
         //     'message' => $message,

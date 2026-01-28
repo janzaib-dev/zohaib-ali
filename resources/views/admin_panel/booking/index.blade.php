@@ -33,20 +33,32 @@
                                 <td>{{ $booking->id }}</td>
                                 <td>{{ $booking->customer_relation->customer_name ?? 'N/A' }}</td>
                                 <td>{{ $booking->reference }}</td>
-                                <td>{{ $booking->product }}</td>
-                                <td>{{ $booking->qty }}</td>
-                                <td>{{ $booking->per_price }}</td>
-                                <td>{{ $booking->per_discount }}</td>
-                                <td>{{ $booking->total_net }}</td>
+                                <td>
+                                    @foreach ($booking->items as $item)
+                                        {{ $item->product->item_name ?? 'N/A' }} <br>
+                                    @endforeach
+                                </td>
+                                <td>
+                                    @foreach ($booking->items as $item)
+                                        {{ $item->qty }} <br>
+                                    @endforeach
+                                </td>
+                                <td>
+                                    @foreach ($booking->items as $item)
+                                        {{ $item->price }} <br>
+                                    @endforeach
+                                </td>
+                                <td>
+                                    @foreach ($booking->items as $item)
+                                        {{ $item->discount_percent }}% <br>
+                                    @endforeach
+                                </td>
+                                <td>{{ number_format($booking->total_net, 2) }}</td>
                                 <td>{{ $booking->created_at->format('d-m-Y') }}</td>
                                 <td>
                                     @can('bookings.view')
-                                        <a href="{{ route('booking.receipt', $booking->id) }}" target="_blank"
-                                            class="btn btn-sm btn-outline-secondary">Receipt</a>
-                                    @endcan
-                                    @can('bookings.edit')
-                                        <a href="{{ route('sales.from.booking', $booking->id) }}"
-                                            class="btn btn-sm btn-success ">Confirm</a>
+                                        <a href="{{ route('sales.dc', $booking->id) }}" target="_blank"
+                                            class="btn btn-sm btn-outline-secondary">DC Receipt</a>
                                     @endcan
 
                                 </td>

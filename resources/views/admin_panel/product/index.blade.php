@@ -104,6 +104,11 @@
 
             <div class="table-responsive">
                 <table id="productTable" class="table table-striped table-bordered align-middle nowrap" style="width:100%">
+                    <div class="mb-3">
+                        <input type="text" id="search_all" class="form-control"
+                            placeholder="Search Item Name, Code, Category, Brand">
+                    </div>
+
                     <thead class="table-light">
                         <tr>
                             <th><input type="checkbox" id="selectAll"></th>
@@ -176,6 +181,9 @@
                         @endforeach
                     </tbody>
                 </table>
+            </div>
+            <div class="mt-3 d-flex justify-content-end">
+                {{ $products->links() }}
             </div>
         </div>
     </div>
@@ -482,7 +490,7 @@
                         $('#lbl_price_unit').text('Sale Price (per Piece)');
                         $('#lbl_purch_unit').text('Purchase Price (per Piece)');
 
-                        salePrice = product.sale_price_per_piece;
+                        salePrice = product.sale_price_per_box;
                         purchPrice = product.purchase_price_per_piece;
 
                     } else if (mode === 'by_pieces') {
@@ -500,7 +508,7 @@
                         $('#lbl_price_unit').text('Sale Price (per Piece)');
                         $('#lbl_purch_unit').text('Purchase Price (per Piece)');
 
-                        salePrice = product.sale_price_per_piece;
+                        salePrice = product.sale_price_per_box;
                         purchPrice = product.purchase_price_per_piece;
                     }
 
@@ -509,7 +517,7 @@
                     $('#view_purch_unit').text('Rs. ' + parseFloat(purchPrice || 0).toFixed(2));
 
                     $('#view_sale_total').text('Rs. ' + parseFloat(product.total_price || 0).toFixed(
-                    2));
+                        2));
                     $('#view_purch_total').text('Rs. ' + parseFloat(product.total_purchase_price || 0)
                         .toFixed(2));
 
@@ -517,10 +525,10 @@
                     if (product.image) {
                         // If you had an image tag in the new modal, but I didn't verify if I left #view_image.
                         // Checking the HTML I inserted, I realized I removed the image logic from the previous HTML which was inside the table (or logic).
-                        // Wait, the previous modal didn't seem to have a big image preview in lines 201-334. 
+                        // Wait, the previous modal didn't seem to have a big image preview in lines 201-334.
                         // The original code had an image column in the database but the modal (lines 201-334) didn't actually show an image in the view I replaced!
                         // Oh, I see lines 386-388 in original JS: `$('#view_image').attr...`
-                        // But `view_image` was NOT in the previous modal HTML I read (lines 201-334). 
+                        // But `view_image` was NOT in the previous modal HTML I read (lines 201-334).
                         // It might have been there and I missed it? Or it was missing HTML but had JS.
                         // Let's stick to the structure I designed which is data focused. If user needs image, I can add it, but it wasn't explicitly requested in "Required Fix".
                     }
@@ -569,21 +577,38 @@
 
     <script>
         $(document).ready(function() {
-            $('#productTable').DataTable({
-                responsive: true,
-                pageLength: 10,
-                lengthMenu: [
-                    [10, 25, 50, -1],
-                    [10, 25, 50, "All"]
-                ],
-                order: [
-                    [0, 'asc']
-                ],
-                language: {
-                    search: "_INPUT_",
-                    searchPlaceholder: "Search products..."
+
+            function debounce(func, delay) {
+                let timer;
+                return function(...args) {
+                    clearTimeout(timer);
+                    timer = setTimeout(() => func.apply(this, args), delay);
                 }
+            }
+
+            let table = $('#productTable').DataTable({
+                responsive: true,
+                paging: false,
+                ordering: true,
+                info: false,
+                order: [
+                    [1, 'asc']
+                ],
+                dom: '<"top"f>rt<"bottom"><"clear">',
+                language: {
+                    search: "",
+                    searchPlaceholder: "Search by code, name, category, brand..."
+                },
+                columnDefs: [{
+                    targets: [0, 11],
+                    searchable: false
+                }, ]
+            }); // Optional: fast typing experience 
+            $('.dataTables_filter input').off().on('keyup', function() {
+                table.search(this.value).draw();
             });
+            // ===== Initialize Products DataTable =====
+          
         });
     </script>
 
@@ -597,15 +622,18 @@
         let piecesPerCartonInput = document.getElementById("pieces_per_carton");
         let initialStockInput = document.getElementById("initial_stock");
 
-        function updateInitialStock() {
-            let cartonQuantity = parseInt(cartonQuantityInput.value) || 0;
-            let piecesPerCarton = parseInt(piecesPerCartonInput.value) || 0;
-            initialStockInput.value = cartonQuantity * piecesPerCarton;
-        }
+        if (cartonQuantityInput && piecesPerCartonInput && initialStockInput) {
+            function updateInitialStock() {
+                let cartonQuantity = parseInt(cartonQuantityInput.value) || 0;
+                let piecesPerCarton = parseInt(piecesPerCartonInput.value) || 0;
+                initialStockInput.value = cartonQuantity * piecesPerCarton;
+            }
 
-        cartonQuantityInput.addEventListener("input", updateInitialStock);
-        piecesPerCartonInput.addEventListener("input", updateInitialStock);
+            cartonQuantityInput.addEventListener("input", updateInitialStock);
+            piecesPerCartonInput.addEventListener("input", updateInitialStock);
+        }
     });
+
 
     $(document).ready(function() {
         // Add Product Modal: Fetch Subcategories on Category Change

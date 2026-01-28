@@ -61,7 +61,7 @@ public function store(Request $request)
 
     // RESPONSE FOR ALERT
     if ($request->page === 'product_page') {
-        return redirect()->route('store')->with('success',$message);
+        return redirect()->back()->with('success',$message);
     }
 
     return response()->json([

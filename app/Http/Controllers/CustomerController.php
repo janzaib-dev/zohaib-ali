@@ -23,17 +23,24 @@ class CustomerController extends Controller
     $type = $request->type ?? 'Main Customer' ;
     
     $customers = Customer::where('customer_type', $type)->get();
+
+    // Attach latest ledger balance
+    $customers->map(function($c) {
+        $ledger = CustomerLedger::where('customer_id', $c->id)->latest('id')->first();
+        $c->previous_balance = $ledger ? $ledger->closing_balance : ($c->opening_balance ?? 0);
+        return $c;
+    });
     
-    // $customers=Customer::all();
-    
-    // dd($customers);
     return response()->json($customers);
 }
 
     // 🔹 Single customer detail
     public function show($id)
     {
-        return Customer::findOrFail($id);
+        $customer = Customer::findOrFail($id);
+        $ledger = CustomerLedger::where('customer_id', $id)->latest('id')->first();
+        $customer->previous_balance = $ledger ? $ledger->closing_balance : ($customer->opening_balance ?? 0);
+        return $customer;
     }
 
 
@@ -110,6 +117,7 @@ class CustomerController extends Controller
             'mobile_2'           => 'nullable',
             'email_address_2'    => 'nullable|email',
             'opening_balance'    => 'nullable|numeric',
+            'balance_range'      => 'nullable|numeric',
             'address'            => 'nullable',
             'customer_type'      => 'nullable',
         ]);
@@ -207,20 +215,34 @@ class CustomerController extends Controller
             'note'             => $request->note,
         ]);
 
-        // Get latest ledger record
-        $ledger = CustomerLedger::where('customer_id', $request->customer_id)->latest()->first();
-
-        if ($ledger) {
-            // Calculate new balance
-            $newBalance = $request->adjustment_type === 'plus'
-                ? $ledger->closing_balance + $request->amount
-                : $ledger->closing_balance - $request->amount;
-
-            // Update existing ledger record only
-            $ledger->update([
-                'closing_balance' => $newBalance,
-            ]);
+        // Get latest ledger record to calculate new balance
+        $latestLedger = CustomerLedger::where('customer_id', $request->customer_id)->latest()->first();
+        
+        // Default to opening balance if no ledger exists, or 0
+         // If no ledger exists, we assume previous balance is opening balance of customer? 
+         // But checking 'customers' table again is safer.
+        $previousBalance = 0;
+        if ($latestLedger) {
+            $previousBalance = $latestLedger->closing_balance;
+        } else {
+            $cust = Customer::find($request->customer_id);
+            $previousBalance = $cust->opening_balance ?? 0;
         }
+
+        // Calculate new balance
+        $newBalance = $request->adjustment_type === 'plus'
+            ? $previousBalance + $request->amount
+            : $previousBalance - $request->amount;
+
+        // Create NEW ledger record (Preserve History)
+        CustomerLedger::create([
+            'customer_id'      => $request->customer_id,
+            'admin_or_user_id' => $userId,
+            'previous_balance' => $previousBalance,
+            'opening_balance'  => 0, // This is not an "opening" entry, so 0 or null
+            'closing_balance'  => $newBalance,
+            'description'      => "Payment: " . ($request->note ?? $request->payment_method),
+        ]);
 
         return back()->with('success', 'Payment adjusted and ledger updated.');
     }

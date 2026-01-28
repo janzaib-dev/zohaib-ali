@@ -321,7 +321,8 @@
                                                                     <!-- Dynamic Total Stock Display -->
                                                                     <div
                                                                         class="field-total-stock d-none bg-light p-2 rounded border d-flex justify-content-between align-items-center">
-                                                                        <span class="small fw-bold text-muted">Total
+                                                                        <span id="total_stock_label"
+                                                                            class="small fw-bold text-muted">Total
                                                                             Stock:</span>
                                                                         <input type="text" id="total_stock_display"
                                                                             class="form-control-plaintext text-end fw-bold text-dark py-0"
@@ -525,12 +526,11 @@
                                                                         <div class="input-group input-group-sm">
                                                                             <span
                                                                                 class="input-group-text bg-success text-white">Rs.</span>
-                                                                            <input type="number"
-                                                                                id="sale_price_per_piece"
-                                                                                name="sale_price_per_piece"
+                                                                            <input type="number" id="sale_price_per_box"
+                                                                                name="sale_price_per_box"
                                                                                 class="form-control calculation-input"
                                                                                 step="0.01" min="0"
-                                                                                value="{{ $product->sale_price_per_piece }}">
+                                                                                value="{{ $product->sale_price_per_box }}">
                                                                         </div>
                                                                         <div
                                                                             class="mt-2 field-by-cartons d-none small text-muted">
@@ -678,7 +678,7 @@
         const pieceQuantityInput = document.getElementById('piece_quantity');
 
         // Shared (Cartons + Pieces) Pricing
-        const salePricePieceInput = document.getElementById('sale_price_per_piece');
+        const salePricePieceInput = document.getElementById('sale_price_per_box');
         const purchasePricePieceInput = document.getElementById('purchase_price_per_piece');
 
         // --- OUTPUTS ---
@@ -723,6 +723,12 @@
                 fieldBySize.forEach(el => toggleGroup(el, true));
                 if (fieldPackingHeader) fieldPackingHeader.classList.remove('d-none');
 
+                // SHOW Total Stock for by_size now
+                if (fieldTotalStock) fieldTotalStock.classList.remove('d-none');
+                // Update Label
+                const lbl = document.getElementById('total_stock_label');
+                if (lbl) lbl.innerText = "Total Boxes:";
+
                 setRequired([heightInput, widthInput, piecesBySize, boxesBySize, pricePerM2Input,
                     purchasePerM2Input
                 ], true);
@@ -740,6 +746,9 @@
                 if (fieldTotalStock) fieldTotalStock.classList.remove('d-none');
                 if (fieldPackingHeader) fieldPackingHeader.classList.remove('d-none');
 
+                const lbl = document.getElementById('total_stock_label');
+                if (lbl) lbl.innerText = "Total Stock:";
+
                 setRequired([piecesByCarton, boxesByCarton, salePricePieceInput, purchasePricePieceInput],
                     true);
                 setRequired([heightInput, widthInput, piecesBySize, boxesBySize, pricePerM2Input,
@@ -754,6 +763,9 @@
                 fieldByPieces.forEach(el => toggleGroup(el, true));
                 if (fieldUnitPricing) toggleGroup(fieldUnitPricing, true);
                 if (fieldTotalStock) fieldTotalStock.classList.remove('d-none');
+
+                const lbl = document.getElementById('total_stock_label');
+                if (lbl) lbl.innerText = "Total Stock:";
 
                 setRequired([pieceQuantityInput, salePricePieceInput, purchasePricePieceInput], true);
                 setRequired([heightInput, widthInput, piecesBySize, boxesBySize, pricePerM2Input,
@@ -825,7 +837,7 @@
                 const m2Box = m2Piece * pcs;
                 const totalM2 = m2Box * boxes;
 
-                finalStock = pcs * boxes;
+                finalStock = boxes;
 
                 // Sale
                 const sPerPiece = m2Piece * sPriceM2;
@@ -995,7 +1007,7 @@
                     } else {
                         // Clear errors
                         document.querySelectorAll('.invalid-feedback.ajax-error').forEach(el => el
-                    .remove());
+                            .remove());
                         form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove(
                             'is-invalid'));
 
