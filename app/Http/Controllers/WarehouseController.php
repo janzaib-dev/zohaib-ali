@@ -13,26 +13,31 @@ class WarehouseController extends Controller
     {
         $productId = $request->input('product_id');
 
-        // Allow fetching if either pieces OR boxes exist
+        // Get all warehouses first
+        $allWarehouses = Warehouse::all();
+        
+        // Get stock entries for this product
         $warehouseStocks = WarehouseStock::with(['stockWarehouse', 'product'])
             ->where('product_id', $productId)
-            ->where(function ($q) {
-                $q->where('total_pieces', '>', 0)
-                  ->orWhere('quantity', '>', 0);
-            })
-            ->get();
+            ->get()
+            ->keyBy('warehouse_id');
 
-        $response = $warehouseStocks->map(function ($ws) {
-            // Self-healing for display: if pieces missing but boxes exist, calculate
-            $stockVal = $ws->total_pieces;
-            if ($stockVal <= 0 && $ws->quantity > 0) {
-                $ppb = ($ws->product && $ws->product->pieces_per_box > 0) ? $ws->product->pieces_per_box : 1;
-                $stockVal = $ws->quantity * $ppb;
+        $response = $allWarehouses->map(function ($warehouse) use ($warehouseStocks, $productId) {
+            $ws = $warehouseStocks->get($warehouse->id);
+            $stockVal = 0;
+            
+            if ($ws) {
+                // Self-healing for display: if pieces missing but boxes exist, calculate
+                $stockVal = $ws->total_pieces;
+                if ($stockVal <= 0 && $ws->quantity > 0) {
+                    $ppb = ($ws->product && $ws->product->pieces_per_box > 0) ? $ws->product->pieces_per_box : 1;
+                    $stockVal = $ws->quantity * $ppb;
+                }
             }
 
             return [
-                'warehouse_id' => $ws->warehouse_id,
-                'warehouse_name' => optional($ws->stockWarehouse)->warehouse_name,
+                'warehouse_id' => $warehouse->id,
+                'warehouse_name' => $warehouse->warehouse_name,
                 'stock' => $stockVal,
             ];
         });

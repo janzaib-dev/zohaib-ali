@@ -331,7 +331,7 @@
 
               <form id="saleForm" autocomplete="off">
                   @csrf
-                  <input type="hidden" id="booking_id" name="booking_id" value="{{ $booking->id ?? '' }}">
+                  <input type="hidden" id="booking_id" name="booking_id" value="">
                   <input type="hidden" id="action" name="action" value="sale">
 
                   {{-- HEADER --}}
@@ -363,10 +363,9 @@
                           <div class="mb-2 d-flex align-items-center gap-2">
                               <label class="form-label fw-bold mb-0">Invoice No.</label>
                               <input type="text" class="form-control input-readonly" name="Invoice_no"
-                                  style="width:150px" value="{{ $nextInvoiceNumber ?? '' }}" readonly>
+                                  style="width:150px" value="{{ $nextInvoiceNumber }}" readonly>
                               <label class="form-label fw-bold mb-0">M. Inv#</label>
-                              <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice"
-                                  value="{{ $booking->reference ?? '' }}">
+                              <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice">
                           </div>
 
                           {{-- Type toggle --}}
@@ -380,6 +379,9 @@
                                   <input type="radio" class="btn-check" name="partyType" id="typeWalkin"
                                       value="Walking Customer">
                                   <label class="btn btn-outline-primary btn-sm" for="typeWalkin">Walk-in</label>
+
+                                  {{-- <input type="radio" class="btn-check" name="partyType" id="typeVendors" value="vendor">
+          <label class="btn btn-outline-primary btn-sm" for="typeVendors">Vendors</label> --}}
                               </div>
                           </div>
 
@@ -388,11 +390,6 @@
                               <label class="form-label fw-bold mb-1">Select Customer</label>
                               <select class="form-select" id="customerSelect" name="customer">
                                   <option selected disabled>Loading…</option>
-                                  @if (isset($booking) && $booking->customer_id)
-                                      <option value="{{ $booking->customer_id }}" selected>
-                                          {{ $booking->customer_relation->customer_name ?? $booking->customer_id }}
-                                      </option>
-                                  @endif
                               </select>
                               <small class="text-muted" id="customerCountHint"></small>
                           </div>
@@ -623,7 +620,7 @@
       <script>
           // Load products once
           // When product changes, load warehouses for that product
-          $(document).on('change', '.product', function(e, manualWhId, manualWhName) {
+          $(document).on('change', '.product', function() {
 
               const $row = $(this).closest('tr');
               const productId = $(this).val();
@@ -633,11 +630,8 @@
               const $retailPrice = $row.find('.retail-price');
 
               // reset
-              // Only reset if NOT in edit mode (manualWhId undefined) to avoid UI flicker/overwrites
-              if (!manualWhId) {
-                  $retailPrice.val('0');
-                  $stock.val('');
-              }
+              $retailPrice.val('0');
+              $stock.val('');
 
               if (!productId) {
                   $warehouse.html('<option value="">Select Warehouse</option>');
@@ -651,73 +645,32 @@
                       product_id: productId
                   })
                   .done(function(warehouses) {
-                      console.log('=== WAREHOUSE LOAD ===');
-                      console.log('Product ID:', productId);
-                      console.log('Manual Warehouse ID:', manualWhId);
-                      console.log('Manual Warehouse Name:', manualWhName);
-                      console.log('Warehouses returned:', warehouses);
 
                       let html = '<option value="">Select Warehouse</option>';
-                      let found = false;
 
                       warehouses.forEach(function(w) {
                           html += `<option value="${w.warehouse_id}" data-stock="${w.stock}">
                             ${w.warehouse_name} -- ${w.stock}
                         </option>`;
-                          if (manualWhId && w.warehouse_id == manualWhId) found = true;
                       });
 
-                      // If manual warehouse ID is provided but not found in the list (e.g. no stock entry yet?), force add it
-                      if (manualWhId && !found) {
-                          console.log('Manual warehouse NOT found in list, adding fallback option');
-                          const name = manualWhName || ('Warehouse #' + manualWhId);
-                          html += `<option value="${manualWhId}" data-stock="0">
-                            ${name} (History)
-                        </option>`;
-                      }
-
                       $warehouse.html(html);
-
-                      // Handle pre-selection (Prioritize argument, then data attribute)
-                      const preSelected = manualWhId || $warehouse.data('selected');
-                      console.log('Pre-selected warehouse:', preSelected);
-
-                      if (preSelected) {
-                          $warehouse.val(preSelected).trigger('change');
-                          console.log('Warehouse value after selection:', $warehouse.val());
-                      }
                   })
-                  .fail(function(xhr) {
-                      console.error('Warehouse AJAX failed:', xhr);
-                      // Fallback: if fetch fails but we have manual data, show it atleast
-                      if (manualWhId) {
-                          const name = manualWhName || ('Warehouse #' + manualWhId);
-                          $warehouse.html(`<option value="${manualWhId}">${name}</option>`);
-                          $warehouse.val(manualWhId);
-                      } else {
-                          $warehouse.html('<option value="">Error loading warehouses</option>');
-                      }
+                  .fail(function() {
+                      $warehouse.html('<option value="">Error loading warehouses</option>');
                   });
 
               /* ================== LOAD RETAIL PRICE ================== */
-              // If we are editing (manualWhId present), we might want to skip overwriting price?
-              // But usually we want fresh metadata. 
-              // The addPopulatedRow sets the saved price AFTER this triggers. 
-              // However, since this is AJAX, it might return AFTER addPopulatedRow finishes.
-              // We should SKIP price fetch if manualWhId is present, relying on addPopulatedRow to set it.
-
-              if (!manualWhId) {
-                  $.get('{{ route('products.price') }}', {
-                          product_id: productId
-                      })
-                      .done(function(res) {
-                          // console.log(res);
-                          $retailPrice.val(parseFloat(res.retail_price || 0).toFixed(2));
-                      })
-                      .fail(function() {
-                          $retailPrice.val('0');
-                      });
-              }
+              $.get('{{ route('products.price') }}', {
+                      product_id: productId
+                  })
+                  .done(function(res) {
+                      // console.log(res);
+                      $retailPrice.val(parseFloat(res.retail_price || 0).toFixed(2));
+                  })
+                  .fail(function() {
+                      $retailPrice.val('0');
+                  });
 
           });
 
@@ -764,94 +717,13 @@
                       });
               }
 
-              const existingItems = @json($saleItems ?? []);
-              const existingCustomer = @json($booking->customer_id ?? null);
-              const existingType = 'Main Customer'; // Default, or detect from DB if saved
-
-              // Helper: Add row with data
-              function addPopulatedRow(item) {
-                  console.log('=== ADD POPULATED ROW ===');
-                  console.log('Item data:', item);
-                  console.log('Warehouse ID from item:', item.warehouse_id);
-                  console.log('Warehouse Name from item:', item.warehouse_name);
-
-                  // Create a new row
-                  addNewRow();
-                  const $row = $('#salesTableBody tr:last-child');
-
-                  // Populate Product Select2
-                  if (item.product_id) {
-                      const $prod = $row.find('.product');
-
-                      // Set the warehouse ID to be picked up by the AJAX handler
-                      if (item.warehouse_id) {
-                          $row.find('.warehouse').data('selected', item.warehouse_id);
-                      }
-
-                      // Add product option and trigger change (this will load warehouses)
-                      const option = new Option(item.item_name, item.product_id, true, true);
-                      $prod.append(option).trigger('change', [item.warehouse_id || null, item.warehouse_name || '']);
-
-                      // IMPORTANT: Delay populating fields to allow warehouse AJAX to complete
-                      setTimeout(function() {
-                          // Populate all input fields with saved data
-                          // Note: We set these AFTER triggering change to override any auto-fetched values
-
-                          // Quantity fields
-                          $row.find('.sales-qty').val(item.qty || item.total_pieces || 0); // Total Pieces
-                          $row.find('.pack-qty').val(item.pieces_per_box || 1); // Pack Size (pieces per box)
-                          $row.find('.loose-pieces').val(item.loose_pieces || 0); // Loose pieces
-                          $row.find('.total-pieces').val(item.boxes || 0); // Calculated boxes
-
-                          // Pricing fields
-                          $row.find('.retail-price').val(parseFloat(item.price || 0).toFixed(
-                              2)); // Retail/Box price
-                          $row.find('.price-per-piece').val(parseFloat(item.price_per_piece || 0).toFixed(
-                              2)); // Price per piece
-
-                          // Discount fields
-                          $row.find('.discount-value').val(parseFloat(item.discount || 0).toFixed(
-                              2)); // Discount %
-                          $row.find('.discount-amount').val(parseFloat(item.discount_amount || 0).toFixed(
-                              2)); // Discount amount
-
-                          // Total amount
-                          $row.find('.sales-amount').val(parseFloat(item.total || 0).toFixed(2));
-
-                          // Stock is already populated by warehouse change event
-                      }, 500); // Wait 500ms for warehouse AJAX to complete
-                  }
-              }
-
               function init() {
-                  console.log("Loading with items:", existingItems);
-
-                  if (existingItems && existingItems.length > 0) {
-                      existingItems.forEach(item => {
-                          addPopulatedRow(item);
-                      });
-                  } else {
-                      addNewRow();
-                  }
-
-                  // Load Customers
+                  addNewRow();
                   loadCustomersByType('Main Customer');
-
-                  // Load Receipts
                   loadAccountsInto($('.rv-account').first());
-
-                  // Trigger initial calculation
-                  // Note: addPopulatedRow triggers 'change' on product, which is async.
-                  // We might need a setTimeout for GrandTotals or let the async handlers do it.
-                  setTimeout(updateGrandTotals, 1000);
-                  setTimeout(refreshPostedState, 1000);
+                  updateGrandTotals();
+                  refreshPostedState();
               }
-
-              // Overwrite loadWarehousesForProduct to accept a 'selectedWarehouseId' if needed?
-              // The AJAX function is defined below. 
-              // We can hook into the 'salesTableBody' on change using a custom event or data attribute.
-
-              // Let's update addPopulatedRow to store desired WH ID or similar.
 
               init();
               // 🔹 Load customers on page load
@@ -891,15 +763,6 @@
                       }
 
                       $('#customerSelect').html(html).prop('disabled', false);
-
-                      // Auto-select if exists and not already selected
-                      if (existingCustomer) {
-                          $('#customerSelect').val(existingCustomer).trigger('change');
-                          // existingCustomer = null; 
-                          // Leave it? If the user switches tabs and back, maybe we want to keep it?
-                          // But switching "type" (Walk-in vs Customer) should probably clear it.
-                          // Let's just set it. 
-                      }
                   });
               }
 
@@ -1403,10 +1266,14 @@
                   // d is the customer object
                   $('#address').val(d.address || '');
                   $('#tel').val(d.mobile || '');
-                  // Controller now sends 'remarks' key (mapped from status or remarks)
                   $('#remarks').val(d.remarks || '');
 
-                  // Use calculated values from controller
+                  // Log DB values for debugging
+                  console.log("Customer Fetch Result:", d);
+                  console.log("Server Previous Balance:", d.previous_balance);
+                  console.log("Server Opening Balance:", d.opening_balance);
+
+                  // Use DB 'previous_balance' column strictly
                   let prevBal = parseFloat(d.previous_balance || 0);
                   $('#previousBalance').val(prevBal.toFixed(2));
 

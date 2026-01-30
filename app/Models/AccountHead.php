@@ -5,16 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class StockMovement extends Model
+class AccountHead extends Model
 {
-    protected $table = 'stock_movements';
-
     use HasFactory;
-
+    
     protected $guarded = [];
 
-    public function product()
+    public function accounts()
     {
-        return $this->belongsTo(Product::class);
+        return $this->hasMany(Account::class, 'head_id');
     }
 }

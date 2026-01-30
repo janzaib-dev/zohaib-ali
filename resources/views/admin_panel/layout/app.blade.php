@@ -265,7 +265,7 @@
                                             <div class="col-group col-md-3">
                                                 <p class="category-heading">Products & Categories</p>
                                                 <ul class="submenu-item">
-                                                    
+
                                                     @can('products.view')
                                                         <li><a href="{{ route('product') }}"><i class="fas fa-box"></i>
                                                                 Products</a></li>
@@ -332,7 +332,8 @@
                                             </div>
                                         @endcanany
                                         <!-- Customers & Sales -->
-                                        @canany(['sales.view', 'customers.view', 'sales.officers.view'])
+                                        @canany(['sales.view', 'customers.view', 'sales.officers.view',
+                                            'receipts.voucher.view'])
                                             <div class="col-group col-md-3">
                                                 <p class="category-heading">Sales & Customers</p>
                                                 <ul class="submenu-item">
@@ -347,6 +348,11 @@
                                                     @can('sales.officers.view')
                                                         <li><a href="{{ url('sales-officers') }}"><i class="fas fa-user-tie"></i>
                                                                 Sales Officer</a></li>
+                                                    @endcan
+                                                    @can('receipts.voucher.view')
+                                                        <li><a href="{{ route('all_recepit_vochers') }}"><i
+                                                                    class="fas fa-file-invoice-dollar"></i>
+                                                                Receipt Vouchers</a></li>
                                                     @endcan
                                                 </ul>
                                             </div>
@@ -373,11 +379,11 @@
                                                     Char Of Accounts</a></li>
                                         @endcan
                                         @can('expense.voucher.view')
-                                            <li><a href="{{ route('vouchers.index', 'expense voucher') }}"><i
+                                            <li><a href="{{ route('all_expense_vochers') }}"><i
                                                         class="fa-solid fa-money-bill-wave"></i> Expense Voucher</a></li>
                                         @endcan
                                         @can('receipts.voucher.view')
-                                            <li><a href="{{ route('vouchers.index', 'receipt voucher') }}"><i
+                                            <li><a href="{{ route('all_recepit_vochers') }}"><i
                                                         class="fa-solid fa-wallet"></i> Receipts Voucher</a></li>
                                         @endcan
                                         @can('journal.voucher.view')
@@ -385,7 +391,7 @@
                                                         class="fa-solid fa-wallet"></i> Journal Voucher</a></li>
                                         @endcan
                                         @can('payment.voucher.view')
-                                            <li><a href="{{ route('vouchers.index', 'payment voucher') }}"><i
+                                            <li><a href="{{ route('all_Payment_vochers') }}"><i
                                                         class="fa-solid fa-wallet"></i> Payment Voucher</a></li>
                                         @endcan
                                         @can('income.voucher.view')
