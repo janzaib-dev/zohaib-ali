@@ -12,28 +12,38 @@ class WarehouseController extends Controller
     public function getWarehouses(Request $request)
     {
         $productId = $request->input('product_id');
-        
-        // DEBUG LOGGING
-        \Log::info("Warehouse Fetch Request for Product: " . $productId);
 
-        $warehouseStocks = WarehouseStock::with('stockWarehouse')
-            ->where('product_id', $productId)
-            ->where('quantity', '>', 0)
-            ->get();
-            
-        \Log::info("Found Stocks: " . $warehouseStocks->count());
+        // Get all warehouses first
+        $allWarehouses = Warehouse::all();
         
-        $response = $warehouseStocks->map(function ($ws) {
+        // Get stock entries for this product
+        $warehouseStocks = WarehouseStock::with(['stockWarehouse', 'product'])
+            ->where('product_id', $productId)
+            ->get()
+            ->keyBy('warehouse_id');
+
+        $response = $allWarehouses->map(function ($warehouse) use ($warehouseStocks, $productId) {
+            $ws = $warehouseStocks->get($warehouse->id);
+            $stockVal = 0;
+            
+            if ($ws) {
+                // Self-healing for display: if pieces missing but boxes exist, calculate
+                $stockVal = $ws->total_pieces;
+                if ($stockVal <= 0 && $ws->quantity > 0) {
+                    $ppb = ($ws->product && $ws->product->pieces_per_box > 0) ? $ws->product->pieces_per_box : 1;
+                    $stockVal = $ws->quantity * $ppb;
+                }
+            }
+
             return [
-                'warehouse_id' => $ws->warehouse_id,
-                'warehouse_name' => optional($ws->stockWarehouse)->warehouse_name,
-                'stock' => $ws->quantity,
+                'warehouse_id' => $warehouse->id,
+                'warehouse_name' => $warehouse->warehouse_name,
+                'stock' => $stockVal,
             ];
         });
 
         return response()->json($response);
     }
-
 
     // VendorController.php aur WarehouseController.php same hoga
     public function index()

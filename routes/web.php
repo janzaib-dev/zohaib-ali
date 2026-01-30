@@ -249,7 +249,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/products/search', [ProductController::class, 'searchProducts'])->name('products.search');
     Route::get('/search-product-name', [SaleController::class, 'searchpname'])->name('search-product-name');
     Route::post('/sales/store', [SaleController::class, 'store'])->middleware('permission:sales.create')->name('sales.store');
-    Route::post('/sales-actions/post-final', [SaleController::class, 'postFinal'])->middleware('permission:sales.create')->name('sales.post_final');
+    Route::post('/sales/post-final', [SaleController::class, 'postFinal'])->middleware('permission:sales.create')->name('sales.post_final');
     Route::get('/sales/{id}/return', [SaleController::class, 'saleretun'])->middleware('permission:sales.create')->name('sales.return.create');
     Route::post('/sales-return/store', [SaleController::class, 'storeSaleReturn'])->middleware('permission:sales.create')->name('sales.return.store');
     Route::get('/sale-returns', [App\Http\Controllers\SaleController::class, 'salereturnview'])->middleware('permission:sales.view')->name('sale.returns.index');
@@ -273,7 +273,25 @@ Route::middleware('auth')->group(function () {
 
     // narratiions
     Route::get('/get-customers-by-type', [CustomerController::class, 'getByType'])->middleware('permission:customers.view');
-    Route::resource('warehouse_stocks', WarehouseStockController::class)->middleware(['permission:warehouse.stock.view']);
+    Route::resource('warehouse_stocks', WarehouseStockController::class)->except(['create', 'edit'])->middleware(['permission:warehouse.stock.view']);
+
+    // Warehouse Stock AJAX Extensions
+    Route::get('/warehouse-stock/search-products', [WarehouseStockController::class, 'searchProducts'])
+        ->middleware('permission:warehouse.stock.view')
+        ->name('warehouse_stock.search-products');
+
+    Route::get('/warehouse-stock/search-warehouses', [WarehouseStockController::class, 'searchWarehouses'])
+        ->middleware('permission:warehouse.stock.view')
+        ->name('warehouse_stock.search-warehouses');
+
+    Route::get('/warehouse-stock/get-current', [WarehouseStockController::class, 'getWarehouseStock'])
+        ->middleware('permission:warehouse.stock.view')
+        ->name('warehouse_stock.get-stock');
+
+    Route::get('/warehouse-stock/{id}/edit-data', [WarehouseStockController::class, 'editData'])
+        ->middleware('permission:warehouse.stock.view')
+        ->name('warehouse_stock.edit-data');
+
     Route::resource('stock_transfers', StockTransferController::class)->middleware(['permission:stock.transfer.view']);
     // //////////
     Route::get('/get-stock/{product}', [StocksController::class, 'getStock'])
@@ -286,7 +304,30 @@ Route::middleware('auth')->group(function () {
     Route::get('vouchers/{type}', [VoucherController::class, 'index'])->name('vouchers.index');
     Route::post('vouchers/store', [VoucherController::class, 'store'])->name('vouchers.store');
     Route::get('/view_all', [AccountsHeadController::class, 'index'])->name('view_all');
-    Route::get('/get-vendor-balance/{id}', [VendorController::class, 'getVendorBalance']);
+
+    // Vouchers (Receipts, Payments, Expenses)
+    Route::get('/all_recepit_vochers', [VoucherController::class, 'all_recepit_vochers'])->name('all_recepit_vochers');
+    Route::get('/recepit_vochers', [VoucherController::class, 'recepit_vochers'])->name('recepit_vochers');
+    Route::post('/store_rec_vochers', [VoucherController::class, 'store_rec_vochers'])->name('store_rec_vochers');
+    Route::get('/print/{id}', [VoucherController::class, 'print'])->name('print');
+
+    Route::get('/all_Payment_vochers', [VoucherController::class, 'all_Payment_vochers'])->name('all_Payment_vochers');
+    Route::get('/Payment_vochers', [VoucherController::class, 'Payment_vochers'])->name('Payment_vochers');
+    Route::post('/store_Pay_vochers', [VoucherController::class, 'store_Pay_vochers'])->name('store_Pay_vochers');
+    Route::get('/Paymentprint/{id}', [VoucherController::class, 'Paymentprint'])->name('Paymentprint');
+
+    Route::get('/all_expense_vochers', [VoucherController::class, 'all_expense_vochers'])->name('all_expense_vochers');
+    Route::get('/expense_vochers', [VoucherController::class, 'expense_vochers'])->name('expense_vochers');
+    Route::post('/store_expense_vochers', [VoucherController::class, 'store_expense_vochers'])->name('store_expense_vochers');
+    Route::get('/expenseprint/{id}', [VoucherController::class, 'expenseprint'])->name('expenseprint');
+
+    // AJAX helpers for vouchers
+    Route::get('/get-accounts-by-head/{id}', [VoucherController::class, 'getAccountsByHead']);
+    Route::get('/getOpeningBalance/{type}/{id}', [VoucherController::class, 'getOpeningBalance']);
+    Route::get('/party-list', [VoucherController::class, 'partyList'])->name('party.list');
+
+    Route::post('/accounts-head/store', [AccountsHeadController::class, 'storeHead'])->name('accounts_head.store');
+    Route::post('/accounts/store', [AccountsHeadController::class, 'storeAccount'])->name('accounts.store');
 
     // reporting routes
 

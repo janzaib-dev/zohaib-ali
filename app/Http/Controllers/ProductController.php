@@ -40,6 +40,7 @@ class ProductController extends Controller
             'pieces_per_box' => $product->pieces_per_box,
             'price_per_m2' => $product->price_per_m2,
             'sale_price_per_box' => $product->sale_price_per_box,
+            'sale_price_per_piece' => $product->sale_price_per_piece,
             'height' => $product->height,
             'width' => $product->width,
         ]);
@@ -79,7 +80,7 @@ class ProductController extends Controller
 
         $query = Product::query()
             ->select('id', 'item_name', 'item_code', 'barcode_path')
-            ->withSum('warehouseStocks', 'quantity') /* Efficient Stock Sum */
+            ->withSum('warehouseStocks', 'total_pieces') /* Efficient Stock Sum */
             ->where(function ($q) use ($term) {
                 $q->where('item_name', 'like', "%{$term}%")
                     ->orWhere('item_code', 'like', "%{$term}%")
@@ -89,7 +90,7 @@ class ProductController extends Controller
         $products = $query->paginate(10); // Lazy loading (10 per request)
 
         $results = $products->map(function ($p) {
-            $stock = (float) ($p->warehouse_stocks_sum_quantity ?? 0);
+            $stock = (float) ($p->warehouse_stocks_sum_total_pieces ?? 0);
 
             return [
                 'id' => $p->id,
@@ -246,7 +247,16 @@ class ProductController extends Controller
         $totalPrice = 0;        // Total Sale Price
         $totalPurchasePrice = 0; // Total Purchase Price
 
+        // Initialize pricing variables
+        $salePricePerPiece = 0;
+        $salePricePerBox = 0;
+        $purchasePricePerPiece = 0;
+        $purchasePricePerBox = 0;
+
+        \Illuminate\Support\Facades\Log::info('Product Create Request', $request->all());
+
         if ($mode === 'by_size') {
+            // By Size Mode - uses dimensions to calculate m² pricing
             $height = (float) $request->height;
             $width = (float) $request->width;
             $piecesPerBox = (int) $request->pieces_per_box;
@@ -265,91 +275,67 @@ class ProductController extends Controller
                 if ($request->wantsJson()) {
                     return response()->json(['status' => 'error', 'errors' => ['total_m2' => ['Total m² cannot be zero.']]], 422);
                 }
-
                 return redirect()->back()->withErrors(['total_m2' => 'Total m² cannot be zero.']);
             }
 
-            $salePricePerPiece = 0;
-            $salePricePerBox = 0;
-            $purchasePricePerPiece = 0;
-            $purchasePricePerBox = 0;
-            $boxesQuantity = 0; // Initialized
+            $totalStockQty = $boxesQuantity * $piecesPerBox; // Store in Pieces
 
-            \Illuminate\Support\Facades\Log::info('Product Create Request', $request->all());
+            // Prices calculated from m²
+            $salePricePerPiece = $m2PerPiece * $pricePerM2;
+            $salePricePerBox = $m2PerBox * $pricePerM2;
+            $purchasePricePerPiece = $m2PerPiece * $purchasePricePerM2;
+            $purchasePricePerBox = $m2PerBox * $purchasePricePerM2;
 
-            if ($mode === 'by_size') {
-                // ... (Existing by_size logic adapted) ...
-                $h = (float) $request->height;
-                $w = (float) $request->width;
-                $pcs = (int) $request->pieces_by_size; // Pieces per box
-                $bxs = (int) $request->boxes_by_size;
-                $priceM2 = (float) $request->price_per_m2; // Sale
-                $purchM2 = (float) $request->purchase_price_per_m2;
+        } elseif ($mode === 'by_cartons') {
+            // By Cartons Mode - boxes with pieces per box
+            $piecesPerBox = (int) $request->pieces_per_box;
+            $boxesQuantity = (int) $request->boxes_quantity;
+            $loosePieces = (int) $request->loose_pieces;
 
-                $piecesPerBox = $pcs;
-                $boxesQuantity = $bxs;
-                $totalStockQty = $bxs * $pcs; // Store in Pieces
+            $totalStockQty = ($piecesPerBox * $boxesQuantity) + $loosePieces;
 
-                $m2PerPiece = ($h * $w) / 10000;
-                $m2PerBox = $m2PerPiece * $pcs;
-                $totalM2 = $m2PerBox * $bxs;
+            $inputSalePc = (float) $request->sale_price_per_box;
+            $inputPurchPc = (float) $request->purchase_price_per_piece;
 
-                // Prices
-                $salePricePerPiece = $m2PerPiece * $priceM2;
-                $salePricePerBox = $m2PerBox * $priceM2;
-                $purchasePricePerPiece = $m2PerPiece * $purchM2;
-                $purchasePricePerBox = $m2PerBox * $purchM2;
+            $salePricePerPiece = $inputSalePc;
+            $salePricePerBox = $inputSalePc * $piecesPerBox;
 
-            } elseif ($mode === 'by_cartons') {
-                $piecesPerBox = (int) $request->pieces_per_box;
-                $boxesQuantity = (int) $request->boxes_quantity;
-                $loosePieces = (int) $request->loose_pieces;
+            $purchasePricePerPiece = $inputPurchPc;
+            $purchasePricePerBox = $inputPurchPc * $piecesPerBox;
 
-                $totalStockQty = ($piecesPerBox * $boxesQuantity) + $loosePieces;
-
-                $inputSalePc = (float) $request->sale_price_per_box;
-                $inputPurchPc = (float) $request->purchase_price_per_piece;
-
-                $salePricePerPiece = $inputSalePc;
-                $salePricePerBox = $inputSalePc * $piecesPerBox;
-
-                $purchasePricePerPiece = $inputPurchPc;
-                $purchasePricePerBox = $inputPurchPc * $piecesPerBox;
-
-                if ($totalStockQty < 1) {
-                    if ($request->wantsJson()) {
-                        return response()->json(['status' => 'error', 'errors' => ['total_stock' => ['Total Stock must be at least 1.']]], 422);
-                    }
-
-                    return redirect()->back()->withErrors(['total_stock' => 'Total Stock must be at least 1.']);
+            if ($totalStockQty < 1) {
+                if ($request->wantsJson()) {
+                    return response()->json(['status' => 'error', 'errors' => ['total_stock' => ['Total Stock must be at least 1.']]], 422);
                 }
-
-            } elseif ($mode === 'by_pieces') {
-                $pieceQuantity = (int) $request->piece_quantity;
-                $piecesPerBox = 1; // Default
-                $boxesQuantity = $pieceQuantity; // Set Boxes = Pieces so Quantity column is not 0
-                $totalStockQty = $pieceQuantity;
-
-                $inputSalePc = (float) $request->sale_price_per_box;
-                $inputPurchPc = (float) $request->purchase_price_per_piece;
-
-                $salePricePerPiece = $inputSalePc;
-                $salePricePerBox = $inputSalePc;
-                $purchasePricePerPiece = $inputPurchPc;
-                $purchasePricePerBox = $inputPurchPc;
+                return redirect()->back()->withErrors(['total_stock' => 'Total Stock must be at least 1.']);
             }
 
-            \Illuminate\Support\Facades\Log::info('Calculated Pricing', [
-                'salePricePerPiece' => $salePricePerPiece,
-                'salePricePerBox' => $salePricePerBox,
-                'purchasePricePerPiece' => $purchasePricePerPiece,
-                'purchasePricePerBox' => $purchasePricePerBox,
-                'boxesQuantity' => $boxesQuantity,
-                'totalStockQty' => $totalStockQty,
-            ]);
+        } elseif ($mode === 'by_pieces') {
+            // By Pieces Mode - individual units, no box concept
+            $pieceQuantity = (int) $request->piece_quantity;
+            $piecesPerBox = 1; // Default to 1 for piece-based products
+            $boxesQuantity = $pieceQuantity; // Set Boxes = Pieces so Quantity column is not 0
+            $totalStockQty = $pieceQuantity;
 
-            // Calculations done.
+            $inputSalePc = (float) $request->sale_price_per_box;
+            $inputPurchPc = (float) $request->purchase_price_per_piece;
+
+            $salePricePerPiece = $inputSalePc;
+            $salePricePerBox = $inputSalePc;
+            $purchasePricePerPiece = $inputPurchPc;
+            $purchasePricePerBox = $inputPurchPc;
         }
+
+        \Illuminate\Support\Facades\Log::info('Calculated Pricing', [
+            'mode' => $mode,
+            'piecesPerBox' => $piecesPerBox,
+            'salePricePerPiece' => $salePricePerPiece,
+            'salePricePerBox' => $salePricePerBox,
+            'purchasePricePerPiece' => $purchasePricePerPiece,
+            'purchasePricePerBox' => $purchasePricePerBox,
+            'boxesQuantity' => $boxesQuantity,
+            'totalStockQty' => $totalStockQty,
+        ]);
 
         $userId = Auth::id();
 
