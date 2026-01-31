@@ -690,37 +690,52 @@
 
       <script>
           $(document).ready(function() {
-              function loadAccountsInto($select) {
-                  console.log('Fetching accounts...');
-                  $select.prop('disabled', true).empty().append('<option value="">Loading...</option>');
 
-                  $.get('{{ route('narrations.fetch') }}', {
-                          type: 'receipt'
-                      })
-                      .done(function(rows) {
-                          console.log('Accounts fetched:', rows);
-                          $select.empty().append('<option value="">Select account</option>');
-                          if (rows && rows.length > 0) {
-                              rows.forEach(function(a) {
-                                  $select.append('<option value="' + a.id + '">' + a.narration +
-                                      '</option>');
-                              });
+              // Load accounts on page load (not dependent on customer)
+              function loadAccountsOnPageLoad() {
+                  console.log('Loading accounts on page load...');
+
+                  $.get('{{ route('receipt_vouchers.fetch') }}', {})
+                      .done(function(response) {
+                          console.log('Accounts loaded:', response);
+
+                          var accounts = response.accounts || [];
+
+                          if (accounts && accounts.length > 0) {
+                              console.log('Populating account dropdowns with', accounts.length, 'accounts');
+                              populateAccountDropdowns(accounts);
                           } else {
-                              $select.append('<option disabled>No receipt accounts found</option>');
+                              console.warn('No accounts found');
                           }
-                          $select.prop('disabled', false);
                       })
                       .fail(function(xhr) {
-                          console.error('Accounts fetch failed:', xhr);
-                          $select.empty().append('<option value="">Error loading</option>').prop('disabled',
-                              false);
+                          console.error('Failed to load accounts:', xhr);
                       });
+              }
+
+              // Populate all account dropdowns in receipt voucher section
+              function populateAccountDropdowns(accounts) {
+                  $('.rv-account').each(function() {
+                      var $accountSelect = $(this);
+                      var currentValue = $accountSelect.val();
+
+                      $accountSelect.empty().append('<option value="">Select Account</option>');
+                      accounts.forEach(function(acc) {
+                          $accountSelect.append('<option value="' + acc.id + '">' + acc.display_name +
+                              '</option>');
+                      });
+
+                      // Restore previous selection if any
+                      if (currentValue) {
+                          $accountSelect.val(currentValue);
+                      }
+                  });
               }
 
               function init() {
                   addNewRow();
                   loadCustomersByType('Main Customer');
-                  loadAccountsInto($('.rv-account').first());
+                  loadAccountsOnPageLoad(); // Load accounts on page load
                   updateGrandTotals();
                   refreshPostedState();
               }
@@ -778,6 +793,11 @@
                           $('#tel').val(d.mobile || '');
                           $('#remarks').val(d.status || '');
                           $('#previousBalance').val((+d.previous_balance || 0).toFixed(2));
+
+                          // Reload receipt vouchers for this customer
+                          $('.rv-account').each(function() {
+                              loadAccountsInto($(this), id);
+                          });
                       }
                   );
               });
@@ -1524,6 +1544,9 @@
 
               // Correct: total_net sent to backend should be just this invoice's amount
               $('#totalBalance').val(currentInvoiceTotal.toFixed(2));
+
+              // Sync Receipts Total to Hidden Cash Input so Backend sees it
+              $('input[name="cash"]').val(receipts.toFixed(2));
           }
 
           $(document).on('input', '#previousBalance, #discountPercent', updateGrandTotals);

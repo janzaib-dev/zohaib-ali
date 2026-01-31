@@ -37,13 +37,8 @@ class CustomerController extends Controller
     {
         $customer = Customer::findOrFail($id);
 
-        // Ledger Logic
-        $ledger = CustomerLedger::where('customer_id', $id)->latest('id')->first();
-        $prevBalance = $ledger ? $ledger->closing_balance : ($customer->previous_balance ?? $customer->opening_balance ?? 0);
-
-        // Prepare response data
         $data = $customer->toArray();
-        $data['previous_balance'] = $prevBalance;
+        $data['previous_balance'] = $customer->previous_balance;
         $data['balance_range'] = $customer->balance_range ?? 0;
 
         // Map status to remarks if needed by frontend
@@ -175,15 +170,30 @@ class CustomerController extends Controller
     // customer ledger start
 
     // Customer Ledger View
-    public function customer_ledger()
+    public function customer_ledger(Request $request)
     {
         if (Auth::check()) {
             $userId = Auth::id();
-            $CustomerLedgers = CustomerLedger::with('customer')
-                ->where('admin_or_user_id', $userId)
-                ->get();
+            
+            // Start Query
+            $query = CustomerLedger::with('customer')
+                ->where('admin_or_user_id', $userId);
 
-            return view('admin_panel.customers.customer_ledger', compact('CustomerLedgers'));
+            // Filters
+            if ($request->filled('customer_id')) {
+                $query->where('customer_id', $request->customer_id);
+            }
+            if ($request->filled('from_date')) {
+                $query->whereDate('created_at', '>=', $request->from_date);
+            }
+            if ($request->filled('to_date')) {
+                $query->whereDate('created_at', '<=', $request->to_date);
+            }
+
+            $CustomerLedgers = $query->latest()->get();
+            $customers = Customer::all(); // For Dropdown
+
+            return view('admin_panel.customers.customer_ledger', compact('CustomerLedgers', 'customers'));
         } else {
             return redirect()->back();
         }

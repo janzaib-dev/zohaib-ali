@@ -5,11 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class ReportingController extends Controller
 {
-
     public function onhand()
     {
         $rows = Product::leftJoin('v_stock_onhand as soh', 'soh.product_id', '=', 'products.id')
@@ -32,6 +30,7 @@ class ReportingController extends Controller
     public function item_stock_report()
     {
         $products = Product::orderBy('item_name')->get();
+
         return view('admin_panel.reporting.item_stock_report', compact('products'));
     }
 
@@ -72,7 +71,7 @@ class ReportingController extends Controller
 
             foreach ($sales as $s) {
                 $codes = array_map('trim', explode(',', $s->product_code));
-                $qtys  = array_map('trim', explode(',', $s->qty));
+                $qtys = array_map('trim', explode(',', $s->qty));
                 $totals = array_map('trim', explode(',', $s->per_total));
 
                 foreach ($codes as $idx => $code) {
@@ -84,10 +83,10 @@ class ReportingController extends Controller
             }
 
             // Actual balance from stocks table
-         // Actual balance from v_stock_onhand (consistent with onhand() page)
-$balance = (float) (DB::table('v_stock_onhand')
-    ->where('product_id', $product->id)
-    ->value('onhand_qty') ?? 0);
+            // Actual balance from v_stock_onhand (consistent with onhand() page)
+            $balance = (float) (DB::table('v_stock_onhand')
+                ->where('product_id', $product->id)
+                ->value('onhand_qty') ?? 0);
 
             // $balance = $stockRecord ? (float) $stockRecord->qty : 0;
 
@@ -112,7 +111,7 @@ $balance = (float) (DB::table('v_stock_onhand')
 
         return response()->json([
             'data' => $rows,
-            'grand_total' => $grandTotalValue
+            'grand_total' => $grandTotalValue,
         ]);
     }
 
@@ -121,11 +120,10 @@ $balance = (float) (DB::table('v_stock_onhand')
         return view('admin_panel.reporting.purchase_report');
     }
 
-
     public function fetchPurchaseReport(Request $request)
     {
         $startDate = $request->start_date;
-        $endDate   = $request->end_date;
+        $endDate = $request->end_date;
 
         $query = DB::table('purchases')
             ->join('purchase_items', 'purchases.id', '=', 'purchase_items.purchase_id')
@@ -157,7 +155,7 @@ $balance = (float) (DB::table('v_stock_onhand')
         $data = $query->orderBy('purchases.purchase_date', 'asc')->get();
 
         return response()->json([
-            'data' => $data
+            'data' => $data,
         ]);
     }
 
@@ -214,8 +212,10 @@ $balance = (float) (DB::table('v_stock_onhand')
     public function customer_ledger_report()
     {
         $customers = DB::table('customers')->select('id', 'customer_name')->get();
+
         return view('admin_panel.reporting.customer_ledger_report', compact('customers'));
     }
+
     public function fetch_customer_ledger(Request $request)
     {
         $customerId = $request->customer_id;
@@ -223,78 +223,63 @@ $balance = (float) (DB::table('v_stock_onhand')
         $end = $request->end_date;
         $customer = DB::table('customers')->where('id', $customerId)->first();
 
-        if (!$customer || !$start || !$end) {
+        if (! $customer || ! $start || ! $end) {
             return response()->json(['error' => 'Invalid parameters'], 400);
         }
 
-        $staticOpening = $customer->opening_balance ?? 0;
-
-        // 1. Calculate History BEFORE Start Date
-        // Sales Before
-        $salesBefore = DB::table('sales')
-            ->where('customer_id', $customerId)
+        // 1. Determine Opening Balance from CustomerLedger (Legacy + V2 Source of Truth)
+        $lastEntryBefore = \App\Models\CustomerLedger::where('customer_id', $customerId)
             ->where('created_at', '<', $start)
-            ->sum('total_net');
+            ->orderBy('id', 'desc')
+            ->first();
 
-        // Payments Before
-        $paymentsBefore = DB::table('customer_payments')
-            ->where('customer_id', $customerId)
-            ->where('payment_date', '<', $start)
-            ->sum('amount');
-        
-        // Dynamic Opening Balance for this period
-        $periodOpeningBalance = $staticOpening + $salesBefore - $paymentsBefore;
+        $periodOpeningBalance = $lastEntryBefore
+            ? $lastEntryBefore->closing_balance
+            : ($customer->opening_balance ?? 0);
 
-        // 2. Fetch Transactions WITHIN Date Range
-        $endDateTime = $end . " 23:59:59";
-
-        $sales = DB::table('sales')
-            ->where('customer_id', $customerId)
+        // 2. Fetch Ledger Entries in Range
+        $endDateTime = $end." 23:59:59";
+        $entries = \App\Models\CustomerLedger::where('customer_id', $customerId)
             ->whereBetween('created_at', [$start, $endDateTime])
-            ->get()
-            ->map(function ($s) {
-                return [
-                    'date' => $s->created_at,
-                    'invoice' => "INV-" . $s->id,
-                    'description' => $s->sale_status == 'posted' ? "Sale (Posted)" : "Sale (Draft)",
-                    'debit' => $s->total_net,
-                    'credit' => 0,
-                    'type' => 'sale',
-                    'ref_id' => $s->id
-                ];
-            });
+            ->orderBy('id', 'asc')
+            ->get();
 
-        $payments = DB::table('customer_payments')
-            ->where('customer_id', $customerId)
-            ->whereBetween('payment_date', [$start, $endDateTime])
-            ->get()
-            ->map(function ($p) {
-                return [
-                    'date' => $p->payment_date,
-                    'invoice' => "-",
-                    'description' => $p->note ?? "Payment Received",
-                    'debit' => 0,
-                    'credit' => $p->amount,
-                    'type' => 'payment',
-                    'ref_id' => $p->id
-                ];
-            });
+        // 3. Process Entries
+        $transactions = $entries->map(function ($row) {
+            // Delta Logic for Dr/Cr
+            $diff = $row->closing_balance - $row->previous_balance;
+            $debit = 0;
+            $credit = 0;
 
-        // Merge and Sort
-        $transactions = $sales->merge($payments)->sortBy('date')->values()->all();
+            if ($diff > 0.001) {
+                $debit = abs($diff);
+            } elseif ($diff < -0.001) {
+                $credit = abs($diff);
+            }
 
-        // 3. Calculate Running Balance
-        $balance = $periodOpeningBalance;
-        foreach ($transactions as $key => $t) {
-            $balance = $balance + $t['debit'] - $t['credit'];
-            $transactions[$key]['balance'] = $balance;
-        }
+            // Extract Ref/Invoice from Description
+            $ref = '-';
+            if (preg_match('/Invoice #(\S+)/', $row->description, $matches)) {
+                $ref = $matches[1];
+            } elseif (preg_match('/Receipt #(\S+)/', $row->description, $matches)) {
+                $ref = $matches[1];
+            }
+
+            return [
+                'date' => $row->created_at->format('Y-m-d H:i'),
+                'invoice' => $ref, 
+                'description' => $row->description,
+                'debit' => $debit,
+                'credit' => $credit,
+                'balance' => $row->closing_balance,
+            ];
+        });
 
         return response()->json([
             'customer' => $customer,
             'opening_balance' => $periodOpeningBalance,
             'transactions' => $transactions,
-            'report_period' => "$start to $end"
+            'report_period' => "$start to $end",
         ]);
     }
 }

@@ -18,12 +18,15 @@ class Kernel extends ConsoleKernel
 
         // Mark absent employees automatically every night at 11:00 PM
         $schedule->command('attendance:mark-absent')->dailyAt('23:00');
-        
+
         // Sync device time daily to prevent drift
         $schedule->command('device:sync-time')->dailyAt('04:00');
 
         // Generate monthly payrolls on the 25th of every month
         $schedule->command('payroll:generate-monthly')->monthlyOn(25, '00:00');
+
+        // Check for overdue customer debts daily at 9 AM
+        $schedule->command('debt:check')->dailyAt('09:00');
     }
 
     /**

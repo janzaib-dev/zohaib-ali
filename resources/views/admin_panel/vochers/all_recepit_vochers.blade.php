@@ -18,52 +18,47 @@
                         <table id="example" class="table table-bordered table-striped">
                             <thead class="table-dark">
                                 <tr>
-                                    <th>ID</th>
+                                    <th>#</th>
                                     <th>Voucher No</th>
-                                    <th>Receipt Date</th>
-                                    <th>Entry Date</th>
+                                    <th>Date</th>
                                     <th>Type</th>
-                                    <th>Party</th>
-                                    <th>Reference No</th>
+                                    <th>Party / Account</th>
                                     <th>Remarks</th>
-                                    <th>Amount</th>
-                                    <th>Total Amount</th>
-                                    <th>Created At</th>
-                                    <th>Actions</th>
+                                    <th class="text-end">Amount</th>
+                                    <th class="text-center">Status</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($receipts as $item)
-                                    @php
-                                        // JSON decode for fields that are stored as arrays
-                                        $amounts = json_decode($item->amount, true);
-                                        $amount = is_array($amounts)
-                                            ? (float) ($amounts[0] ?? 0)
-                                            : (float) $item->amount;
-
-                                        $refs = json_decode($item->reference_no, true);
-                                        $reference = is_array($refs) ? implode(', ', $refs) : $item->reference_no;
-
-                                        $narrations = json_decode($item->narration_id, true);
-                                        $narration = is_array($narrations)
-                                            ? implode(', ', $narrations)
-                                            : $item->narration_id;
-                                    @endphp
                                     <tr>
-                                        <td>{{ $item->id }}</td>
-                                        <td>{{ $item->rvid }}</td>
-                                        <td>{{ $item->receipt_date }}</td>
-                                        <td>{{ $item->entry_date }}</td>
-                                        <td>{{ $item->type_label }}</td>
-                                        <td>{{ $item->party_name }}</td>
-                                        <td>{{ $reference }}</td>
-                                        <td>{{ $item->remarks }}</td>
-                                        <td>{{ number_format($amount, 2) }}</td>
-                                        <td>{{ number_format((float) $item->total_amount, 2) }}</td>
-                                        <td>{{ $item->created_at }}</td>
+                                        <td>{{ $loop->iteration }}</td>
+                                        <td>
+                                            <span class="fw-bold text-primary">{{ $item->voucher_no }}</span>
+                                        </td>
+                                        <td>{{ $item->date ? $item->date->format('d-M-Y') : '-' }}</td>
+                                        <td>
+                                            <span
+                                                class="badge bg-info text-dark">{{ ucfirst($item->payment_from ?? 'Receipt') }}</span>
+                                        </td>
+                                        <td>
+                                            <strong>{{ $item->party_name }}</strong>
+                                            <small class="d-block text-muted">{{ $item->type_label }}</small>
+                                        </td>
+                                        <td>{{ Str::limit($item->remarks, 50) }}</td>
+                                        <td class="text-end fw-bold">{{ number_format($item->total_amount, 2) }}</td>
+                                        <td class="text-center">
+                                            @if ($item->status == 'posted')
+                                                <span class="badge bg-success">Posted</span>
+                                            @elseif($item->status == 'draft')
+                                                <span class="badge bg-secondary">Draft</span>
+                                            @else
+                                                <span class="badge bg-danger">{{ ucfirst($item->status) }}</span>
+                                            @endif
+                                        </td>
                                         <td>
                                             <a href="{{ route('print', $item->id) }}" target="_blank"
-                                                class="btn btn-sm btn-danger">
+                                                class="btn btn-sm btn-outline-danger" title="Print">
                                                 <i class="bi bi-printer"></i>
                                             </a>
                                         </td>
