@@ -304,6 +304,7 @@ Route::middleware('auth')->group(function () {
     Route::get('vouchers/{type}', [VoucherController::class, 'index'])->name('vouchers.index');
     Route::post('vouchers/store', [VoucherController::class, 'store'])->name('vouchers.store');
     Route::get('/view_all', [AccountsHeadController::class, 'index'])->name('view_all');
+    Route::get('/accounts/{id}/ledger', [AccountsHeadController::class, 'showLedger'])->name('accounts.ledger');
 
     // Vouchers (Receipts, Payments, Expenses)
     Route::get('/all_recepit_vochers', [VoucherController::class, 'all_recepit_vochers'])->name('all_recepit_vochers');
@@ -325,8 +326,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/get-accounts-by-head/{id}', [VoucherController::class, 'getAccountsByHead']);
     Route::get('/getOpeningBalance/{type}/{id}', [VoucherController::class, 'getOpeningBalance']);
     Route::get('/party-list', [VoucherController::class, 'partyList'])->name('party.list');
+    Route::get('/receipt-vouchers/fetch', [VoucherController::class, 'fetchReceiptVouchers'])->name('receipt_vouchers.fetch');
 
-    Route::post('/accounts-head/store', [AccountsHeadController::class, 'storeHead'])->name('accounts_head.store');
+    Route::post('/accounts-head/store', [AccountsHeadController::class, 'storeHead'])->name('account-heads.store');
     Route::post('/accounts/store', [AccountsHeadController::class, 'storeAccount'])->name('accounts.store');
 
     // reporting routes
@@ -349,7 +351,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/modules/list', function () {
         return response()->json(\Illuminate\Support\Facades\DB::table('modules')->pluck('name'));
     })->name('modules.list');
-    // reports
+    
+    // Settings & Notifications
+    Route::get('/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
+    Route::post('/settings', [App\Http\Controllers\SettingsController::class, 'update'])->name('settings.update');
+    Route::get('/notifications', [App\Http\Controllers\SettingsController::class, 'notifications'])->name('notifications.index');
+    Route::get('/notifications/count', [App\Http\Controllers\SettingsController::class, 'notificationCount'])->name('notifications.count');
+    Route::post('/notifications/{id}/read', [App\Http\Controllers\SettingsController::class, 'markAsRead'])->name('notifications.read');
+    Route::post('/notifications/read-all', [App\Http\Controllers\SettingsController::class, 'markAllAsRead'])->name('notifications.readAll');
 
 });
 // Temporary debug route to inspect authenticated user's roles & permissions (remove after use)

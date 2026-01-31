@@ -1,4 +1,5 @@
 @extends('admin_panel.layout.app')
+
 @section('content')
     <style>
         .custom-table th {
@@ -6,9 +7,7 @@
             font-weight: 600;
             font-size: 14px;
             background: #212529;
-            /* dark header (bootstrap table-dark) */
             color: #fff;
-            /* sticky header */
             position: sticky;
             top: 0;
             z-index: 5;
@@ -20,40 +19,29 @@
             vertical-align: middle;
         }
 
-        /* Optional: Reduce font size for action buttons */
         .custom-table .btn-sm {
             padding: 2px 6px;
             font-size: 12px;
         }
 
-        /* Wrapper that controls scroll inside table only */
         .table-wrapper {
             height: 400px;
-            /* set jo height chahte ho (changeable) */
             overflow-y: auto;
             border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 6px;
         }
 
-        /* Keep header and body columns aligned */
         .custom-table {
             width: 100%;
             table-layout: fixed;
-            /* helps alignment when header is sticky */
             border-collapse: collapse;
         }
 
-        /* Make th background solid (sticky header can show transparent without this) */
         .custom-table thead th {
             background-clip: padding-box;
-        }
-
-        /* Optional: add subtle shadow to sticky header so it looks separated */
-        .custom-table thead th {
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
         }
 
-        /* Responsive: allow horizontal scroll on small screens */
         .table-responsive-fixed {
             overflow-x: auto;
         }
@@ -63,14 +51,13 @@
         <div class="main-content-inner">
             <div class="container mt-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h4 class="mb-0">Chart Of Accounts</h4>
+                    <h4 class="mb-0">Chart Of Accounts (V2)</h4>
                     @can('chart.of.accounts.create')
                         <div>
                             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">➕ Add New
                                 Account</button>
                             <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addHeadModal">➕ Add
-                                Chart
-                                Of Accounts</button>
+                                Category</button>
                         </div>
                     @endcan
                 </div>
@@ -94,29 +81,59 @@
                             <thead class="table-dark">
                                 <tr>
                                     <th style="width: 4%;">#</th>
-                                    <th style="width: 12%;">Account Code</th>
-                                    <th style="width: 14%;">Expense Head</th>
-                                    <th style="width: 22%;">Account Title</th>
-                                    <th style="width: 10%;">Type</th>
-                                    <th style="width: 12%;">Opening Balance</th>
-                                    <th style="width: 14%;">Status</th>
+                                    <th style="width: 10%;">Code</th>
+                                    <th style="width: 15%;">Head / Group</th>
+                                    <th style="width: 20%;">Account Title</th>
+                                    <th style="width: 8%;">Type</th>
+                                    <th style="width: 12%;">Balance</th>
+                                    <th style="width: 8%;">Status</th>
+                                    <th style="width: 10%;">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($accounts as $acc)
                                     <tr>
                                         <td>{{ $loop->iteration }}</td>
-                                        <td>{{ $acc->account_code }}</td>
-                                        <td>{{ $acc->head->name ?? '-' }}</td>
+                                        <td>
+                                            <span
+                                                class="badge bg-light text-dark border">{{ $acc->account_code ?? 'N/A' }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold">{{ $acc->head->name ?? '-' }}</span>
+                                            @if ($acc->head && $acc->head->parent_id)
+                                                <small
+                                                    class="text-muted d-block">({{ $acc->head->parent->name ?? '' }})</small>
+                                            @endif
+                                        </td>
                                         <td>{{ $acc->title }}</td>
-                                        <td>{{ $acc->type }}</td>
-                                        <td>{{ number_format($acc->opening_balance, 2) }}</td>
+                                        <td>
+                                            @if ($acc->type == 'Debit')
+                                                <span class="badge bg-primary">Debit</span>
+                                            @else
+                                                <span class="badge bg-warning text-dark">Credit</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <span
+                                                class="{{ $acc->current_balance < 0 ? 'text-danger' : 'text-success' }} fw-bold">
+                                                {{ number_format(abs($acc->current_balance), 2) }}
+                                                <small class="text-muted" style="font-size: 0.7em;">
+                                                    {{ $acc->current_balance >= 0 ? 'Dr' : 'Cr' }}
+                                                </small>
+                                            </span>
+                                        </td>
                                         <td>
                                             @if ($acc->status)
                                                 <span class="badge bg-success">Active</span>
                                             @else
                                                 <span class="badge bg-danger">Inactive</span>
                                             @endif
+                                        </td>
+                                        <td>
+                                            <a href="{{ route('accounts.ledger', $acc->id) }}"
+                                                class="btn btn-sm btn-info text-white" title="View Ledger">
+                                                <i class="bi bi-eye"></i> Ledger
+                                            </a>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -161,41 +178,41 @@
                             </div>
                             <div class="mb-3">
                                 <label>Opening Balance</label>
-                                <input type="number" name="opening_balance" step="0.01" value="0"
-                                    class="form-control" required>
-                            </div>
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="status" checked>
-                                <label class="form-check-label">Active</label>
+                                <input type="number" step="0.01" name="opening_balance" class="form-control"
+                                    value="0">
                             </div>
                         </div>
                         <div class="modal-footer">
-                            <button type="submit" class="btn btn-success">Add Account</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary">Save Account</button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            <!-- Add Head of Expense Modal -->
-            <div class="modal fade" id="addHeadModal" tabindex="-1" aria-labelledby="addHeadModalLabel" aria-hidden="true">
+            <!-- Add Head Modal -->
+            <div class="modal fade" id="addHeadModal" tabindex="-1" aria-labelledby="addHeadLabel" aria-hidden="true">
                 <div class="modal-dialog">
-                    <form class="modal-content" action="{{ route('accounts_head.store') }}" method="POST">
+                    <form class="modal-content" action="{{ route('account-heads.store') }}" method="POST">
                         @csrf
                         <div class="modal-header">
-                            <h5 class="modal-title" id="addHeadModalLabel">Add Head of Expense/Income</h5>
+                            <h5 class="modal-title" id="addHeadLabel">Add New Category</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
                             <div class="mb-3">
-                                <label>New Head Name</label>
-                                <input type="text" name="name" class="form-control"
-                                    placeholder="e.g., Expense, Bank, Assets" required>
+                                <label>Head Name</label>
+                                <input type="text" name="name" class="form-control" required>
                             </div>
                         </div>
                         <div class="modal-footer">
-                            <button type="submit" class="btn btn-secondary">Add Head</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary">Save Head</button>
                         </div>
                     </form>
                 </div>
             </div>
-        @endsection
+
+        </div>
+    </div>
+@endsection

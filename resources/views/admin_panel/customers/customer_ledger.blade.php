@@ -1,85 +1,157 @@
 @extends('admin_panel.layout.app')
 
 @section('content')
+    <style>
+        .ledger-card {
+            border-top: 3px solid #0d6efd;
+        }
 
-<div class="main-content">
-    <div class="main-content-inner">
-        <div class="container-fluid">
+        .table-ledger th {
+            background-color: #212529;
+            color: #fff;
+        }
 
-            <div class="page-header row">
-                <div class="page-title col-lg-6">
-                    <h4>Customer Ledger</h4>
-                    <h6>View Customer Balances</h6>
+        .balance-positive {
+            color: #198754;
+            font-weight: 700;
+        }
+
+        .balance-neutral {
+            color: #6c757d;
+            font-weight: 700;
+        }
+    </style>
+
+    <div class="main-content">
+        <div class="main-content-inner">
+            <div class="container-fluid mt-4">
+
+                <!-- Page Header -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h4 class="mb-1 text-primary"><i class="bi bi-people"></i> Customer Ledger (Statement)</h4>
+                        <p class="text-muted mb-0">Track all customer transactions, invoices, and receipts.</p>
+                    </div>
+                    <div>
+                        <a href="{{ route('view_all') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i>
+                            Back to Accounts</a>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm ledger-card">
+                    <div class="card-body">
+
+                        <!-- Filters -->
+                        <form method="GET" action="{{ route('customers.ledger') }}"
+                            class="row g-3 mb-4 p-3 bg-light rounded border">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Select Customer</label>
+                                <select name="customer_id" class="form-control select2">
+                                    <option value="">-- All Customers --</option>
+                                    @foreach ($customers as $cust)
+                                        <option value="{{ $cust->id }}"
+                                            {{ request('customer_id') == $cust->id ? 'selected' : '' }}>
+                                            {{ $cust->customer_name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">From Date</label>
+                                <input type="date" name="from_date" value="{{ request('from_date') }}"
+                                    class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">To Date</label>
+                                <input type="date" name="to_date" value="{{ request('to_date') }}" class="form-control">
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <div class="d-flex w-100 gap-2">
+                                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-filter"></i>
+                                        Filter</button>
+                                    <a href="{{ route('customers.ledger') }}" class="btn btn-outline-secondary"><i
+                                            class="bi bi-arrow-clockwise"></i></a>
+                                </div>
+                            </div>
+                        </form>
+
+                        <!-- Ledger Table -->
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped table-hover table-ledger" id="ledger-table">
+                                <thead>
+                                    <tr>
+                                        <th width="5%">#</th>
+                                        <th width="12%">Date</th>
+                                        <th width="18%">Customer</th>
+                                        <th width="30%">Description / Particulars</th>
+                                        <th width="10%" class="text-end">Debit (Dr)</th>
+                                        <th width="10%" class="text-end">Credit (Cr)</th>
+                                        <th width="15%" class="text-end">Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($CustomerLedgers as $key => $ledger)
+                                        @php
+                                            // Determine Debit vs Credit based on Balance Change
+                                            // Logic: Closing = Previous + Debit - Credit
+                                            // Delta = Closing - Previous
+                                            // If Delta > 0, it's Debit (Sale). If Delta < 0, it's Credit (Receipt).
+
+                                            $delta = $ledger->closing_balance - $ledger->previous_balance;
+                                            $debit = 0;
+                                            $credit = 0;
+
+                                            // Precision tolerance for float
+                                            if ($delta > 0.01) {
+                                                $debit = abs($delta);
+                                            } elseif ($delta < -0.01) {
+                                                $credit = abs($delta);
+                                            }
+
+                                            // Use direct values if available in future, but for now calculate.
+                                            // Fallback: If opening balance row (rarely stored as row), handle separate.
+
+                                        @endphp
+                                        <tr>
+                                            <td>{{ $loop->iteration }}</td>
+                                            <td>{{ $ledger->created_at->format('d-M-Y') }}</td>
+                                            <td class="fw-bold">{{ $ledger->customer->customer_name ?? 'N/A' }}</td>
+                                            <td>
+                                                {{ $ledger->description }}
+                                                @if ($ledger->description == 'Opening Balance')
+                                                    <span class="badge bg-secondary">Op</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-end text-success">
+                                                {{ $debit > 0 ? number_format($debit, 2) : '-' }}
+                                            </td>
+                                            <td class="text-end text-danger">
+                                                {{ $credit > 0 ? number_format($credit, 2) : '-' }}
+                                            </td>
+                                            <td class="text-end fw-bold">
+                                                {{ number_format($ledger->closing_balance, 2) }}
+                                                <small class="text-muted">Dr</small>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
                 </div>
             </div>
-
-            <div class="card mt-3">
-                <div class="card-body">
-                    <table id="default-datatable" class="table ">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Customer</th>
-                                <th>Opening Balance</th>
-                                <th>Previous Balance</th>
-                                <th>Closing Balance</th>
-                                <th>Created At</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($CustomerLedgers as $key => $ledger)
-                            <tr>
-                                <td>{{ $key+1 }}</td>
-                                <td>{{ $ledger->customer->customer_name ?? 'N/A' }}</td>
-                                <td>{{ number_format($ledger->opening_balance, 2) }}</td>
-                                <td>{{ number_format($ledger->previous_balance, 2) }}</td>
-                                <td>{{ number_format($ledger->closing_balance, 2) }}</td>
-                                <td>{{ $ledger->created_at->format('d-m-Y') }}</td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
         </div>
     </div>
-</div>
-
 @endsection
 
 @push('scripts')
-<!-- DataTable CSS -->
- <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-
- <!-- jQuery -->
- <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
- <!-- DataTable JS -->
- <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
- <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-
- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
- <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
- <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
- <script src="{{ asset('assets/js/mycode.js') }}"> </script>
-<script>
-    $('.datanew').DataTable();
-</script>
-<script>
-     $(document).ready(function() {
-         $('#default-datatable').DataTable({
-             "pageLength": 10,
-             "lengthMenu": [5, 10, 25, 50, 100],
-             "order": [
-                 [0, 'desc']
-             ],
-             "language": {
-                 "search": "Search Category:",
-                 "lengthMenu": "Show _MENU_ entries"
-             }
-         });
-     });
- </script>
+    <script>
+        $(document).ready(function() {
+            // Init Select2 if available
+            if ($('.select2').length > 0) {
+                $('.select2').select2();
+            }
+        });
+    </script>
 @endpush

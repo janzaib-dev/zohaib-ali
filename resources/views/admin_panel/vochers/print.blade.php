@@ -283,16 +283,24 @@
 
             <table style="width:100%; border-collapse:collapse; font-size:14px;">
                 <tr>
-                    <td>Previous Balance.</td>
-                    <td style="color:#6b0f8a;">>>> {{ number_format($previousBalance, 2) }}</td>
+                    <td>Previous Balance (Dr/Cr)</td>
+                    <td style="color:#6b0f8a; text-align:right;">
+                        {{ number_format(abs($previousBalance), 2) }}
+                        <span style="font-size:0.8em">{{ $previousBalance >= 0 ? 'Dr' : 'Cr' }}</span>
+                    </td>
                 </tr>
                 <tr>
-                    <td>Total Payment Received. (-)</td>
-                    <td style="color:#6b0f8a;">>>> {{ number_format($voucher->total_amount, 2) }}</td>
+                    <td>Total Payment Received (Cr) (+)</td>
+                    <td style="color:#6b0f8a; text-align:right;">
+                        {{ number_format($voucher->total_amount, 2) }} <span style="font-size:0.8em">Cr</span>
+                    </td>
                 </tr>
                 <tr>
-                    <td>Amount Payable.</td>
-                    <td style="color:#0b5a2b;">>>> {{ number_format($amountPayable, 2) }}</td>
+                    <td><strong>Balance Due (Dr)</strong></td>
+                    <td style="color:#0b5a2b; text-align:right; font-weight:bold;">
+                        {{ number_format(abs($amountPayable), 2) }}
+                        <span style="font-size:0.8em">{{ $amountPayable >= 0 ? 'Dr' : 'Cr' }}</span>
+                    </td>
                 </tr>
             </table>
 

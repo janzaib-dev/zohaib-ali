@@ -27,10 +27,9 @@ class VoucherController extends Controller
         return view('admin_panel.accounts.expenses', [
             'vouchers' => $vouchers,
             'type' => $type,
-            'narration' => $narration
+            'narration' => $narration,
         ]);
     }
-
 
     public function store(Request $request)
     {
@@ -61,7 +60,6 @@ class VoucherController extends Controller
         return back()->with('success', 'Vouchers saved successfully!');
     }
 
-
     /**
      * Display the specified resource.
      */
@@ -69,6 +67,7 @@ class VoucherController extends Controller
     {
         //
     }
+
     public function receipt($id)
     {
         $voucher = Voucher::findOrFail($id);
@@ -77,8 +76,8 @@ class VoucherController extends Controller
         $customerAddress = '-';
         $closingBalance = 0;
 
-        //yahan accounts bhi show karwayn all heads 
-        // bank cash  
+        // yahan accounts bhi show karwayn all heads
+        // bank cash
         if ($voucher->type === 'Main Customer' && $voucher->mainCustomer) {
             $customerName = $voucher->mainCustomer->customer_name;
             $customerAddress = $voucher->mainCustomer->address;
@@ -91,9 +90,6 @@ class VoucherController extends Controller
 
         return view('admin_panel.accounts.receipt', compact('voucher', 'customerName', 'customerAddress', 'closingBalance'));
     }
-
-
-
 
     /**
      * Show the form for editing the specified resource.
@@ -121,47 +117,128 @@ class VoucherController extends Controller
 
     public function all_recepit_vochers()
     {
-        $receipts = \App\Models\ReceiptsVoucher::orderBy('id', 'DESC')->get();
+        // V2: Fetch from VoucherMaster where type is receipt
+        $receipts = \App\Models\VoucherMaster::where('voucher_type', \App\Models\VoucherMaster::TYPE_RECEIPT)
+            ->with('party') // Eager load the polymorphic party
+            ->orderBy('id', 'DESC')
+            ->get();
 
         foreach ($receipts as $voucher) {
-            $partyName = '-';
             $typeLabel = '-';
+            $partyName = '-';
 
-            // 🧩 Check if type is numeric → account-based
-            if (is_numeric($voucher->type)) {
-                $accountHead = DB::table('account_heads')->where('id', $voucher->type)->first();
-                $account = DB::table('accounts')->where('id', $voucher->party_id)->first();
-
-                $typeLabel = $accountHead->name ?? 'Account';
-                $partyName = $account->title ?? '-';
-            } elseif ($voucher->type === 'vendor') {
-                $vendor = DB::table('vendors')->where('id', $voucher->party_id)->first();
-                $typeLabel = 'Vendor';
-                $partyName = $vendor->name ?? '-';
-            } elseif ($voucher->type === 'customer') {
-                $customer = DB::table('customers')->where('id', $voucher->party_id)->first();
-                $typeLabel = 'Customer';
-                $partyName = $customer->customer_name ?? '-';
-            } elseif ($voucher->type === 'walkin') {
-                $walkin = DB::table('customers')
-                    ->where('id', $voucher->party_id)
-                    ->where('customer_type', 'Walking Customer')
-                    ->first();
-                $typeLabel = 'Walk-in';
-                $partyName = $walkin->customer_name ?? '-';
+            if ($voucher->party) {
+                // Determine Label from Class Name
+                $class = get_class($voucher->party);
+                if (str_contains($class, 'Customer')) {
+                    $typeLabel = 'Customer';
+                    $partyName = $voucher->party->customer_name ?? $voucher->party->name ?? '-';
+                } elseif (str_contains($class, 'Vendor')) {
+                    $typeLabel = 'Vendor';
+                    $partyName = $voucher->party->name ?? '-';
+                } elseif (str_contains($class, 'Account')) {
+                    $typeLabel = 'Account';
+                    $partyName = $voucher->party->title ?? '-';
+                } else {
+                    $typeLabel = class_basename($class);
+                    $partyName = $voucher->party->name ?? '-';
+                }
             }
 
-            // Attach new properties to the object
+            // Attach for View
             $voucher->type_label = $typeLabel;
             $voucher->party_name = $partyName;
+
+            // Map old fields to new fields for View compatibility (or update View)
+            // View uses: rvid, receipt_date, entry_date
+            $voucher->rvid = $voucher->voucher_no;
+            $voucher->receipt_date = $voucher->date->format('Y-m-d');
+            $voucher->entry_date = $voucher->created_at->format('Y-m-d');
         }
 
         return view('admin_panel.vochers.all_recepit_vochers', compact('receipts'));
     }
 
-
     public function print($id)
     {
+        \Log::info("Print Voucher Requested. ID: " . $id);
+
+        // 1. Try V2 VoucherMaster First
+        $voucherV2 = \App\Models\VoucherMaster::find($id);
+
+        if ($voucherV2) {
+            \Log::info("Found V2 Voucher: " . $voucherV2->voucher_no);
+
+            // Lazy load relationships to avoid eager loading weirdness
+            $voucherV2->load(['details.account', 'party']);
+
+            // -- Adapter for V2 to V1 View --
+            $voucher = (object) [
+                'rvid' => $voucherV2->voucher_no,
+                'receipt_date' => $voucherV2->date->format('Y-m-d'),
+                'total_amount' => $voucherV2->amount,
+                'remarks' => $voucherV2->remarks,
+                'type' => 'unknown', // Default
+            ];
+            
+            if (!isset($voucher->total_amount)) $voucher->total_amount = $voucherV2->total_amount;
+
+            $rows = [];
+            foreach ($voucherV2->details as $detail) {
+                $rows[] = [
+                    'narration' => $detail->narration,
+                    'reference' => '-',
+                    'account_head' => $detail->account->account_head_id ?? '-', 
+                    'account_name' => $detail->account->title ?? '-',
+                    'account_code' => $detail->account->account_code ?? '-',
+                    'amount' => $detail->credit > 0 ? $detail->credit : $detail->debit,
+                ];
+            }
+
+            // Party Logic
+            $party = $voucherV2->party;
+            $previousBalance = 0;
+
+            if ($party) {
+                if ($party instanceof \App\Models\Customer) {
+                     $voucher->type = ($party->customer_type == 'Walking Customer') ? 'walkin' : 'customer';
+                     
+                     // Ensure fields expected by view exist
+                     $party->name = $party->customer_name; // Fallback
+                     $party->address = $party->address ?? '-';
+                     $party->mobile = $party->mobile ?? '-';
+                     
+                     $previousBalance = \App\Models\CustomerLedger::where('customer_id', $party->id)
+                        ->where('created_at', '<', $voucherV2->created_at)
+                        ->orderBy('id', 'desc')
+                        ->value('closing_balance') ?? ($party->opening_balance ?? 0);
+
+                } elseif ($party instanceof \App\Models\Vendor) {
+                     $voucher->type = 'vendor';
+                     $party->address = $party->address ?? '-';
+                     $party->phone = $party->phone ?? '-'; // View uses phone
+
+                     $previousBalance = \App\Models\VendorLedger::where('vendor_id', $party->id)
+                        ->where('created_at', '<', $voucherV2->created_at)
+                        ->orderBy('id', 'desc')
+                        ->value('closing_balance') ?? ($party->opening_balance ?? 0);
+
+                } elseif ($party instanceof \App\Models\Account) {
+                    $voucher->type = '1'; // Numeric triggers Account Block
+                    $party->name = $party->title;
+                    $party->phone = $party->account_code;
+                    $party->head_name = $party->accountHead->name ?? 'Account';
+                    
+                    $previousBalance = $party->opening_balance; 
+                }
+            } else {
+                $previousBalance = 0;
+            }
+
+            return view('admin_panel.vochers.print', compact('voucher', 'rows', 'party', 'previousBalance'));
+        }
+
+        // 2. Fallback to V1 Legacy (Original Code)
         $voucher = ReceiptsVoucher::findOrFail($id);
 
         // Decode JSON arrays
@@ -178,7 +255,7 @@ class VoucherController extends Controller
             $ref = $references[$index] ?? null;
             $accountHead = DB::table('account_heads')->where('id', $accountHeads[$index] ?? null)->value('name');
             $account = DB::table('accounts')->where('id', $accounts[$index] ?? null)->first();
-            $amount = (float)($amounts[$index] ?? 0);
+            $amount = (float) ($amounts[$index] ?? 0);
 
             $rows[] = [
                 'narration' => $narration,
@@ -200,7 +277,7 @@ class VoucherController extends Controller
             $account = DB::table('accounts')->where('id', $voucher->party_id)->first();
 
             if ($account) {
-                $party = (object)[
+                $party = (object) [
                     'name' => $account->title ?? '—',
                     'address' => '—',
                     'phone' => $account->account_code ?? '—',
@@ -235,39 +312,38 @@ class VoucherController extends Controller
         return view('admin_panel.vochers.print', compact('voucher', 'rows', 'party', 'previousBalance'));
     }
 
-     public function getAccountsByHead($headId)
+    public function getAccountsByHead($headId)
     {
         $accounts = Account::where('head_id', $headId)->where('status', 1)->get();
+
         // echo "<pre>";
         // print_r($accounts);
         // echo "</pre>";
         // dd();
         return response()->json($accounts);
     }
-public function getOpeningBalance($type, $id)
-{
-    if ($type === 'customer' || $type === 'walkin') {
-        $customer = Customer::find($id);
-        // echo "<pre>";
-        // print_r($customer);
-        // echo "<pre>";
-        // dd();
+
+    public function getOpeningBalance($type, $id)
+    {
+        if ($type === 'customer' || $type === 'walkin') {
+            $customer = Customer::find($id);
+
+            // echo "<pre>";
+            // print_r($customer);
+            // echo "<pre>";
+            // dd();
+            return response()->json([
+                'opening_balance' => $customer->opening_balance ?? 0,
+            ]);
+        }
+
+        // Account case
+        $account = AccountHead::find($id);
+
         return response()->json([
-            'opening_balance' => $customer->opening_balance ?? 0
+            'opening_balance' => $account->opening_balance ?? 0,
         ]);
     }
-
-    // Account case
-    $account = AccountHead::find($id);
-    return response()->json([
-        'opening_balance' => $account->opening_balance ?? 0
-    ]);
-}
-
-
-
-
-
 
     public function recepit_vochers()
     {
@@ -285,11 +361,10 @@ public function getOpeningBalance($type, $id)
 
         // Next ID generate karna
         $nextId = $lastVoucher ? $lastVoucher->id + 1 : 1;
-        $nextRvid = 'RVID-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        $nextRvid = 'RVID-'.str_pad($nextId, 3, '0', STR_PAD_LEFT);
 
         return view('admin_panel.vochers.reciepts_vouchers', compact('narrations', 'AccountHeads', 'nextRvid'));
     }
-
 
     public function store_rec_vochers(Request $request)
     {
@@ -305,7 +380,7 @@ public function getOpeningBalance($type, $id)
                 $manualText = $request->narration_text[$index] ?? null;
                 $manualType = $request->narration_type_text[$index] ?? 'Manual';
 
-                if (empty($narrId) && !empty($manualText)) {
+                if (empty($narrId) && ! empty($manualText)) {
                     // Auto expense_head set based on voucher type
                     $expenseHead = 'Receipts Voucher';
                     if (stripos($manualType, 'Receipt') !== false || $request->voucher_type == 'receipt') {
@@ -314,75 +389,74 @@ public function getOpeningBalance($type, $id)
 
                     $new = \App\Models\Narration::create([
                         'expense_head' => $expenseHead,
-                        'narration'    => $manualText,
+                        'narration' => $manualText,
                     ]);
 
-                    $narrationIds[] = (string)$new->id; // store as string → ["7"]
+                    $narrationIds[] = (string) $new->id; // store as string → ["7"]
                 } else {
-                    $narrationIds[] = (string)$narrId; // force string format
+                    $narrationIds[] = (string) $narrId; // force string format
                 }
             }
 
-
             $voucherData = [
-                'rvid'             => $rvid,
-                'receipt_date'     => $request->receipt_date,
-                'entry_date'       => $request->entry_date,
-                'type'             => $request->vendor_type,
-                'party_id'         => $request->vendor_id,
-                'tel'              => $request->tel,
-                'remarks'          => $request->remarks,
+                'rvid' => $rvid,
+                'receipt_date' => $request->receipt_date,
+                'entry_date' => $request->entry_date,
+                'type' => $request->vendor_type,
+                'party_id' => $request->vendor_id,
+                'tel' => $request->tel,
+                'remarks' => $request->remarks,
 
                 'narration_id' => json_encode($narrationIds),
-                'reference_no'     => json_encode($request->reference_no),
+                'reference_no' => json_encode($request->reference_no),
                 'row_account_head' => json_encode($request->row_account_head),
-                'row_account_id'   => json_encode($request->row_account_id),
-                'discount_value'   => json_encode($request->discount_value),
+                'row_account_id' => json_encode($request->row_account_id),
+                'discount_value' => json_encode($request->discount_value),
                 // 'kg'               => json_encode($request->kg),
-                'rate'             => json_encode($request->rate),
-                'amount'           => json_encode($request->amount),
-                'total_amount'     => $request->total_amount,
-                'processed'        => true,
+                'rate' => json_encode($request->rate),
+                'amount' => json_encode($request->amount),
+                'total_amount' => $request->total_amount,
+                'processed' => true,
             ];
 
             ReceiptsVoucher::create($voucherData);
 
             // ✅ Ledger update logic
-            $amount = (float)$request->total_amount;
+            $amount = (float) $request->total_amount;
 
             if ($request->vendor_type === 'vendor') {
                 $ledger = VendorLedger::where('vendor_id', $request->vendor_id)->latest()->first();
 
                 if ($ledger) {
                     $ledger->previous_balance = $ledger->closing_balance;
-                    $ledger->closing_balance  = $ledger->closing_balance - $amount;
+                    $ledger->closing_balance = $ledger->closing_balance - $amount;
                     $ledger->save();
                 } else {
                     VendorLedger::create([
-                        'vendor_id'        => $request->vendor_id,
+                        'vendor_id' => $request->vendor_id,
                         'admin_or_user_id' => auth()->id(),
-                        'date'             => now(),
-                        'description'      => "Receipt Voucher #$rvid",
-                        'opening_balance'  => 0,
-                        'debit'            => 0,
-                        'credit'           => $amount,
+                        'date' => now(),
+                        'description' => "Receipt Voucher #$rvid",
+                        'opening_balance' => 0,
+                        'debit' => 0,
+                        'credit' => $amount,
                         'previous_balance' => 0,
-                        'closing_balance'  => -$amount,
+                        'closing_balance' => -$amount,
                     ]);
                 }
             } elseif ($request->vendor_type == 'customer') {
                 $ledger = CustomerLedger::where('customer_id', $request->vendor_id)->latest()->first();
                 if ($ledger) {
                     $ledger->previous_balance = $ledger->closing_balance;
-                    $ledger->closing_balance  = $ledger->closing_balance - $amount;
+                    $ledger->closing_balance = $ledger->closing_balance - $amount;
                     $ledger->save();
                 } else {
                     CustomerLedger::create([
-                        'customer_id'      => $request->vendor_id,
+                        'customer_id' => $request->vendor_id,
                         'admin_or_user_id' => auth()->id(),
                         'previous_balance' => 0,
-                        'opening_balance'  => 0,
-                        'closing_balance'  => -$amount,
+                        'opening_balance' => 0,
+                        'closing_balance' => -$amount,
                     ]);
                 }
             } else {
@@ -395,36 +469,41 @@ public function getOpeningBalance($type, $id)
             }
 
             // ✅ Har case me row_account_id ka + hona zaroori hai
-          // ✅ Row account posting (Debit / Credit aware)
-if ($request->row_account_id && $request->amount) {
-    foreach ($request->row_account_id as $index => $accId) {
+            // ✅ Row account posting (Debit / Credit aware)
+            if ($request->row_account_id && $request->amount) {
+                foreach ($request->row_account_id as $index => $accId) {
 
-        $rowAmount = isset($request->amount[$index])
-            ? (float)$request->amount[$index]
-            : 0;
+                    $rowAmount = isset($request->amount[$index])
+                        ? (float) $request->amount[$index]
+                        : 0;
 
-        if ($rowAmount <= 0) continue;
+                    if ($rowAmount <= 0) {
+                        continue;
+                    }
 
-        $rowAccount = Account::find($accId);
-        if (! $rowAccount) continue;
+                    $rowAccount = Account::find($accId);
+                    if (! $rowAccount) {
+                        continue;
+                    }
 
-        if ($rowAccount->type === 'Debit') {
-            // Debit account → increase
-            $rowAccount->opening_balance += $rowAmount;
-        } else {
-            // Credit account → decrease
-            $rowAccount->opening_balance -= $rowAmount;
-        }
+                    if ($rowAccount->type === 'Debit') {
+                        // Debit account → increase
+                        $rowAccount->opening_balance += $rowAmount;
+                    } else {
+                        // Credit account → decrease
+                        $rowAccount->opening_balance -= $rowAmount;
+                    }
 
-        $rowAccount->save();
-    }
-}
-
+                    $rowAccount->save();
+                }
+            }
 
             DB::commit();
+
             return back()->with('success', 'Receipt Voucher saved successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return back()->with('error', $e->getMessage());
         }
     }
@@ -444,7 +523,7 @@ if ($request->row_account_id && $request->amount) {
 
         // Next ID generate karna
         $nextId = $lastVoucher ? $lastVoucher->id + 1 : 1;
-        $nextPVID = 'PVID-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        $nextPVID = 'PVID-'.str_pad($nextId, 3, '0', STR_PAD_LEFT);
 
         return view('admin_panel.vochers.payment_vochers.payment_vouchers', compact('narrations', 'AccountHeads', 'nextPVID'));
     }
@@ -457,17 +536,17 @@ if ($request->row_account_id && $request->amount) {
             $narrationIds = [];
 
             // Narration handling (assuming multiple narrations from table)
-            if($request->narration_id){
+            if ($request->narration_id) {
                 foreach ($request->narration_id as $index => $narrId) {
                     $manualText = $request->narration_text[$index] ?? null;
-                    if (empty($narrId) && !empty($manualText)) {
-                         $new = \App\Models\Narration::create([
+                    if (empty($narrId) && ! empty($manualText)) {
+                        $new = \App\Models\Narration::create([
                             'expense_head' => 'Payment voucher',
-                            'narration'    => $manualText,
+                            'narration' => $manualText,
                         ]);
-                        $narrationIds[] = (string)$new->id;
+                        $narrationIds[] = (string) $new->id;
                     } else {
-                        $narrationIds[] = (string)$narrId;
+                        $narrationIds[] = (string) $narrId;
                     }
                 }
             }
@@ -477,29 +556,29 @@ if ($request->row_account_id && $request->amount) {
             // Table = Destination (Party) -> vendor_type[], vendor_id[] (Multiple)
 
             $voucherData = [
-                'pvid'             => $pvid,
-                'receipt_date'     => $request->receipt_date,
-                'entry_date'       => $request->entry_date,
-                
+                'pvid' => $pvid,
+                'receipt_date' => $request->receipt_date,
+                'entry_date' => $request->entry_date,
+
                 // Store Header Source as single values
-                'row_account_head' => $request->header_account_head, 
-                'row_account_id'   => $request->header_account_id,
-                'remarks'          => $request->remarks,
+                'row_account_head' => $request->header_account_head,
+                'row_account_id' => $request->header_account_id,
+                'remarks' => $request->remarks,
 
                 // Store Table Destinations as JSON
-                'type'             => json_encode($request->vendor_type),
-                'party_id'         => json_encode($request->vendor_id), 
-                'narration_id'     => json_encode($narrationIds),
-                'reference_no'     => json_encode($request->reference_no),
-                'discount_value'   => json_encode($request->discount_value),
-                'rate'             => json_encode($request->rate),
-                'amount'           => json_encode($request->amount),
-                'total_amount'     => $request->total_amount,
+                'type' => json_encode($request->vendor_type),
+                'party_id' => json_encode($request->vendor_id),
+                'narration_id' => json_encode($narrationIds),
+                'reference_no' => json_encode($request->reference_no),
+                'discount_value' => json_encode($request->discount_value),
+                'rate' => json_encode($request->rate),
+                'amount' => json_encode($request->amount),
+                'total_amount' => $request->total_amount,
             ];
 
             PaymentVoucher::create($voucherData);
 
-            $totalAmount = (float)$request->total_amount;
+            $totalAmount = (float) $request->total_amount;
 
             /**
              * STEP 1: Header Source (Account) -> MINUS (Money Leaving)
@@ -518,59 +597,63 @@ if ($request->row_account_id && $request->amount) {
             if ($request->vendor_id && $request->amount) {
                 foreach ($request->vendor_id as $index => $partyId) {
                     $type = $request->vendor_type[$index] ?? null;
-                    $rowAmount = isset($request->amount[$index]) ? (float)$request->amount[$index] : 0;
+                    $rowAmount = isset($request->amount[$index]) ? (float) $request->amount[$index] : 0;
 
-                    if ($rowAmount <= 0) continue;
+                    if ($rowAmount <= 0) {
+                        continue;
+                    }
 
                     if ($type === 'vendor') {
                         $ledger = VendorLedger::where('vendor_id', $partyId)->latest()->first();
                         $bal = $ledger ? $ledger->closing_balance : 0;
                         VendorLedger::create([
-                            'vendor_id'        => $partyId,
+                            'vendor_id' => $partyId,
                             'admin_or_user_id' => auth()->id(),
-                            'date'             => now(),
-                            'description'      => "Payment Voucher #$pvid",
-                            'opening_balance'  => 0, // Not strictly tracking opening this way usually
-                            'debit'            => $rowAmount, // Payment to vendor is Debit (reduces liability)
-                            'credit'           => 0,
+                            'date' => now(),
+                            'description' => "Payment Voucher #$pvid",
+                            'opening_balance' => 0, // Not strictly tracking opening this way usually
+                            'debit' => $rowAmount, // Payment to vendor is Debit (reduces liability)
+                            'credit' => 0,
                             'previous_balance' => $bal,
-                            'closing_balance'  => $bal + $rowAmount, // Vendor Balance (Liability) decreases? Or is this logic implied "Paid Amount"?
+                            'closing_balance' => $bal + $rowAmount, // Vendor Balance (Liability) decreases? Or is this logic implied "Paid Amount"?
                             // Typically: Vendor Credit = Payable. Debit = Paid.
                             // If I pay a vendor, their Balance (Payable) decreases.
-                            // Here logic says `closing_balance + amount`. 
-                            // This implies we are INCREASING the balance? 
+                            // Here logic says `closing_balance + amount`.
+                            // This implies we are INCREASING the balance?
                             // Let's stick to previous logic to avoid breaking convention, assuming "Debit" increases the ledger value stored.
                         ]);
                     } elseif ($type === 'customer') {
                         $ledger = CustomerLedger::where('customer_id', $partyId)->latest()->first();
                         $bal = $ledger ? $ledger->closing_balance : 0;
                         CustomerLedger::create([
-                            'customer_id'      => $partyId,
+                            'customer_id' => $partyId,
                             'admin_or_user_id' => auth()->id(),
                             'previous_balance' => $bal,
-                            'opening_balance'  => 0,
-                            'closing_balance'  => $bal + $rowAmount, // Same logic as previous
+                            'opening_balance' => 0,
+                            'closing_balance' => $bal + $rowAmount, // Same logic as previous
                         ]);
                     } elseif ($type) {
-                         // Account ID in table
+                        // Account ID in table
                         $acc = Account::find($partyId);
-                        if($acc){
-                             $acc->opening_balance = $acc->opening_balance + $rowAmount;
-                             $acc->save();
+                        if ($acc) {
+                            $acc->opening_balance = $acc->opening_balance + $rowAmount;
+                            $acc->save();
                         }
                     }
                 }
             }
 
             DB::commit();
+
             return back()->with('success', 'Payment Voucher saved successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return back()->with('error', $e->getMessage());
         }
     }
 
-     public function all_Payment_vochers()
+    public function all_Payment_vochers()
     {
         foreach ($receipts as $voucher) {
             $partyName = '-';
@@ -626,7 +709,7 @@ if ($request->row_account_id && $request->amount) {
             $ref = $references[$index] ?? null;
             $accountHead = DB::table('account_heads')->where('id', $accountHeads[$index] ?? null)->value('name');
             $account = DB::table('accounts')->where('id', $accounts[$index] ?? null)->first();
-            $amount = (float)($amounts[$index] ?? 0);
+            $amount = (float) ($amounts[$index] ?? 0);
 
             $rows[] = [
                 'narration' => $narration,
@@ -648,7 +731,7 @@ if ($request->row_account_id && $request->amount) {
             $account = DB::table('accounts')->where('id', $voucher->party_id)->first();
 
             if ($account) {
-                $party = (object)[
+                $party = (object) [
                     'name' => $account->title ?? '—',
                     'address' => '—',
                     'phone' => $account->account_code ?? '—',
@@ -684,7 +767,6 @@ if ($request->row_account_id && $request->amount) {
 
         return view('admin_panel.vochers.payment_vochers.print', compact('voucher', 'rows', 'party', 'previousBalance'));
     }
-
 
     public function partyList(Request $request)
     {
@@ -728,7 +810,7 @@ if ($request->row_account_id && $request->amount) {
 
         // Next ID generate karna
         $nextId = $lastVoucher ? $lastVoucher->id + 1 : 1;
-        $nextRvid = 'EVID-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        $nextRvid = 'EVID-'.str_pad($nextId, 3, '0', STR_PAD_LEFT);
 
         return view('admin_panel.vochers.expense_vochers.expense_vouchers', compact('narrations', 'AccountHeads', 'nextRvid'));
     }
@@ -744,7 +826,7 @@ if ($request->row_account_id && $request->amount) {
                 $manualText = $request->narration_text[$index] ?? null;
                 $manualType = $request->narration_type_text[$index] ?? 'Manual';
 
-                if (empty($narrId) && !empty($manualText)) {
+                if (empty($narrId) && ! empty($manualText)) {
                     // Auto expense_head set based on voucher type
                     $expenseHead = 'Expense voucher';
                     if (stripos($manualType, 'Receipt') !== false || $request->voucher_type == 'receipt') {
@@ -753,38 +835,38 @@ if ($request->row_account_id && $request->amount) {
 
                     $new = \App\Models\Narration::create([
                         'expense_head' => $expenseHead,
-                        'narration'    => $manualText,
+                        'narration' => $manualText,
                     ]);
 
-                    $narrationIds[] = (string)$new->id; // store as string → ["7"]
+                    $narrationIds[] = (string) $new->id; // store as string → ["7"]
                 } else {
-                    $narrationIds[] = (string)$narrId; // force string format
+                    $narrationIds[] = (string) $narrId; // force string format
                 }
             }
             $voucherData = [
-                'evid'             => $evid,
-                'entry_date'       => $request->entry_date,
-                'type'             => $request->vendor_type,
-                'party_id'         => $request->vendor_id,
-                'tel'              => $request->tel,
-                'remarks'          => $request->remarks,
+                'evid' => $evid,
+                'entry_date' => $request->entry_date,
+                'type' => $request->vendor_type,
+                'party_id' => $request->vendor_id,
+                'tel' => $request->tel,
+                'remarks' => $request->remarks,
                 'narration_id' => json_encode($narrationIds),
                 'row_account_head' => json_encode($request->row_account_head),
-                'row_account_id'   => json_encode($request->row_account_id),
-                'amount'           => json_encode($request->amount),
-                'total_amount'     => $request->total_amount,
+                'row_account_id' => json_encode($request->row_account_id),
+                'amount' => json_encode($request->amount),
+                'total_amount' => $request->total_amount,
             ];
 
             ExpenseVoucher::create($voucherData);
 
-            $amount = (float)$request->total_amount;
+            $amount = (float) $request->total_amount;
 
             /**
              * STEP 1: Expense Accounts (row side) → PLUS
              */
             if ($request->row_account_id && $request->amount) {
                 foreach ($request->row_account_id as $index => $accId) {
-                    $rowAmount = isset($request->amount[$index]) ? (float)$request->amount[$index] : 0;
+                    $rowAmount = isset($request->amount[$index]) ? (float) $request->amount[$index] : 0;
 
                     if ($rowAmount > 0) {
                         $rowAccount = Account::find($accId);
@@ -803,34 +885,34 @@ if ($request->row_account_id && $request->amount) {
                 $ledger = VendorLedger::where('vendor_id', $request->vendor_id)->latest()->first();
                 if ($ledger) {
                     $ledger->previous_balance = $ledger->closing_balance;
-                    $ledger->closing_balance  = $ledger->closing_balance - $amount; // MINUS
+                    $ledger->closing_balance = $ledger->closing_balance - $amount; // MINUS
                     $ledger->save();
                 } else {
                     VendorLedger::create([
-                        'vendor_id'        => $request->vendor_id,
+                        'vendor_id' => $request->vendor_id,
                         'admin_or_user_id' => auth()->id(),
-                        'date'             => now(),
-                        'description'      => "Expense Voucher #$evid",
-                        'opening_balance'  => 0,
-                        'debit'            => 0,
-                        'credit'           => $amount,
+                        'date' => now(),
+                        'description' => "Expense Voucher #$evid",
+                        'opening_balance' => 0,
+                        'debit' => 0,
+                        'credit' => $amount,
                         'previous_balance' => 0,
-                        'closing_balance'  => -$amount,
+                        'closing_balance' => -$amount,
                     ]);
                 }
             } elseif ($request->vendor_type === 'customer') {
                 $ledger = CustomerLedger::where('customer_id', $request->vendor_id)->latest()->first();
                 if ($ledger) {
                     $ledger->previous_balance = $ledger->closing_balance;
-                    $ledger->closing_balance  = $ledger->closing_balance - $amount; // MINUS
+                    $ledger->closing_balance = $ledger->closing_balance - $amount; // MINUS
                     $ledger->save();
                 } else {
                     CustomerLedger::create([
-                        'customer_id'      => $request->vendor_id,
+                        'customer_id' => $request->vendor_id,
                         'admin_or_user_id' => auth()->id(),
                         'previous_balance' => 0,
-                        'opening_balance'  => 0,
-                        'closing_balance'  => -$amount,
+                        'opening_balance' => 0,
+                        'closing_balance' => -$amount,
                     ]);
                 }
             } else {
@@ -843,9 +925,11 @@ if ($request->row_account_id && $request->amount) {
             }
 
             DB::commit();
+
             return back()->with('success', 'Expense Voucher saved successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return back()->with('error', $e->getMessage());
         }
     }
@@ -890,8 +974,6 @@ if ($request->row_account_id && $request->amount) {
         return view('admin_panel.vochers.expense_vochers.all_expense_vochers', compact('receipts'));
     }
 
-
-
     public function expenseprint($id)
     {
         $voucher = \App\Models\ExpenseVoucher::findOrFail($id);
@@ -910,7 +992,7 @@ if ($request->row_account_id && $request->amount) {
             $ref = $references[$index] ?? null;
             $accountHead = DB::table('account_heads')->where('id', $accountHeads[$index] ?? null)->value('name');
             $account = DB::table('accounts')->where('id', $accounts[$index] ?? null)->first();
-            $amount = (float)($amounts[$index] ?? 0);
+            $amount = (float) ($amounts[$index] ?? 0);
 
             $rows[] = [
                 'narration' => $narration,
@@ -932,7 +1014,7 @@ if ($request->row_account_id && $request->amount) {
             $account = DB::table('accounts')->where('id', $voucher->party_id)->first();
 
             if ($account) {
-                $party = (object)[
+                $party = (object) [
                     'name' => $account->title ?? '—',
                     'address' => '—',
                     'phone' => $account->account_code ?? '—',
@@ -964,5 +1046,32 @@ if ($request->row_account_id && $request->amount) {
         }
 
         return view('admin_panel.vochers.expense_vochers.print', compact('voucher', 'rows', 'party', 'previousBalance'));
+    }
+
+    public function fetchReceiptVouchers(Request $request)
+    {
+
+        // Fetch all accounts for the dropdown
+        $accounts = \Illuminate\Support\Facades\DB::table('accounts')
+            ->select('id', 'title', 'head_id')
+            ->orderBy('title')
+            ->get()
+            ->map(function ($account) {
+                // Get account head name
+                $headName = \Illuminate\Support\Facades\DB::table('account_heads')
+                    ->where('id', $account->head_id)
+                    ->value('name');
+
+                return [
+                    'id' => $account->id,
+                    'title' => $account->title,
+                    'head_name' => $headName,
+                    'display_name' => ($headName ? $headName.' - ' : '').$account->title,
+                ];
+            });
+
+        return response()->json([
+            'accounts' => $accounts,
+        ]);
     }
 }

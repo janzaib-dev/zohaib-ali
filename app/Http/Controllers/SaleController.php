@@ -2,17 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerLedger;
 use App\Models\Product;
 use App\Models\ProductBooking;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\SalesReturn;
 use App\Models\Stock;
 use App\Models\Warehouse;
+use App\Models\WarehouseStock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class SaleController extends Controller
 {
@@ -63,7 +65,7 @@ class SaleController extends Controller
 
     public function store(Request $request)
     {
-        return $this->processSale($request, new Sale());
+        return $this->processSale($request, new Sale);
     }
 
     public function edit(Sale $sale)
@@ -313,8 +315,9 @@ class SaleController extends Controller
     {
         $sale = Sale::findOrFail($id);
         if (in_array($sale->sale_status, ['posted', 'cancelled', 'returned'])) {
-             return redirect()->back()->with('error', 'Cannot edit a ' . $sale->sale_status . ' sale.');
+            return redirect()->back()->with('error', 'Cannot edit a '.$sale->sale_status.' sale.');
         }
+
         return $this->processSale($request, $sale);
     }
 
@@ -337,19 +340,20 @@ class SaleController extends Controller
     public function postFinal(Request $request)
     {
         // If the request contains full form data, we process it as an update + post
-        // If it only contains an ID, we just transition state? 
+        // If it only contains an ID, we just transition state?
         // Based on previous code, it receives form data.
         $request->merge(['action' => 'post']);
-        
+
         if ($request->booking_id) {
             $sale = Sale::findOrFail($request->booking_id);
             if ($sale->sale_status === 'posted') {
-                 return response()->json(['ok' => true, 'msg' => 'Already Posted', 'invoice_url' => route('sales.invoice', $sale->id)]);
+                return response()->json(['ok' => true, 'msg' => 'Already Posted', 'invoice_url' => route('sales.invoice', $sale->id)]);
             }
+
             return $this->processSale($request, $sale);
         }
-        
-        return $this->processSale($request, new Sale());
+
+        return $this->processSale($request, new Sale);
     }
 
     private function processSale(Request $request, Sale $sale)
@@ -362,24 +366,24 @@ class SaleController extends Controller
             'qty' => 'required|array|min:1',
             'warehouse_id' => 'required|array',
         ]);
-        
+
         // Prevent duplicate products
         if (count($request->product_id) !== count(array_unique($request->product_id))) {
-             throw \Illuminate\Validation\ValidationException::withMessages(['product_id' => 'Duplicate products are not allowed in a single sale. Please merge quantities.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['product_id' => 'Duplicate products are not allowed in a single sale. Please merge quantities.']);
         }
 
         $status = $request->action === 'post' ? 'posted' : 'booked';
 
         // Concurrency Safe Transaction
         return DB::transaction(function () use ($request, $sale, $status) {
-            
+
             // 2. Prepare Header Data
-            $isNew = !$sale->exists;
+            $isNew = ! $sale->exists;
             $sale->customer_id = $request->customer;
             $sale->reference = $request->reference;
             $sale->total_amount_Words = $request->total_amount_Words; // Consider auto-generating this too?
             $sale->sale_status = $status;
-            
+
             if ($isNew) {
                 $sale->invoice_no = Sale::generateInvoiceNo();
             }
@@ -387,15 +391,15 @@ class SaleController extends Controller
             // We will calculate totals from verified items
             $total_bill = 0;
             $total_items = 0;
-            
+
             $sale->save(); // Save first to get ID
-            
+
             // 3. Process Items
             // Delete old items if updating
-            if (!$isNew) {
-                 // Restore stock if we were somehow editing a posted sale (should be blocked, but safety first)
-                 // For now, we blocked editing posted sales, so strictly 'booked'.
-                 SaleItem::where('sale_id', $sale->id)->delete();
+            if (! $isNew) {
+                // Restore stock if we were somehow editing a posted sale (should be blocked, but safety first)
+                // For now, we blocked editing posted sales, so strictly 'booked'.
+                SaleItem::where('sale_id', $sale->id)->delete();
             }
 
             $productIds = $request->product_id;
@@ -405,60 +409,66 @@ class SaleController extends Controller
             // Or Frontend sends 'total_pieces'?
             // Looking at invoice blade: $item['qty'] is boxes.
             // Let's assume input 'qty' is BOXES.
-            
+
             $warehouses = $request->warehouse_id;
             $discounts = $request->item_disc ?? [];
 
             foreach ($productIds as $index => $pid) {
-                if (!$pid) continue;
-                
-                $qtyBox = (float)($quantities[$index] ?? 0);
-                if ($qtyBox <= 0) continue;
+                if (! $pid) {
+                    continue;
+                }
+
+                $qtyBox = (float) ($quantities[$index] ?? 0);
+                if ($qtyBox <= 0) {
+                    continue;
+                }
 
                 $product = Product::findOrFail($pid);
-                
-                // IGNORE frontend price - Fetch from DB
-                // Assuming 'retail_price' exists
-                $dbPrice = $product->retail_price > 0 ? $product->retail_price : 0; 
-                // Or check price_level logic? 
-                
+
+                // USE INPUT PRICE (User might have changed it manually)
+                $inputPrice = (float) ($request->price[$index] ?? 0);
+                $dbPrice = $inputPrice > 0 ? $inputPrice : ($product->retail_price > 0 ? $product->retail_price : 0);
+
+                \Log::info("SaleItem #{$index}: Product {$product->item_name}, InputPrice: {$inputPrice}, FinalPrice: {$dbPrice}");
+                // Or check price_level logic?
+
                 $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
                 $totalPieces = $qtyBox * $ppb; // Convert Box to Pieces
                 // + Loose?
-                $loose = (float)($request->loose_pieces[$index] ?? 0);
+                $loose = (float) ($request->loose_pieces[$index] ?? 0);
                 $totalPieces += $loose;
-                
-                // Recalculate boxes for storage if needed
-                $storedQtyBox = $totalPieces / $ppb; 
 
-                $discount = (float)($discounts[$index] ?? 0);
-                
+                // Recalculate boxes for storage if needed
+                $storedQtyBox = $totalPieces / $ppb;
+
+                $discount = (float) ($discounts[$index] ?? 0);
+
                 // Calculate Line Total
-                // Price usually per Box or Per Piece? 
+                // Price usually per Box or Per Piece?
                 // Invoice view shows "Price/Box".
-                $lineTotal = ($qtyBox * $dbPrice) + ($loose * ($dbPrice/$ppb)); // Approx
-                
+                $lineTotal = ($qtyBox * $dbPrice) + ($loose * ($dbPrice / $ppb)); // Approx
+
                 // Apply Discount
                 $lineTotal = $lineTotal - ($lineTotal * $discount / 100);
 
-                $saleItem = new SaleItem();
+                $saleItem = new SaleItem;
                 $saleItem->sale_id = $sale->id;
                 $saleItem->product_id = $pid;
                 $saleItem->warehouse_id = $warehouses[$index] ?? 1;
                 $saleItem->product_name = $product->item_name; // Store name snapshot
-                
+
                 $saleItem->qty = $storedQtyBox; // Store as Box equivalent for consistency
                 $saleItem->total_pieces = $totalPieces;
                 $saleItem->loose_pieces = $loose;
-                
+
                 $saleItem->price = $dbPrice;
                 $saleItem->discount_percent = $discount;
                 $saleItem->total = $lineTotal;
-                
+
                 // Meta
                 $saleItem->brand_id = $product->brand_id;
                 $saleItem->unit_id = $product->unit_id;
-                
+
                 $saleItem->save();
 
                 $total_bill += $lineTotal;
@@ -470,7 +480,7 @@ class SaleController extends Controller
             $sale->total_extradiscount = $request->total_extra_cost ?? 0;
             $sale->total_net = $total_bill - $sale->total_extradiscount;
             $sale->total_items = $total_items;
-            
+
             $sale->cash = $request->cash ?? 0;
             $sale->change = ($sale->cash - $sale->total_net);
 
@@ -478,53 +488,96 @@ class SaleController extends Controller
 
             // 4. Handle Status Logic
             if ($status === 'posted') {
-                $this->handleStockImpact($sale, 'out');
+                \Log::info('Proceeding to Auto-Receipt & Ledger logic for Sale #'.$sale->invoice_no);
+
+                // 1. LEGACY LEDGER: Post Invoice First (Increases Balance)
+                // This ensures the CustomerLedger has the Debit entry before we potentially Credit it with a receipt.
                 $this->updateLedger($sale);
+
+                try {
+                    $journalService = app(\App\Services\JournalEntryService::class);
+                    $arAccountId = 4; // Accounts Receivable
+                    $salesAccountId = 5; // Sales Revenue
+                    $date = $sale->created_at->format('Y-m-d');
+
+                    // --- PROFESSIONAL LEDGER POSTING (ENTRY 1: THE INVOICE) ---
+                    // Line 1: Debit Customer Receivable (Increase Balance)
+                    $journalService->recordEntry(
+                        $sale,
+                        $arAccountId,
+                        $sale->total_net,
+                        0,
+                        "Sale Invoice #{$sale->invoice_no}",
+                        $date,
+                        $sale->customer_relation // Link polymorphic party
+                    );
+
+                    // Line 2: Credit Sales Revenue (Increase Revenue)
+                    $journalService->recordEntry(
+                        $sale,
+                        $salesAccountId,
+                        0,
+                        $sale->total_net,
+                        "Sale Invoice #{$sale->invoice_no}",
+                        $date
+                    );
+
+                    // --- AUTO RECEIPT (ENTRY 2: THE PAYMENT) ---
+                    $transactionService = app(\App\Services\TransactionService::class);
+                    $transactionService->createReceiptFromSale(
+                        $sale,
+                        $request->input('receipt_account_id', []),
+                        $request->input('receipt_amount', [])
+                    );
+
+                } catch (\Exception $e) {
+                    \Log::error('Professional Ledger Posting Error: '.$e->getMessage());
+                }
             }
-            
+
             // If AJAX/JSON response needed
             if ($request->ajax() || $request->wantsJson()) {
-                 return response()->json([
+                return response()->json([
                     'ok' => true,
                     'booking_id' => $sale->id,
-                    'msg' => 'Sale ' . ucfirst($status) . ' Successfully',
+                    'msg' => 'Sale '.ucfirst($status).' Successfully',
                     'invoice_url' => route('sales.invoice', $sale->id),
                 ]);
             }
 
-            return redirect()->route('sale.index')->with('success', 'Sale saved as ' . $status);
+            return redirect()->route('sale.index')->with('success', 'Sale saved as '.$status);
         });
     }
 
-    private function handleStockImpact(Sale $sale, $type = 'out') 
+    private function handleStockImpact(Sale $sale, $type = 'out')
     {
         // Type: 'out' (Sale Posted), 'in' (Sale Cancelled), 'return' (Returned)
-        
+
         foreach ($sale->items as $item) {
             $stock = WarehouseStock::where('product_id', $item->product_id)
-                        ->where('warehouse_id', $item->warehouse_id)
-                        ->lockForUpdate() // LOCK ROW
-                        ->first();
-            
-            if (!$stock) {
-                 // Create if missing? Or fail? User said "Validate warehouse stock".
-                 throw new \Exception("Stock not found for product: " . $item->product_name);
+                ->where('warehouse_id', $item->warehouse_id)
+                ->lockForUpdate() // LOCK ROW
+                ->first();
+
+            if (! $stock) {
+                // Create if missing? Or fail? User said "Validate warehouse stock".
+                throw new \Exception('Stock not found for product: '.$item->product_name);
             }
-            
+
             // Convert everything to pieces for calculation
             $qtyPieces = $item->total_pieces;
-            
+
             if ($type === 'out') {
                 // Deduct
                 if ($stock->total_pieces < $qtyPieces) {
-                    throw new \Exception("Insufficient stock for " . $item->product_name . ". Available: " . $stock->total_pieces);
+                    throw new \Exception('Insufficient stock for '.$item->product_name.'. Available: '.$stock->total_pieces);
                 }
                 $stock->total_pieces -= $qtyPieces;
                 // Update approx boxes for display
                 $ppb = $item->product->pieces_per_box ?? 1;
                 $stock->quantity = $stock->total_pieces / ($ppb > 0 ? $ppb : 1);
                 $stock->save();
-                
+
                 // Movement
                 DB::table('stock_movements')->insert([
                     'product_id' => $item->product_id,
@@ -532,80 +585,126 @@ class SaleController extends Controller
                     'qty' => -$qtyPieces, // Negative for OUT
                     'ref_type' => 'sale',
                     'ref_id' => $sale->id,
-                    'note' => 'Sale Posted #' . $sale->invoice_no,
+                    'note' => 'Sale Posted #'.$sale->invoice_no,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
             } elseif ($type === 'in' || $type === 'return') {
                 // Restore (Cancel or Return)
                 $stock->total_pieces += $qtyPieces;
-                 // Update approx boxes
+                // Update approx boxes
                 $ppb = $item->product->pieces_per_box ?? 1;
                 $stock->quantity = $stock->total_pieces / ($ppb > 0 ? $ppb : 1);
                 $stock->save();
-                
-                 // Movement
+
+                // Movement
                 DB::table('stock_movements')->insert([
                     'product_id' => $item->product_id,
                     'type' => 'in',
                     'qty' => $qtyPieces,
-                    'ref_type' => 'sale_' . $type, // sale_in (cancel), sale_return
+                    'ref_type' => 'sale_'.$type, // sale_in (cancel), sale_return
                     'ref_id' => $sale->id,
-                    'note' => 'Sale ' . ucfirst($type) . ' #' . $sale->invoice_no,
+                    'note' => 'Sale '.ucfirst($type).' #'.$sale->invoice_no,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
             }
         }
     }
-    
+
     private function updateLedger(Sale $sale)
     {
-         $customer_id = $sale->customer_id;
-         if(!$customer_id) return;
-         
-         $ledger = CustomerLedger::where('customer_id', $customer_id)->latest('id')->first();
-         $prev_bal = $ledger ? $ledger->closing_balance : 0;
-         $new_bal = $prev_bal + $sale->total_net;
-         
-         CustomerLedger::create([
-             'customer_id' => $customer_id,
-             'admin_or_user_id' => auth()->id() ?? 1,
-             'description' => 'Sale Invoice #' . $sale->invoice_no,
-             'previous_balance' => $prev_bal,
-             'closing_balance' => $new_bal,
-             'opening_balance' => 0, // Schema might require this
-         ]);
-         
-         // Update Customer Master
-         $cust = \App\Models\Customer::find($customer_id);
-         if ($cust) {
-             $cust->previous_balance = $new_bal;
-             $cust->save();
-         }
+        $customer_id = $sale->customer_id;
+        if (! $customer_id) {
+            return;
+        }
+
+        $ledger = CustomerLedger::where('customer_id', $customer_id)->latest('id')->first();
+        // Fallback: If no ledger, check Customer Master
+        if (! $ledger) {
+            $cust = \App\Models\Customer::find($customer_id);
+            $prev_bal = $cust->previous_balance ?? 0;
+        } else {
+            $prev_bal = $ledger->closing_balance;
+        }
+
+        $new_bal = $prev_bal + $sale->total_net;
+
+        \Log::info("Legacy Ledger (Invoice): Customer #{$customer_id}. Prev: {$prev_bal} + Sale: {$sale->total_net} = New: {$new_bal}");
+
+        CustomerLedger::create([
+            'customer_id' => $customer_id,
+            'admin_or_user_id' => auth()->id() ?? 1,
+            'description' => 'Sale Invoice #'.$sale->invoice_no,
+            'previous_balance' => $prev_bal,
+            'closing_balance' => $new_bal,
+            'opening_balance' => 0, // Schema might require this
+        ]);
+
+        // Update Customer Master
+        $cust = \App\Models\Customer::find($customer_id);
+        if ($cust) {
+            $cust->previous_balance = $new_bal;
+            $cust->save();
+        }
+    }
+
+    /**
+     * Auto-generate receipt voucher when sale is posted
+     */
+    private function autoGenerateReceiptVoucher(Sale $sale, Request $request)
+    {
+        // Get account IDs from request (from receipt voucher section)
+        $accountIds = $request->input('receipt_account_id', []);
+        $amounts = $request->input('receipt_amount', []);
+
+        // If no accounts selected, use default cash account
+        if (empty($accountIds) || empty(array_filter($accountIds))) {
+            $accountIds = [1]; // Default to account ID 1 (Cash)
+            $amounts = [$sale->cash];
+        }
+
+        // Generate unique RVID
+        $lastRV = \App\Models\ReceiptsVoucher::orderBy('id', 'desc')->first();
+        $nextNumber = $lastRV ? (int) filter_var($lastRV->rvid, FILTER_SANITIZE_NUMBER_INT) + 1 : 1;
+        $rvid = 'RV-'.str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+
+        // Create receipt voucher
+        \App\Models\ReceiptsVoucher::create([
+            'rvid' => $rvid,
+            'party_id' => $sale->customer_id,
+            'type' => 'customer',
+            'total_amount' => $sale->cash,
+            'receipt_date' => now()->format('Y-m-d'),
+            'row_account_id' => json_encode($accountIds),
+            'row_account_head' => json_encode([]), // Can be populated if needed
+            'row_amount' => json_encode($amounts),
+            'remarks' => 'Auto-generated from Sale Invoice #'.$sale->invoice_no,
+            'processed' => true, // Mark as processed since it's linked to sale
+        ]);
     }
 
     private function _getSaleItems($sale)
     {
         // Legacy support wrapper or direct relation
         // Re-implementing correctly based on new structure
-        return $sale->items->map(function($item) {
-             return [
-                 'product_id' => $item->product_id,
-                 'item_name' => $item->product_name ?? $item->product->item_name ?? 'Item',
-                 'item_code' => $item->product->item_code ?? '',
-                 'brand' => $item->product->brand->name ?? '',
-                 'unit' => $item->product->unit->name ?? '', // Access name if relation exists
-                 'qty' => (float)$item->qty, // Boxes
-                 'total_pieces' => (int)$item->total_pieces,
-                 'loose_pieces' => (int)$item->loose_pieces,
-                 'price' => (float)$item->price,
-                 'discount' => (float)$item->discount_percent,
-                 'total' => (float)$item->total,
-                 'color' => json_decode($item->color, true),
-                 'pieces_per_box' => $item->product->pieces_per_box ?? 1,
-                 'price_per_piece' => ($item->total_pieces > 0) ? ($item->total / $item->total_pieces) : 0,
-             ];
+        return $sale->items->map(function ($item) {
+            return [
+                'product_id' => $item->product_id,
+                'item_name' => $item->product_name ?? $item->product->item_name ?? 'Item',
+                'item_code' => $item->product->item_code ?? '',
+                'brand' => $item->product->brand->name ?? '',
+                'unit' => $item->product->unit->name ?? '', // Access name if relation exists
+                'qty' => (float) $item->qty, // Boxes
+                'total_pieces' => (int) $item->total_pieces,
+                'loose_pieces' => (int) $item->loose_pieces,
+                'price' => (float) $item->price,
+                'discount' => (float) $item->discount_percent,
+                'total' => (float) $item->total,
+                'color' => json_decode($item->color, true),
+                'pieces_per_box' => $item->product->pieces_per_box ?? 1,
+                'price_per_piece' => ($item->total_pieces > 0) ? ($item->total / $item->total_pieces) : 0,
+            ];
         });
     }
 }

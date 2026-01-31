@@ -199,6 +199,17 @@
                                     <i class="fa fa-fingerprint"></i> My Attendance
                                 </a>
                             </li>
+
+                            <!-- Notification Bell -->
+                            <li class="nav-item dropdown mr-2">
+                                <a class="nav-link position-relative" href="{{ route('notifications.index') }}"
+                                    id="notificationDropdown">
+                                    <i class="fas fa-bell" style="font-size: 20px;"></i>
+                                    <span class="badge badge-danger notification-badge"
+                                        style="display: none; position: absolute; top: 0; right: 0; font-size: 10px; padding: 2px 5px; border-radius: 10px;">0</span>
+                                </a>
+                            </li>
+
                             <li class="nav-item nav-profile dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown"
                                     id="profileDropdown">
@@ -528,6 +539,16 @@
                                 </div>
                             @endcanany
                         </li>
+
+                        <!-- Settings -->
+                        @if (auth()->check() && (auth()->user()->email === 'admin@admin.com' || auth()->user()->hasRole('Super Admin')))
+                            <li class="nav-item">
+                                <a href="{{ route('settings.index') }}" class="nav-link">
+                                    <i class="menu_icon feather ft-settings"></i>
+                                    <span class="menu-title">Settings</span>
+                                </a>
+                            </li>
+                        @endif
 
                     </ul>
                 </div>

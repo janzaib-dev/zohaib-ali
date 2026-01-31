@@ -50,3 +50,24 @@
 
 <!-- Main Js -->
 <script src="{{ asset('assets/js/main.js') }}"></script>
+
+<!-- Notification Count Script -->
+<script>
+    $(document).ready(function() {
+        // Load notification count on page load
+        function loadNotificationCount() {
+            $.get('{{ route('notifications.count') }}', function(data) {
+                if (data.count > 0) {
+                    $('.notification-badge').text(data.count).show();
+                } else {
+                    $('.notification-badge').hide();
+                }
+            });
+        }
+
+        loadNotificationCount();
+
+        // Refresh count every 60 seconds
+        setInterval(loadNotificationCount, 60000);
+    });
+</script>
