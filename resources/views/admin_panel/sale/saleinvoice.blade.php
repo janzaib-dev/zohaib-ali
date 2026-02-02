@@ -277,7 +277,7 @@
                     <th class="text-start" style="width: 40%">Description</th>
                     <th class="text-center">Packing</th>
                     <th class="text-center">Quantity (Shipped)</th>
-                    <th class="text-end">Unit Price</th>
+                    <th class="text-end">Unit Price<br><small style="font-weight: normal;">(Per Piece)</small></th>
                     <th class="text-center">Disc.</th>
                     <th class="text-end">Extended Price</th>
                 </tr>
@@ -303,10 +303,12 @@
                         </td>
                         <td class="text-center">
                             <span style="font-size: 1.1em; font-weight: bold;">
-                                {{ (float) $item['qty'] }} Box
+                                {{ (int) $item['total_pieces'] }} Pcs
                             </span>
                             @if ($item['loose_pieces'] > 0)
-                                <br><small class="text-danger">+ {{ $item['loose_pieces'] }} Loose</small>
+                                <br><small
+                                    class="text-muted">({{ (int) ($item['total_pieces'] - $item['loose_pieces']) }} +
+                                    {{ $item['loose_pieces'] }} loose)</small>
                             @endif
                         </td>
                         <td class="text-end">{{ number_format($item['price'], 2) }}</td>
@@ -350,25 +352,40 @@
             <div class="col-5">
                 <div class="info-box" style="border: none; padding: 0;">
                     <table class="totals-table">
-                        <tr>
-                            <td>Sub Total</td>
-                            <td class="text-end">{{ number_format($sale->total_bill_amount, 2) }}</td>
+                        <tr style="border-bottom: 2px solid #eee;">
+                            <td class="fw-bold text-muted">Previous Balance</td>
+                            <td class="text-end fw-bold text-muted">
+                                {{ number_format(abs($previousBalance), 2) }}
+                                <small>{{ $previousBalance >= 0 ? 'Dr' : 'Cr' }}</small>
+                            </td>
                         </tr>
                         <tr>
-                            <td>Extra Discount</td>
-                            <td class="text-end text-danger">-{{ number_format($sale->total_extradiscount, 2) }}</td>
-                        </tr>
-                        <tr class="total-row">
-                            <td>Net Total</td>
+                            <td>Current Bill Amount</td>
                             <td class="text-end">{{ number_format($sale->total_net, 2) }}</td>
+                        </tr>
+                        <tr class="total-row" style="background-color: #f8f9fa;">
+                            <td class="fw-bold">Net Payable / Total</td>
+                            <td class="text-end fw-bold">
+                                {{ number_format(abs($previousBalance + $sale->total_net), 2) }}
+                                <small>{{ $previousBalance + $sale->total_net >= 0 ? 'Dr' : 'Cr' }}</small>
+                            </td>
                         </tr>
                         <tr>
                             <td>Cash Paid</td>
-                            <td class="text-end">{{ number_format($sale->cash, 2) }}</td>
+                            <td class="text-end text-success">{{ number_format($sale->cash, 2) }}</td>
                         </tr>
+                        @php
+                            // Calculate final closing balance (Net Payable - Paid)
+                            // Note: Net Payable (Dr) - Paid (Cr effect).
+                            // If balance is Dr (positive), Paid reduces it.
+                            $finalBalance = $previousBalance + $sale->total_net - $sale->cash;
+                        @endphp
                         <tr>
-                            <td>Change Return</td>
-                            <td class="text-end">{{ number_format($sale->change, 2) }}</td>
+                            <td class="fw-bold">Closing Balance / Credit</td>
+                            <td class="text-end fw-bold">
+                                {{ number_format(abs($finalBalance), 2) }}
+                                <small>{{ $finalBalance >= 0 ? 'Dr' : 'Cr' }}</small>
+                            </td>
                         </tr>
                     </table>
                 </div>

@@ -201,14 +201,141 @@
                             </li>
 
                             <!-- Notification Bell -->
-                            <li class="nav-item dropdown mr-2">
-                                <a class="nav-link position-relative" href="{{ route('notifications.index') }}"
-                                    id="notificationDropdown">
-                                    <i class="fas fa-bell" style="font-size: 20px;"></i>
+                            <li class="nav-item dropdown mr-2" id="notificationLi">
+                                <a class="nav-link count-indicator dropdown-toggle position-relative"
+                                    id="notificationDropdown" href="#" data-toggle="dropdown"
+                                    aria-expanded="false">
+                                    <i class="fas fa-bell text-secondary"
+                                        style="font-size: 20px; transition: color 0.3s;"></i>
                                     <span class="badge badge-danger notification-badge"
-                                        style="display: none; position: absolute; top: 0; right: 0; font-size: 10px; padding: 2px 5px; border-radius: 10px;">0</span>
+                                        style="display: none; position: absolute; top: -2px; right: -2px; font-size: 9px; padding: 3px 5px; border-radius: 50%; box-shadow: 0 2px 5px rgba(220,53,69,0.5);">0</span>
                                 </a>
+                                <div class="dropdown-menu dropdown-menu-right navbar-dropdown preview-list shadow-lg border-0"
+                                    aria-labelledby="notificationDropdown"
+                                    style="width: 320px; border-radius: 12px; margin-top: 10px; overflow: hidden;">
+                                    <div class="dropdown-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center"
+                                        style="border-radius: 12px 12px 0 0;">
+                                        <p class="mb-0 font-weight-bold text-dark">NOTIFICATIONS</p>
+                                    </div>
+                                    <div id="notificationList" style="max-height: 350px; overflow-y: auto;">
+                                        <!-- Items will be injected here -->
+                                        <div class="text-center p-4">
+                                            <div class="spinner-border text-primary spinner-border-sm" role="status">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Sticky Footer Button -->
+                                    <div class="dropdown-footer text-center bg-light border-top p-2"
+                                        style="position: sticky; bottom: 0; z-index: 10;">
+                                        <a href="{{ route('notifications.index') }}"
+                                            class="btn btn-primary btn-sm btn-block shadow-sm font-weight-bold">View
+                                            All Notifications</a>
+                                    </div>
+                                </div>
                             </li>
+
+                            <style>
+                                /* Standard Click Dropdown Styling */
+
+                                /* Scrollbar */
+                                #notificationList::-webkit-scrollbar {
+                                    width: 5px;
+                                }
+
+                                #notificationList::-webkit-scrollbar-thumb {
+                                    background: #e0e0e0;
+                                    border-radius: 10px;
+                                }
+
+                                #notificationList::-webkit-scrollbar-track {
+                                    background: transparent;
+                                }
+
+                                /* Items */
+                                .notification-item {
+                                    transition: all 0.2s ease;
+                                    border-left: 3px solid transparent;
+                                }
+
+                                .notification-item:hover {
+                                    background-color: #f8f9fa;
+                                    border-left: 3px solid #3b82f6;
+                                    /* Blue accent */
+                                }
+
+                                /* Navigation Bell Hover */
+                                #notificationLi .nav-link:hover .fa-bell {
+                                    color: #3b82f6 !important;
+                                    /* Blue on hover */
+                                }
+                            </style>
+
+                            <script>
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    // Poll every 30s
+                                    fetchNotifications();
+                                    setInterval(fetchNotifications, 30000);
+                                });
+
+                                function fetchNotifications() {
+                                    if (typeof $ === 'undefined') return;
+
+                                    $.get("{{ route('notifications.fetch') }}", function(data) {
+                                        // Update Badge
+                                        if (data.count > 0) {
+                                            $('.notification-badge').text(data.count).show();
+                                            $('.notification-badge').addClass('animate__animated animate__pulse');
+                                        } else {
+                                            $('.notification-badge').hide();
+                                        }
+
+                                        // Update List
+                                        let html = '';
+                                        if (data.notifications.length === 0) {
+                                            html = `
+                                                <div class="text-center p-5">
+                                                    <i class="fas fa-bell-slash text-muted mb-2" style="font-size: 24px;"></i>
+                                                    <p class="text-muted small mb-0">No new notifications</p>
+                                                </div>`;
+                                        } else {
+                                            data.notifications.forEach(n => {
+                                                // Modern colors: Soft background with strong icon color
+                                                let iconBg = '#e3f2fd'; // Light Blue
+                                                let iconColor = '#2196f3'; // Blue
+                                                let iconClass = 'fa-info';
+
+                                                if (n.type === 'sale_return') {
+                                                    iconBg = '#fff3e0'; // Light Orange
+                                                    iconColor = '#ff9800'; // Orange
+                                                    iconClass = 'fa-undo';
+                                                }
+
+                                                html += `
+                                                <a class="dropdown-item p-3 notification-item" href="${n.action_url || '#'}" style="white-space: normal;">
+                                                    <div class="d-flex align-items-start">
+                                                        <div class="me-3 mt-1" style="min-width: 36px;">
+                                                            <div class="rounded-circle d-flex align-items-center justify-content-center" 
+                                                                 style="width:36px; height:36px; background-color: ${iconBg}; color: ${iconColor};">
+                                                                <i class="fas ${iconClass}" style="font-size:14px;"></i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex-grow-1 ms-3">
+                                                            <h6 class="font-weight-bold text-dark mb-1" style="font-size:14px; line-height:1.2;">${n.title}</h6>
+                                                            <p class="text-muted small mb-1" style="font-size:12px; line-height:1.4; color: #6c757d;">
+                                                                ${n.message.substring(0, 60)}${n.message.length > 60 ? '...' : ''}
+                                                            </p>
+                                                            <p class="text-secondary small mb-0" style="font-size:10px; font-weight: 500;">
+                                                                <i class="far fa-clock me-1"></i> ${new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </a>`;
+                                            });
+                                        }
+                                        $('#notificationList').html(html);
+                                    });
+                                }
+                            </script>
 
                             <li class="nav-item nav-profile dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown"

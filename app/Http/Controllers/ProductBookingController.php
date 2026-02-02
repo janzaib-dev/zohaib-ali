@@ -17,7 +17,7 @@ class ProductBookingController extends Controller
         // We fetch Sales where status is 'posted'.
         // We eager load 'items' and 'items.product' to display details in the view.
         $bookings = Sale::with(['customer_relation', 'items.product'])
-            ->whereIn('sale_status', ['draft', 'posted'])
+            ->where('sale_status', 'posted') // Show ONLY posted sales
             ->latest()
             ->get();
 

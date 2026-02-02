@@ -145,4 +145,21 @@ class VendorController extends Controller
             'closing_balance' => $ledger ? $ledger->closing_balance : 0
         ]);
     }
+
+    /**
+     * Show vendor ledger (journal-based)
+     */
+    public function ledger($vendorId)
+    {
+        $vendor = Vendor::findOrFail($vendorId);
+        
+        // Get date range from request or default to current month
+        $startDate = request('start_date', now()->startOfMonth()->format('Y-m-d'));
+        $endDate = request('end_date', now()->endOfMonth()->format('Y-m-d'));
+        
+        $balanceService = app(\App\Services\BalanceService::class);
+        $ledgerData = $balanceService->getVendorLedger($vendorId, $startDate, $endDate);
+        
+        return view('admin_panel.vendors.ledger', $ledgerData);
+    }
 }

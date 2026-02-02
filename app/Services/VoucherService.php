@@ -107,6 +107,20 @@ class VoucherService
     private function postToJournal(VoucherMaster $voucher)
     {
         foreach ($voucher->details as $detail) {
+            
+            $includeParty = true;
+
+            // Logic to prevent linking Customer/Vendor to the Cash side of the transaction
+            // Receipt: Dr Cash (No Party), Cr Receivable (Party)
+            if ($voucher->voucher_type === VoucherMaster::TYPE_RECEIPT && $detail->debit > 0) {
+                $includeParty = false;
+            }
+            
+            // Payment: Dr Payable (Party), Cr Cash (No Party)
+            if ($voucher->voucher_type === VoucherMaster::TYPE_PAYMENT && $detail->credit > 0) {
+                $includeParty = false;
+            }
+
             $this->journalService->recordEntry(
                 $voucher,
                 $detail->account_id,
@@ -114,7 +128,7 @@ class VoucherService
                 $detail->credit,
                 $detail->narration ?? $voucher->remarks,
                 $voucher->date->format('Y-m-d'),
-                $voucher->party // Pass the polymorphic party (Customer/Vendor/Account)
+                $includeParty ? $voucher->party : null
             );
         }
     }

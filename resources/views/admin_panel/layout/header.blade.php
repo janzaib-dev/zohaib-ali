@@ -55,14 +55,102 @@
                     <div class="nav_wrapper_main d-flex align-items-center justify-content-between flex-grow-1">
                         <ul class="navbar-nav navbar-nav-right mr-0 ml-auto">
                             <!-- Notification Bell -->
-                            <li class="nav-item dropdown">
-                                <a class="nav-link" href="{{ route('notifications.index') }}"
-                                    id="notificationDropdown">
-                                    <i class="fas fa-bell" style="font-size: 20px;"></i>
+                            <!-- Notification Bell -->
+                            <li class="nav-item dropdown" id="notificationLi">
+                                <a class="nav-link count-indicator dropdown-toggle" id="notificationDropdown"
+                                    href="#" data-toggle="dropdown">
+                                    <i class="fas fa-bell mx-0"></i>
                                     <span class="badge badge-danger notification-badge"
-                                        style="display: none; position: absolute; top: 8px; right: 8px; font-size: 10px; padding: 2px 5px;">0</span>
+                                        style="display: none; position: absolute; top: 0px; right: 0px; font-size: 10px; padding: 3px 5px;">0</span>
                                 </a>
+                                <div class="dropdown-menu dropdown-menu-right navbar-dropdown preview-list"
+                                    aria-labelledby="notificationDropdown" style="width: 300px;">
+                                    <p class="mb-0 font-weight-normal float-left dropdown-header">Notifications</p>
+                                    <div id="notificationList" style="max-height: 300px; overflow-y: auto;">
+                                        <!-- Items will be injected here -->
+                                        <p class="text-center p-3 text-muted">Loading...</p>
+                                    </div>
+                                    {{-- <a href="{{ route('notifications.index') }}" class="dropdown-item text-center text-primary">View all</a> --}}
+                                </div>
                             </li>
+
+                            <style>
+                                /* CSS Hover Fallback */
+                                #notificationLi:hover .dropdown-menu {
+                                    display: block;
+                                    animation: fadeIn 0.3s;
+                                }
+
+                                @keyframes fadeIn {
+                                    from {
+                                        opacity: 0;
+                                    }
+
+                                    to {
+                                        opacity: 1;
+                                    }
+                                }
+                            </style>
+
+                            <script>
+                                document.addEventListener('DOMContentLoaded', function() {
+                                    // Poll every 30s
+                                    fetchNotifications();
+                                    setInterval(fetchNotifications, 30000);
+                                });
+
+                                function fetchNotifications() {
+                                    if (typeof $ === 'undefined') return; // Safety check
+
+                                    $.get("{{ route('notifications.fetch') }}", function(data) {
+                                        // Update Badge
+                                        if (data.count > 0) {
+                                            $('.notification-badge').text(data.count).show();
+                                        } else {
+                                            $('.notification-badge').hide();
+                                        }
+
+                                        // Update List
+                                        let html = '';
+                                        if (data.notifications.length === 0) {
+                                            html = '<p class="text-center p-3 text-muted">No new notifications</p>';
+                                        } else {
+                                            data.notifications.forEach(n => {
+                                                let iconClass = 'bg-info';
+                                                let icon = 'fa-info';
+
+                                                if (n.type === 'sale_return') {
+                                                    iconClass = 'bg-warning';
+                                                    icon = 'fa-undo';
+                                                }
+
+                                                html += `
+                                                <a class="dropdown-item preview-item" href="${n.action_url || '#'}">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="preview-thumbnail me-3">
+                                                            <div class="preview-icon ${iconClass} rounded-circle d-flex align-items-center justify-content-center" style="width:30px; height:30px;">
+                                                                <i class="fas ${icon} text-white" style="font-size:12px;"></i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="preview-item-content flex-grow-1 ms-2">
+                                                            <h6 class="preview-subject font-weight-normal mb-1" style="font-size:13px;">${n.title}</h6>
+                                                            <p class="font-weight-light small-text mb-0 text-muted" style="font-size:11px; white-space: normal;">
+                                                                ${n.message.substring(0, 50)}...
+                                                            </p>
+                                                             <p class="font-weight-light small-text mb-0 text-muted mt-1" style="font-size:10px">
+                                                                ${new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                                <div class="dropdown-divider"></div>
+                                                `;
+                                            });
+                                        }
+                                        $('#notificationList').html(html);
+                                    });
+                                }
+                            </script>
 
                             <li class="nav-item nav-profile dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown"

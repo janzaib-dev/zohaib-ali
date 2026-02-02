@@ -34,6 +34,19 @@ class HomeController extends Controller
             $totalSales = Auth::user()->can('sales.view') ? DB::table('sales')->sum('total_net') : 0;
             $totalSalesReturns = Auth::user()->can('sales.returns.view') ? DB::table('sales_returns')->sum('total_net') : 0;
 
+            // Financial Summary (Accounting Based)
+            $financialSummary = [];
+            if (Auth::user()->can('purchases.view') || Auth::user()->can('sales.view')) {
+                try {
+                    $balanceService = app(\App\Services\BalanceService::class);
+                    $fromDate = request('from_date', now()->startOfMonth()->format('Y-m-d'));
+                    $toDate = request('to_date', now()->endOfMonth()->format('Y-m-d'));
+                    $financialSummary = $balanceService->getFinancialSummary($fromDate, $toDate);
+                } catch (\Exception $e) {
+                     \Log::error("Dashboard Financial Summary Error: " . $e->getMessage());
+                }
+            }
+
             // ===== SALES REPORT CHARTS =====
             $salesChartStats = ['daily' => ['series' => [], 'categories' => []]];
             if (Auth::user()->can('sales.view')) {
@@ -147,7 +160,8 @@ class HomeController extends Controller
                 'totalSales',
                 'totalSalesReturns',
                 'salesChartStats',
-                'purchaseChartStats'
+                'purchaseChartStats',
+                'financialSummary'
             ));
         } else {
             return redirect()->back()->with('error', 'Unauthorized access');

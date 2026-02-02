@@ -63,59 +63,59 @@
             </div>
         </div>
     </div>
+@endsection
 
-    @push('scripts')
-        <script>
-            $(document).ready(function() {
-                // Mark single notification as read
-                $('.mark-read').on('click', function() {
-                    const id = $(this).data('id');
-                    const $item = $(this).closest('.list-group-item');
+@section('js')
+    <script>
+        $(document).ready(function() {
+            // Mark single notification as read
+            $('.mark-read').on('click', function() {
+                const id = $(this).data('id');
+                const $item = $(this).closest('.list-group-item');
 
-                    $.ajax({
-                        url: `/notifications/${id}/read`,
-                        method: 'POST',
-                        data: {
-                            _token: '{{ csrf_token() }}'
-                        },
-                        success: function() {
-                            $item.removeClass('bg-light');
-                            $(this).remove();
-                            updateNotificationBadge();
-                        }
-                    });
+                $.ajax({
+                    url: `/notifications/${id}/read`,
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}'
+                    },
+                    success: function() {
+                        $item.removeClass('bg-light');
+                        $(this).remove();
+                        updateNotificationBadge();
+                    }
                 });
-
-                // Mark all as read
-                $('#markAllRead').on('click', function() {
-                    $.ajax({
-                        url: '{{ route('notifications.readAll') }}',
-                        method: 'POST',
-                        data: {
-                            _token: '{{ csrf_token() }}'
-                        },
-                        success: function() {
-                            $('.list-group-item').removeClass('bg-light');
-                            $('.mark-read').remove();
-                            updateNotificationBadge();
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'All notifications marked as read',
-                                timer: 2000
-                            });
-                        }
-                    });
-                });
-
-                function updateNotificationBadge() {
-                    $.get('{{ route('notifications.count') }}', function(data) {
-                        $('.notification-badge').text(data.count);
-                        if (data.count === 0) {
-                            $('.notification-badge').hide();
-                        }
-                    });
-                }
             });
-        </script>
-    @endpush
+
+            // Mark all as read
+            $('#markAllRead').on('click', function() {
+                $.ajax({
+                    url: '{{ route('notifications.readAll') }}',
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}'
+                    },
+                    success: function() {
+                        $('.list-group-item').removeClass('bg-light');
+                        $('.mark-read').remove();
+                        updateNotificationBadge();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'All notifications marked as read',
+                            timer: 2000
+                        });
+                    }
+                });
+            });
+
+            function updateNotificationBadge() {
+                $.get('{{ route('notifications.count') }}', function(data) {
+                    $('.notification-badge').text(data.count);
+                    if (data.count === 0) {
+                        $('.notification-badge').hide();
+                    }
+                });
+            }
+        });
+    </script>
 @endsection

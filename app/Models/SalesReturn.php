@@ -17,8 +17,21 @@ class SalesReturn extends Model
         'return_note',
     ];
 
+    protected $casts = [
+        'approved_at' => 'datetime',
+        'return_deadline' => 'date',
+        'return_status' => 'string',
+        'quality_status' => 'string',
+        'is_within_deadline' => 'boolean',
+    ];
+
     public function sale()
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function customer_relation()
+    {
+        return $this->belongsTo(Customer::class, 'customer', 'id');
     }
 }

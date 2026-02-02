@@ -42,16 +42,18 @@ class TransactionService
              $cash = $sale->cash ?? 0;
             if ($cash > 0) {
                 \Log::info("TransactionService: Using fallback Cash amount: $cash");
-                $accountIds = [6]; // Default Cash Account (Init ID: 6)
+                $balanceService = app(\App\Services\BalanceService::class);
+                $accountIds = [$balanceService->getCashAccountId()];
                 $amounts = [$cash];
             } else {
-                \Log::warning('TransactionService: No payment info provided (Accounts empty and Cash=0), aborting.');
+                \Log::info('TransactionService: No payment info provided (Credit Sale), aborting receipt creation.');
                 return;
             }
         }
 
         try {
-            $customerControlAccountId = 4; // Accounts Receivable (Asset) ID: 4
+            $balanceService = app(\App\Services\BalanceService::class);
+            $customerControlAccountId = $balanceService->getAccountsReceivableId();
             $totalPaid = 0;
             $lines = [];
 
@@ -59,7 +61,7 @@ class TransactionService
             foreach ($accountIds as $index => $accId) {
                 $amount = (float)($amounts[$index] ?? 0);
                 
-                if ($amount >= 0) {
+                if ($amount > 0) { // Fixed: Only positive amounts
                     $totalPaid += $amount;
                     
                     $lines[] = [
@@ -71,10 +73,11 @@ class TransactionService
                 }
             }
 
-            // if ($totalPaid <= 0) {
-            //     \Log::warning('TransactionService: Total payment is 0, skipping voucher.');
-            //     return;
-            // }
+            // Skip if no payment (Credit Sale - customer will pay later)
+            if ($totalPaid <= 0) {
+                \Log::info('TransactionService: No payment received (Credit Sale), skipping receipt voucher.');
+                return;
+            }
 
             // 3. Prepare Credit Line (Customer Control - Money Out / Receivable Reduced)
             $lines[] = [
@@ -136,6 +139,89 @@ class TransactionService
 
         } catch (\Exception $e) {
             \Log::error('TransactionService V2 Error: '.$e->getMessage());
+        }
+    }
+    /**
+     * Create a Payment Voucher for a Purchase.
+     * Debit: Accounts Payable (Vendor) | Credit: Cash/Bank
+     */
+    public function createPaymentForPurchase(\App\Models\Purchase $purchase, array $accountIds = [], array $amounts = [])
+    {
+        \Log::info("TransactionService: Create Payment for Purchase #{$purchase->invoice_no}");
+
+        // Filter valid inputs
+        $accountIds = array_filter($accountIds, fn($val) => !empty($val));
+        
+        if (empty($accountIds)) {
+            \Log::info('TransactionService: No payment accounts provided, skipping payment.');
+            return;
+        }
+
+        try {
+            $balanceService = app(\App\Services\BalanceService::class);
+            $apAccountId = $balanceService->getAccountsPayableId(); // We need to ensure this method exists
+            
+            $totalPaid = 0;
+            $lines = [];
+
+            // 1. Prepare Credit Lines (Money Out - Cash/Bank)
+            foreach ($accountIds as $index => $accId) {
+                $amount = (float)($amounts[$index] ?? 0);
+                if ($amount > 0) {
+                    $totalPaid += $amount;
+                    $lines[] = [
+                        'account_id' => $accId,
+                        'debit' => 0,
+                        'credit' => $amount, // Money leaving asset
+                        'narration' => "Payment for Purchase #{$purchase->invoice_no}",
+                    ];
+                }
+            }
+
+            if ($totalPaid <= 0) return;
+
+            // 2. Prepare Debit Line (Accounts Payable - Liability Decreases)
+            $vendorName = '';
+            if ($purchase->vendor) {
+                $vendorName = $purchase->vendor->name;
+            }
+            
+            $lines[] = [
+                'account_id' => $apAccountId,
+                'debit' => $totalPaid,
+                'credit' => 0,
+                'narration' => "Payment to Vendor {$vendorName}",
+            ];
+
+            // 3. Voucher Header
+            $voucherData = [
+                'voucher_type' => VoucherMaster::TYPE_PAYMENT,
+                'date' => now()->format('Y-m-d'),
+                'status' => VoucherMaster::STATUS_POSTED,
+                'payment_from' => 'Vendor', // Or 'System'
+                'party_type' => \App\Models\Vendor::class,
+                'party_id' => $purchase->vendor_id,
+                'remarks' => "Auto-Payment for Purchase #{$purchase->invoice_no}",
+            ];
+
+            // 4. Create Voucher
+            $this->voucherService->createVoucher($voucherData, $lines, auth()->id());
+            
+            // 5. Update Legacy Vendor Ledger (Optional but recommended for consistency)
+            // You might want to move this inside BalanceService or similar if reused
+             // For now we rely on Journal Entries, but if you have a legacy table:
+             // \App\Models\VendorLedger::create(...)
+             
+            // Update Paid Amount in Purchase
+            $purchase->paid_amount += $totalPaid;
+            $purchase->due_amount = $purchase->net_amount - $purchase->paid_amount;
+            $purchase->save();
+
+             \Log::info("Payment Voucher Created for Purchase #{$purchase->invoice_no}");
+
+        } catch (\Exception $e) {
+            \Log::error("TransactionService Payment Error: " . $e->getMessage());
+            throw $e;
         }
     }
 }

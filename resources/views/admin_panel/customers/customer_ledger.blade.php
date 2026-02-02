@@ -92,25 +92,11 @@
                                 <tbody>
                                     @foreach ($CustomerLedgers as $key => $ledger)
                                         @php
-                                            // Determine Debit vs Credit based on Balance Change
-                                            // Logic: Closing = Previous + Debit - Credit
-                                            // Delta = Closing - Previous
-                                            // If Delta > 0, it's Debit (Sale). If Delta < 0, it's Credit (Receipt).
-
-                                            $delta = $ledger->closing_balance - $ledger->previous_balance;
-                                            $debit = 0;
-                                            $credit = 0;
-
-                                            // Precision tolerance for float
-                                            if ($delta > 0.01) {
-                                                $debit = abs($delta);
-                                            } elseif ($delta < -0.01) {
-                                                $credit = abs($delta);
-                                            }
-
-                                            // Use direct values if available in future, but for now calculate.
-                                            // Fallback: If opening balance row (rarely stored as row), handle separate.
-
+                                            // Ledger object now has explicit debit/credit from Controller/BalanceService
+                                            $debit = $ledger->debit ?? 0;
+                                            $credit = $ledger->credit ?? 0;
+                                            $balance = $ledger->closing_balance;
+                                            $suffix = $balance >= 0 ? 'Dr' : 'Cr';
                                         @endphp
                                         <tr>
                                             <td>{{ $loop->iteration }}</td>
@@ -118,9 +104,6 @@
                                             <td class="fw-bold">{{ $ledger->customer->customer_name ?? 'N/A' }}</td>
                                             <td>
                                                 {{ $ledger->description }}
-                                                @if ($ledger->description == 'Opening Balance')
-                                                    <span class="badge bg-secondary">Op</span>
-                                                @endif
                                             </td>
                                             <td class="text-end text-success">
                                                 {{ $debit > 0 ? number_format($debit, 2) : '-' }}
@@ -129,8 +112,8 @@
                                                 {{ $credit > 0 ? number_format($credit, 2) : '-' }}
                                             </td>
                                             <td class="text-end fw-bold">
-                                                {{ number_format($ledger->closing_balance, 2) }}
-                                                <small class="text-muted">Dr</small>
+                                                {{ number_format(abs($balance), 2) }}
+                                                <small class="text-muted">{{ $suffix }}</small>
                                             </td>
                                         </tr>
                                     @endforeach

@@ -40,4 +40,14 @@ class Sale extends Model
     {
         return $this->hasMany(SaleItem::class);
     }
+
+    public function journalEntries()
+    {
+        return $this->morphMany(JournalEntry::class, 'source');
+    }
+
+    public function returns()
+    {
+        return $this->hasMany(SalesReturn::class, 'sale_id');
+    }
 }

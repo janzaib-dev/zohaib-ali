@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::table('journal_entries', function (Blueprint $table) {
             // Polymorphic Party (Customer, Vendor, etc.)
             // Allows us to filter General Ledger entries for a specific party
-            if (!Schema::hasColumn('journal_entries', 'party_type')) {
+            if (! Schema::hasColumn('journal_entries', 'party_type')) {
                 $table->nullableMorphs('party'); // party_type, party_id
             }
         });

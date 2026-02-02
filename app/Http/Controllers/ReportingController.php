@@ -61,26 +61,13 @@ class ReportingController extends Controller
             $purchaseAmount = (float) $purchaseData->total_amount;
 
             // Sold qty & amount
-            $sold = 0.0;
-            $saleAmount = 0.0;
+            $saleStats = DB::table('sale_items')
+                ->where('product_id', $product->id)
+                ->selectRaw('COALESCE(SUM(qty),0) as total_qty, COALESCE(SUM(total),0) as total_amount')
+                ->first();
 
-            $sales = DB::table('sales')
-                ->select('product_code', 'qty', 'per_total')
-                ->whereNotNull('product_code')
-                ->get();
-
-            foreach ($sales as $s) {
-                $codes = array_map('trim', explode(',', $s->product_code));
-                $qtys = array_map('trim', explode(',', $s->qty));
-                $totals = array_map('trim', explode(',', $s->per_total));
-
-                foreach ($codes as $idx => $code) {
-                    if ($code === $product->item_code && isset($qtys[$idx])) {
-                        $sold += floatval($qtys[$idx]);
-                        $saleAmount += isset($totals[$idx]) ? floatval($totals[$idx]) : 0;
-                    }
-                }
-            }
+            $sold = (float) $saleStats->total_qty;
+            $saleAmount = (float) $saleStats->total_amount;
 
             // Actual balance from stocks table
             // Actual balance from v_stock_onhand (consistent with onhand() page)
@@ -170,40 +157,60 @@ class ReportingController extends Controller
             $start = $request->start_date;
             $end = $request->end_date;
 
-            $query = DB::table('sales')
-                ->leftJoin('customers', 'sales.customer', '=', 'customers.id')
-                ->select(
-                    'sales.id',
-                    'sales.reference',
-                    'sales.product',
-                    'sales.product_code',
-                    'sales.brand',
-                    'sales.unit',
-                    'sales.per_price',
-                    'sales.per_discount',
-                    'sales.qty',
-                    'sales.per_total',
-                    'sales.total_net',
-                    'sales.created_at',
-                    'customers.customer_name'
-                );
+            // Use Eloquent to handle relations and new table structure
+            $query = \App\Models\Sale::with(['customer_relation', 'items.product', 'returns']);
 
             if ($start && $end) {
-                $query->whereBetween(DB::raw('DATE(sales.created_at)'), [$start, $end]);
+                $query->whereBetween(DB::raw('DATE(created_at)'), [$start, $end]);
             }
 
-            $sales = $query->orderBy('sales.created_at', 'asc')->get();
+            $sales = $query->orderBy('created_at', 'asc')->get();
 
-            // Sale returns merge
-            foreach ($sales as $sale) {
-                $returns = DB::table('sales_returns')
-                    ->where('sale_id', $sale->id)
-                    ->get();
+            // Transform to match the structure expected by the frontend (CSV strings)
+            $transformed = $sales->map(function ($sale) {
+                // Construct comma-separated strings for legacy frontend support
+                $productNames = $sale->items->map(function ($item) {
+                    return $item->product ? $item->product->item_name : 'Unknown';
+                })->implode(',');
 
-                $sale->returns = $returns;
-            }
+                // Use SKU or Name as per preference, usually Name for reports
+                $productCodes = $sale->items->map(function ($item) {
+                    return $item->product ? $item->product->item_code : '-';
+                })->implode(',');
 
-            return response()->json($sales);
+                $qtys = $sale->items->pluck('qty')->implode(',');
+                $prices = $sale->items->pluck('price')->implode(','); // Unit Price
+                $totals = $sale->items->pluck('total')->implode(','); // Line Total
+
+                return [
+                    'id' => $sale->id,
+                    'reference' => $sale->reference ?? '-',
+                    'product' => $productNames,      // Names
+                    'product_code' => $productCodes, // Codes
+                    'brand' => '-',                  // Could extract from items if needed
+                    'unit' => '-',                   // Could extract
+                    'per_price' => $prices,
+                    'per_discount' => 0,             
+                    'qty' => $qtys,
+                    'per_total' => $totals,
+                    'total_net' => $sale->total_net,
+                    'created_at' => $sale->created_at->format('Y-m-d H:i:s'),
+                    'customer_name' => $sale->customer_relation ? $sale->customer_relation->customer_name : 'Walk-in',
+                    'returns' => $sale->returns->map(function($ret) {
+                         // Simplify return object for frontend
+                         return [
+                            'product' => $ret->product ?? '-', // Legacy return might just store string?
+                            // New return system uses SalesReturn table. 
+                            // If `SalesReturn` model has items relation we need to check.
+                            // Assuming `returns` relation on Sale model returns rows from `sales_returns`
+                            'qty' => $ret->qty ?? 0,
+                            'per_total' => $ret->total_net ?? 0 // best guess based on return table
+                         ];
+                    })
+                ];
+            });
+
+            return response()->json($transformed);
         }
 
         return view('admin_panel.reporting.sale_report');
@@ -221,63 +228,41 @@ class ReportingController extends Controller
         $customerId = $request->customer_id;
         $start = $request->start_date;
         $end = $request->end_date;
+        
         $customer = DB::table('customers')->where('id', $customerId)->first();
 
         if (! $customer || ! $start || ! $end) {
             return response()->json(['error' => 'Invalid parameters'], 400);
         }
 
-        // 1. Determine Opening Balance from CustomerLedger (Legacy + V2 Source of Truth)
-        $lastEntryBefore = \App\Models\CustomerLedger::where('customer_id', $customerId)
-            ->where('created_at', '<', $start)
-            ->orderBy('id', 'desc')
-            ->first();
+        // Use BalanceService for proper journal entry based ledger
+        $balanceService = app(\App\Services\BalanceService::class);
+        $ledgerData = $balanceService->getCustomerLedger($customerId, $start, $end);
 
-        $periodOpeningBalance = $lastEntryBefore
-            ? $lastEntryBefore->closing_balance
-            : ($customer->opening_balance ?? 0);
-
-        // 2. Fetch Ledger Entries in Range
-        $endDateTime = $end." 23:59:59";
-        $entries = \App\Models\CustomerLedger::where('customer_id', $customerId)
-            ->whereBetween('created_at', [$start, $endDateTime])
-            ->orderBy('id', 'asc')
-            ->get();
-
-        // 3. Process Entries
-        $transactions = $entries->map(function ($row) {
-            // Delta Logic for Dr/Cr
-            $diff = $row->closing_balance - $row->previous_balance;
-            $debit = 0;
-            $credit = 0;
-
-            if ($diff > 0.001) {
-                $debit = abs($diff);
-            } elseif ($diff < -0.001) {
-                $credit = abs($diff);
-            }
-
+        // Format transactions for frontend
+        $transactions = collect($ledgerData['transactions'])->map(function ($row) {
             // Extract Ref/Invoice from Description
             $ref = '-';
-            if (preg_match('/Invoice #(\S+)/', $row->description, $matches)) {
+            if (preg_match('/Invoice #(\S+)/', $row['description'] ?? '', $matches)) {
                 $ref = $matches[1];
-            } elseif (preg_match('/Receipt #(\S+)/', $row->description, $matches)) {
+            } elseif (preg_match('/Receipt #(\S+)/', $row['description'] ?? '', $matches)) {
                 $ref = $matches[1];
             }
 
             return [
-                'date' => $row->created_at->format('Y-m-d H:i'),
-                'invoice' => $ref, 
-                'description' => $row->description,
-                'debit' => $debit,
-                'credit' => $credit,
-                'balance' => $row->closing_balance,
+                'date' => $row['date'],
+                'invoice' => $ref,
+                'description' => $row['description'] ?? '',
+                'debit' => $row['debit'] ?? 0,
+                'credit' => $row['credit'] ?? 0,
+                'balance' => $row['balance'] ?? 0,
             ];
         });
 
         return response()->json([
             'customer' => $customer,
-            'opening_balance' => $periodOpeningBalance,
+            'opening_balance' => $ledgerData['opening_balance'],
+            'closing_balance' => $ledgerData['closing_balance'] ?? $ledgerData['opening_balance'],
             'transactions' => $transactions,
             'report_period' => "$start to $end",
         ]);

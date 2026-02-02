@@ -20,8 +20,8 @@ class SaleController extends Controller
 {
     public function index()
     {
-        $sales = Sale::with(['customer_relation', 'items.product'])
-            ->whereIn('sale_status', ['draft', 'posted'])
+        $sales = Sale::with(['customer_relation', 'items.product', 'returns'])
+            ->whereIn('sale_status', ['draft', 'booked', 'posted', 'returned'])
             ->latest()
             ->get();
 
@@ -33,8 +33,11 @@ class SaleController extends Controller
         $customer = Customer::all();
         $warehouse = Warehouse::all();
         $nextInvoiceNumber = Sale::generateInvoiceNo();
+        
+        // Filter accounts (Cash/Bank) for Payment Voucher
+        $accounts = \App\Models\Account::whereIn('head_id', [1, 2])->get();
 
-        return view('admin_panel.sale.add_sale222', compact('warehouse', 'customer', 'nextInvoiceNumber'));
+        return view('admin_panel.sale.add_sale222', compact('warehouse', 'customer', 'nextInvoiceNumber', 'accounts'));
     }
 
     public function searchpname(Request $request)
@@ -116,40 +119,163 @@ class SaleController extends Controller
 
     public function saleretun($id)
     {
-        $sale = Sale::findOrFail($id);
+        $sale = Sale::with(['items.product.unit', 'items.product.brand', 'customer_relation'])->findOrFail($id);
         $customers = Customer::all();
         $items = $this->_getSaleItems($sale);
+        
+        // Get Cash/Bank accounts for payment voucher
+        $accounts = \App\Models\Account::whereIn('head_id', [1, 2])->orderBy('title')->get();
+
+        // Calculate return deadline from database settings
+        $returnDeadlineDays = \App\Models\SystemSetting::get('return_deadline_days', 30);
+        $returnDeadline = $sale->created_at->copy()->addDays($returnDeadlineDays);
+        $isWithinDeadline = now()->lte($returnDeadline);
+        
+        // Get already returned quantities for this sale
+        $alreadyReturned = \App\Models\SalesReturn::where('sale_id', $sale->id)
+            ->whereIn('return_status', ['approved', 'completed'])
+            ->get();
+        
+        // Calculate max returnable for each item
+        foreach ($items as &$item) {
+            $returned = 0;
+            foreach ($alreadyReturned as $return) {
+                $returnProductIds = explode(',', $return->product_code);
+                $returnQtys = explode(',', $return->qty);
+                
+                foreach ($returnProductIds as $idx => $code) {
+                    if (trim($code) === $item['item_code']) {
+                        $returned += (float)($returnQtys[$idx] ?? 0);
+                    }
+                }
+            }
+            
+            $item['already_returned'] = $returned;
+            $item['max_returnable'] = max(0, $item['qty'] - $returned);
+        }
 
         return view('admin_panel.sale.return.create', [
             'sale' => $sale,
             'Customer' => $customers,
             'saleItems' => $items,
+            'accounts' => $accounts,
+            'returnDeadline' => $returnDeadline,
+            'isWithinDeadline' => $isWithinDeadline,
+            'returnDeadlineDays' => $returnDeadlineDays,
         ]);
     }
 
     public function storeSaleReturn(Request $request)
     {
+        // Validation
+        $request->validate([
+            'sale_id' => 'required|exists:sales,id',
+            'customer' => 'required|exists:customers,id',
+            'product_id' => 'required|array|min:1',
+            'qty' => 'required|array',
+            'payment_account_id' => 'required|array|min:1',
+            'payment_amount' => 'required|array|min:1',
+            'quality_status' => 'nullable|in:good,damaged,defective,pending_inspection',
+        ]);
+
+        // Load the sale
+        $sale = Sale::findOrFail($request->sale_id);
+        
+        // --- VALIDATION 1: Return Deadline Policy ---
+        $returnDeadlineDays = \App\Models\SystemSetting::get('return_deadline_days', 30);
+        
+        // Check if returns are disabled (0 days = no returns allowed)
+        if ($returnDeadlineDays == 0) {
+            return back()->with('error', 'Returns are currently disabled by store policy.');
+        }
+        
+        $returnDeadline = $sale->created_at->copy()->addDays($returnDeadlineDays);
+        $isWithinDeadline = now()->lte($returnDeadline);
+        
+        // Check if return is past deadline
+        if (!$isWithinDeadline) {
+            $user = auth()->user();
+            $isSuperAdmin = $user->hasRole('Super Admin');
+            $canApprovePastDeadline = $user->can_approve_past_deadline_returns ?? false;
+            
+            // Only Super Admin or users with special permission can approve past deadline returns
+            if (!$isSuperAdmin && !$canApprovePastDeadline) {
+                $daysLate = now()->diffInDays($returnDeadline);
+                return back()->with('error', "Return period expired! This sale is {$daysLate} days past the {$returnDeadlineDays}-day return deadline (Sale Date: {$sale->created_at->format('d-M-Y')}). Only Super Admin can approve past deadline returns.");
+            }
+            
+            // Log that this is a past-deadline return approved by authorized user
+            \Log::info("Past deadline return approved by {$user->name} (ID: {$user->id}) for Sale #{$sale->id}");
+        }
+        
+        // --- VALIDATION 2: Partial Return - Prevent returning more than sold ---
+        $product_ids = $request->product_id ?? [];
+        $quantities = $request->qty ?? [];
+        
+        // Get already returned quantities
+        $alreadyReturned = \App\Models\SalesReturn::where('sale_id', $sale->id)
+            ->whereIn('return_status', ['approved', 'completed', 'pending']) // Include pending to prevent duplicate submissions
+            ->get();
+        
+        foreach ($product_ids as $index => $product_id) {
+            $returnQty = (float)($quantities[$index] ?? 0);
+            
+            if ($returnQty <= 0) {
+                continue;
+            }
+            
+            // Find original sale item
+            $saleItem = $sale->items->where('product_id', $product_id)->first();
+            
+            if (!$saleItem) {
+                return back()->with('error', "Product ID {$product_id} was not found in the original sale.");
+            }
+            
+            // Calculate already returned quantity for this product
+            $previouslyReturned = 0;
+            foreach ($alreadyReturned as $return) {
+                $returnProductIds = $request->product_id;
+                $returnQtys = explode(',', $return->qty);
+                
+                // Match by product_id in the combined string
+                $productCodes = explode(',', $return->product_code);
+                foreach ($productCodes as $idx => $code) {
+                    $product = \App\Models\Product::where('item_code', trim($code))->first();
+                    if ($product && $product->id == $product_id) {
+                        $previouslyReturned += (float)($returnQtys[$idx] ?? 0);
+                    }
+                }
+            }
+            
+            $maxReturnable = $saleItem->total_pieces - $previouslyReturned;
+            
+            if ($returnQty > $maxReturnable) {
+                $productName = $saleItem->product_name ?? "Product #{$product_id}";
+                return back()->with('error', "Cannot return {$returnQty} pieces of '{$productName}'. Maximum returnable: {$maxReturnable} pieces (Sold: {$saleItem->total_pieces}, Already Returned: {$previouslyReturned}).");
+            }
+        }
+
         DB::beginTransaction();
 
         try {
             $warehouseId = (int) ($request->input('warehouse_id', 1));
-            $srMovements = [];
-            $product_ids = $request->product_id ?? [];
+            
             $product_names = $request->product ?? [];
             $product_codes = $request->item_code ?? [];
             $brands = $request->uom ?? [];
             $units = $request->unit ?? [];
             $prices = $request->price ?? [];
             $discounts = $request->item_disc ?? [];
-            $quantities = $request->qty ?? [];
             $totals = $request->total ?? [];
             $colors = $request->color ?? [];
 
             $combined_products = $combined_codes = $combined_brands = $combined_units = [];
             $combined_prices = $combined_discounts = $combined_qtys = $combined_totals = $combined_colors = [];
 
+            $jsonItems = [];
             $total_items = 0;
 
+            // Process each returned item logic
             foreach ($product_ids as $index => $product_id) {
                 $qty = max(0.0, (float) ($quantities[$index] ?? 0));
                 $price = max(0.0, (float) ($prices[$index] ?? 0));
@@ -157,6 +283,13 @@ class SaleController extends Controller
                 if (! $product_id || $qty <= 0) {
                     continue;
                 }
+
+                // Add to JSON structure for later processing
+                $jsonItems[] = [
+                    'product_id' => $product_id,
+                    'qty' => $qty,
+                    'price' => $price
+                ];
 
                 $combined_products[] = $product_names[$index] ?? '';
                 $combined_codes[] = $product_codes[$index] ?? '';
@@ -170,37 +303,22 @@ class SaleController extends Controller
                 $decodedColor = $colors[$index] ?? [];
                 $combined_colors[] = is_array($decodedColor) ? json_encode($decodedColor) : json_encode((array) json_decode($decodedColor, true));
 
-                // restore stock at SAME location
-                $stock = \App\Models\WarehouseStock::where('product_id', $product_id)
-                    ->where('warehouse_id', $warehouseId)
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($stock) {
-                    $stock->total_pieces += $qty; // Assuming Return Qty is Pieces?
-                    // Re-calculate boxes for consistency?
-                    // If return qty is pieces (consistent with new sales), update total_pieces.
-                    // Also update quantity (boxes).
-                    $product = Product::find($product_id);
-                    $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
-                    $stock->quantity += ($qty / $ppb);
-                    $stock->save();
-                }
-
-                $srMovements[] = [
-                    'product_id' => $product_id,
-                    'type' => 'in',
-                    'qty' => (float) $qty,
-                    'ref_type' => 'SR',
-                    'ref_id' => null,
-                    'note' => 'Sale return',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-
+                // NOTE: Stock updates are now deferred to the approval step
                 $total_items += $qty;
             }
 
+            // Prepare Payment Details
+            $paymentAccountIds = $request->payment_account_id ?? [];
+            $paymentAmounts = $request->payment_amount ?? [];
+            $jsonPayments = [];
+            
+            foreach ($paymentAccountIds as $idx => $id) {
+                if (($paymentAmounts[$idx] ?? 0) > 0) {
+                    $jsonPayments[] = ['account_id' => $id, 'amount' => $paymentAmounts[$idx]];
+                }
+            }
+
+            // Create Sale Return Record
             $saleReturn = new SalesReturn;
             $saleReturn->sale_id = $request->sale_id;
             $saleReturn->customer = $request->customer;
@@ -223,93 +341,454 @@ class SaleController extends Controller
             $saleReturn->change = $request->change;
             $saleReturn->total_items = $total_items;
             $saleReturn->return_note = $request->return_note;
+            
+            // Store comprehensive data for later processing
+            $saleReturn->refund_details = json_encode([
+                'items' => $jsonItems,
+                'payments' => $jsonPayments,
+                'warehouse_id' => $warehouseId,
+                'customer_id' => $request->customer,
+                'total_net' => $request->total_net
+            ]);
+            
+            // --- WORKFLOW STATUS FIELDS ---
+            $autoApproveThreshold = \App\Models\SystemSetting::get('return_auto_approve_threshold', 0);
+            $returnAmount = (float) $request->total_net;
+            $requireApproval = \App\Models\SystemSetting::get('return_require_approval', true);
+
+            if (($autoApproveThreshold > 0 && $returnAmount <= $autoApproveThreshold) || !$requireApproval) {
+                $saleReturn->return_status = 'approved';
+                // Dates set in _processApproval
+            } else {
+                $saleReturn->return_status = 'pending';
+            }
+            
+            // Quality Status
+            $saleReturn->quality_status = $request->quality_status ?? 'pending_inspection';
+            if ($request->quality_status && in_array($request->quality_status, ['good', 'damaged', 'defective'])) {
+                $saleReturn->inspected_by = auth()->id();
+            }
+            
+            // Return Deadline
+            $saleReturn->return_deadline = $returnDeadline;
+            $saleReturn->is_within_deadline = $isWithinDeadline;
+            
             $saleReturn->save();
 
-            if (! empty($srMovements)) {
-                foreach ($srMovements as &$m) {
-                    $m['ref_id'] = $saleReturn->id;
-                }
-                unset($m);
-                DB::table('stock_movements')->insert($srMovements);
-            }
-
-            // Update original sale (decrement quantity)
-            $sale = Sale::find($request->sale_id);
-            if ($sale && $sale->items) {
-                foreach ($product_ids as $index => $product_id) {
-                    $return_qty = max(0.0, (float) ($quantities[$index] ?? 0));
-                    if ($return_qty <= 0) {
-                        continue;
-                    }
-                    $saleItem = $sale->items->where('product_id', $product_id)->first();
-                    if ($saleItem) {
-                        // Assuming return_qty is pieces
-                        $saleItem->total_pieces = max(0, $saleItem->total_pieces - $return_qty);
-                        // Update boxes/loose
-                        $prod = Product::find($product_id);
-                        $ppb = $prod->pieces_per_box > 0 ? $prod->pieces_per_box : 1;
-                        $saleItem->qty = floor($saleItem->total_pieces / $ppb);
-                        $saleItem->loose_pieces = $saleItem->total_pieces % $ppb;
-                        $saleItem->save();
-                    }
-                }
-            }
-
-            $this->updateLedger($saleReturn); // Credit/Refund to customer?
-            // Usually returns decrease Balance.
-            // _updateLeger adds total_net to balance.
-            // If return, we should Subtract.
-            // But let's leave legacy logic if unsure, or implementing simpler Ledger impact:
-            // Ledger: Closing Balance = Closing - Return Amount.
-            $customer_id = $request->customer;
-            $ledger = CustomerLedger::where('customer_id', $customer_id)->latest('id')->first();
-            if ($ledger) {
-                $ledger->closing_balance -= $request->total_net;
-                $ledger->save();
+            // If Approved, process transactions immediately
+            if ($saleReturn->return_status === 'approved') {
+                $this->_processApproval($saleReturn);
             }
 
             DB::commit();
 
-            return redirect()->route('sale.index')->with('success', 'Sale return saved successfully.');
+            // Create notification for super admins
+            try {
+                \App\Models\SystemNotification::createSaleReturnNotification($saleReturn, $sale);
+            } catch (\Exception $e) {
+                \Log::error('Notification creation failed: ' . $e->getMessage());
+                // Don't fail the return process if notification fails
+            }
+
+            return redirect()->route('sale.index')->with('success', 'Sale return processed successfully with journal entries and payment voucher.');
         } catch (\Exception $e) {
             DB::rollBack();
-
+            \Log::error('Sale Return Error: ' . $e->getMessage());
             return back()->with('error', 'Sale return failed: '.$e->getMessage());
         }
     }
 
     public function salereturnview()
     {
-        $salesReturns = SalesReturn::with('sale.customer_relation')->orderBy('created_at', 'desc')->get();
+        $salesReturns = SalesReturn::with(['sale.customer_relation', 'customer_relation'])->orderBy('created_at', 'desc')->get();
 
-        return view('admin_panel.sale.return.index', compact('salesReturns'));
+        // Calculate stats
+        $stats = [
+            'total' => $salesReturns->count(),
+            'pending' => $salesReturns->where('return_status', 'pending')->count(),
+            'approved' => $salesReturns->where('return_status', 'approved')->count(),
+            'rejected' => $salesReturns->where('return_status', 'rejected')->count(),
+            'completed' => $salesReturns->where('return_status', 'completed')->count(),
+        ];
+
+        return view('admin_panel.sale.return.index', compact('salesReturns', 'stats'));
+    }
+
+    /**
+     * Approve a sale return
+     */
+    public function approveReturn($id)
+    {
+        try {
+            $return = SalesReturn::findOrFail($id);
+            
+            // Check if already processed
+            if ($return->return_status !== 'pending') {
+                return back()->with('error', 'This return has already been processed.');
+            }
+            
+            DB::beginTransaction();
+
+            // If we have refund_details, it means we used the new workflow where 
+            // actions were deferred until approval.
+            if (!empty($return->refund_details)) {
+                $this->_processApproval($return);
+            } else {
+                // Legacy support: If no refund_details, it means stock/accounting 
+                // were likely done at creation time (old behavior), so just update status.
+                $return->return_status = 'approved';
+                $return->approved_by = auth()->id();
+                $return->approved_at = now();
+                $return->save();
+            }
+            
+            DB::commit();
+            
+            return back()->with('success', 'Return approved successfully!');
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Return approval failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to approve return: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Process the physical and financial transactions for a return
+     */
+    private function _processApproval($saleReturn)
+    {
+        $data = is_string($saleReturn->refund_details) ? json_decode($saleReturn->refund_details, true) : $saleReturn->refund_details;
+        
+        if (!$data) {
+            throw new \Exception("Invalid return data for processing");
+        }
+
+        $warehouseId = $data['warehouse_id'] ?? 1; // Default to 1 if missing
+        $items = $data['items'] ?? [];
+        $payments = $data['payments'] ?? [];
+        $srMovements = [];
+
+        // 1. Update Stock & Original Sale Items
+        $sale = Sale::find($saleReturn->sale_id);
+        
+        foreach ($items as $item) {
+            $productId = $item['product_id'];
+            $qty = (float) $item['qty'];
+
+            if ($qty <= 0) continue;
+
+            // Update Warehouse Stock
+            $stock = \App\Models\WarehouseStock::where('product_id', $productId)
+                ->where('warehouse_id', $warehouseId)
+                ->first();
+
+            if ($stock) {
+                $stock->total_pieces += $qty;
+                $prod = Product::find($productId);
+                $ppb = $prod->pieces_per_box > 0 ? $prod->pieces_per_box : 1;
+                $stock->quantity += ($qty / $ppb);
+                $stock->save();
+            }
+
+            // Prepare Stock Movement
+            $srMovements[] = [
+                'product_id' => $productId,
+                'type' => 'in',
+                'qty' => $qty,
+                'ref_type' => 'SR',
+                'ref_id' => $saleReturn->id,
+                'note' => 'Sale return approved',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+
+            // Update Sales Item (Decrement sold quantity)
+            if ($sale && $sale->items) {
+                $saleItem = $sale->items->where('product_id', $productId)->first();
+                if ($saleItem) {
+                    $saleItem->total_pieces = max(0, $saleItem->total_pieces - $qty);
+                    $prod = Product::find($productId);
+                    $ppb = $prod->pieces_per_box > 0 ? $prod->pieces_per_box : 1;
+                    $saleItem->qty = floor($saleItem->total_pieces / $ppb);
+                    $saleItem->loose_pieces = $saleItem->total_pieces % $ppb;
+                    $saleItem->save();
+                }
+            }
+        }
+
+        // Inert Stock Movements
+        if (!empty($srMovements)) {
+            DB::table('stock_movements')->insert($srMovements);
+        }
+
+        // 2. Journal Entries
+        $customer = Customer::find($data['customer_id'] ?? $saleReturn->customer);
+        $returnAmount = (float) $saleReturn->total_net;
+        $date = now()->format('Y-m-d');
+        $journalService = app(\App\Services\JournalEntryService::class);
+        $balanceService = app(\App\Services\BalanceService::class);
+
+        // Accounts
+        $arAccountId = $balanceService->getAccountsReceivableId();
+        $salesAccountId = $balanceService->getSalesRevenueId();
+
+        if ($returnAmount > 0) {
+            // Debit Sales Return (or Sales Revenue)
+            $journalService->recordEntry(
+                $saleReturn,
+                $salesAccountId,
+                $returnAmount,
+                0,
+                "Sale Return #{$saleReturn->id} - Invoice #{$sale->invoice_no}",
+                $date
+            );
+
+            // Credit Customer (AR)
+            $journalService->recordEntry(
+                $saleReturn,
+                $arAccountId,
+                0,
+                $returnAmount,
+                "Sale Return #{$saleReturn->id} - Invoice #{$sale->invoice_no}",
+                $date,
+                $customer
+            );
+        }
+
+        // 3. Process Payments (Refunds)
+        $totalPaid = 0;
+        foreach ($payments as $payment) {
+            $amount = (float) ($payment['amount'] ?? 0);
+            $accountId = $payment['account_id'];
+
+            if ($amount <= 0 || !$accountId) continue;
+
+            $totalPaid += $amount;
+
+            // Credit Cash/Bank (Money Out)
+            $journalService->recordEntry(
+                $saleReturn,
+                $accountId,
+                0,
+                $amount,
+                "Refund Payment for Sale Return #{$saleReturn->id}",
+                $date
+            );
+        }
+
+        // Debit Customer (AR) for the refund amount (since we paid them back)
+        // Logic: Return credited AR (balance down). Refund debits AR (balance up/neutralized).
+        // Net result: Sales reversed, Cash paid out. Customer balance neutral.
+        if ($totalPaid > 0) {
+            $journalService->recordEntry(
+                $saleReturn,
+                $arAccountId,
+                $totalPaid,
+                0,
+                "Refund Payment for Sale Return #{$saleReturn->id}",
+                $date,
+                $customer
+            );
+
+            // Create Payment Voucher Record
+            \App\Models\CustomerPayment::create([
+                'customer_id' => $customer->id,
+                'admin_or_user_id' => auth()->id(),
+                'voucher_no' => 'SR-' . $saleReturn->id, 
+                'payment_date' => $date,
+                'payment_method' => 'Cash', 
+                'amount' => $totalPaid,
+                'note' => "Refund for Sale Return #{$saleReturn->id}",
+                'type' => 'refund' 
+            ]);
+
+            // Auto-Generate Payment Voucher (PV) for Refund
+            try {
+                $pvid = \App\Models\PaymentVoucher::generateInvoiceNo();
+                // Extract accounts and amounts
+                $pvAccounts = [];
+                $pvAmounts = [];
+                foreach ($payments as $p) {
+                    if (($p['amount'] ?? 0) > 0) {
+                        $pvAccounts[] = $p['account_id'];
+                        $pvAmounts[] = $p['amount'];
+                    }
+                }
+
+                \App\Models\PaymentVoucher::create([
+                    'pvid' => $pvid,
+                    'party_id' => $customer->id,
+                    'type' => 'customer',
+                    'total_amount' => $totalPaid,
+                    'payment_date' => $date,
+                    'row_account_id' => json_encode($pvAccounts),
+                    'row_account_head' => json_encode([]), 
+                    'row_amount' => json_encode($pvAmounts),
+                    'remarks' => "Refund for Sale Return #{$saleReturn->id}",
+                ]);
+            } catch (\Exception $e) {
+                \Log::error('Refund PV Creation Failed: ' . $e->getMessage());
+            }
+        }
+
+        // 4. Update Status
+        $saleReturn->return_status = 'approved';
+        $saleReturn->approved_by = auth()->id();
+        $saleReturn->approved_at = now();
+        $saleReturn->save();
+    }
+
+    /**
+     * Reject a sale return
+     */
+    public function rejectReturn(Request $request, $id)
+    {
+        $request->validate([
+            'rejection_reason' => 'required|string|min:10',
+        ]);
+        
+        try {
+            $return = SalesReturn::findOrFail($id);
+            
+            // Check if already processed
+            if ($return->return_status !== 'pending') {
+                return back()->with('error', 'This return has already been processed.');
+            }
+            
+            // Update return status
+            $return->return_status = 'rejected';
+            $return->approved_by = auth()->id();
+            $return->approved_at = now();
+            $return->rejection_reason = $request->rejection_reason;
+            $return->save();
+            
+            return back()->with('success', 'Return rejected successfully!');
+            
+        } catch (\Exception $e) {
+            \Log::error('Return rejection failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to reject return: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Show detailed sale return information
+     */
+    public function saleReturnDetail($id)
+    {
+        $saleReturn = SalesReturn::with('customer_relation')->findOrFail($id);
+        $sale = Sale::with(['customer_relation', 'items.product'])->findOrFail($saleReturn->sale_id);
+        
+        // Parse return items
+        $returnItems = [];
+        $productNames = explode(',', $saleReturn->product);
+        $productCodes = explode(',', $saleReturn->product_code);
+        $brands = explode(',', $saleReturn->brand);
+        $units = explode(',', $saleReturn->unit);
+        $prices = explode(',', $saleReturn->per_price);
+        $discounts = explode(',', $saleReturn->per_discount);
+        $quantities = explode(',', $saleReturn->qty);
+        $totals = explode(',', $saleReturn->per_total);
+        
+        for ($i = 0; $i < count($productNames); $i++) {
+            $returnItems[] = [
+                'product_name' => $productNames[$i] ?? '',
+                'product_code' => $productCodes[$i] ?? '',
+                'brand' => $brands[$i] ?? '',
+                'unit' => $units[$i] ?? '',
+                'price' => $prices[$i] ?? 0,
+                'discount' => $discounts[$i] ?? 0,
+                'quantity' => $quantities[$i] ?? 0,
+                'total' => $totals[$i] ?? 0,
+            ];
+        }
+        
+        // Get payment details
+        $payments = \App\Models\CustomerPayment::where('note', 'like', "%Sale Return #{$saleReturn->id}%")->get();
+        
+        // Get journal entries
+        $journalEntries = \App\Models\JournalEntry::where('source_type', 'App\Models\SalesReturn')
+            ->where('source_id', $saleReturn->id)
+            ->with('account')
+            ->get();
+        
+        // Get approver and inspector info
+        $approver = $saleReturn->approved_by ? \App\Models\User::find($saleReturn->approved_by) : null;
+        $inspector = $saleReturn->inspected_by ? \App\Models\User::find($saleReturn->inspected_by) : null;
+        
+        return view('admin_panel.sale.return.detail', compact(
+            'saleReturn',
+            'sale',
+            'returnItems',
+            'payments',
+            'journalEntries',
+            'approver',
+            'inspector'
+        ));
     }
 
     public function saleinvoice($id)
     {
         $sale = Sale::with('customer_relation')->findOrFail($id);
         $items = $this->_getSaleItems($sale);
+        
+        // Calculate Balances for Invoice
+        $previousBalance = 0;
+        $currentBalance = 0;
+        
+        // Find the Journal Entry for this Sale (Debit side)
+        // We look for where source is Sale and it's a Debit (Customer side)
+        $journalEntry = \App\Models\JournalEntry::where('source_type', \App\Models\Sale::class)
+            ->where('source_id', $sale->id)
+            ->where('debit', '>', 0) // The debit to customer
+            ->first();
+            
+        if ($journalEntry && $sale->customer_id) {
+            // Calculate Previous Balance: Sum of (Dr - Cr) for all entries BEFORE this one
+            $previousBalance = \App\Models\JournalEntry::where('party_type', \App\Models\Customer::class)
+                ->where('party_id', $sale->customer_id)
+                ->where('id', '<', $journalEntry->id)
+                ->sum(\Illuminate\Support\Facades\DB::raw('debit - credit'));
+                
+            // Current Balance (after this bill, before payment if payment is separate)
+            $currentBalance = $previousBalance + $sale->total_net; 
+            
+            // Note: If payment was made, it's usually a separate receipt voucher (even if immediate).
+            // So "Current Balance" here naturally excludes the payment unless we look for payment next.
+            // But the user wants "Previous Bal +/- Current Amount = Net".
+        } else {
+            // Fallback if no journal entry (legacy or draft)
+            $customer = $sale->customer_relation;
+            $previousBalance = $customer->opening_balance ?? 0;
+            // This is an estimate if we can't find the entry
+        }
 
-        return view('admin_panel.sale.saleinvoice', ['sale' => $sale, 'saleItems' => $items]);
+        return view('admin_panel.sale.saleinvoice', [
+            'sale' => $sale, 
+            'saleItems' => $items,
+            'previousBalance' => $previousBalance,
+            'currentBalance' => $currentBalance
+        ]);
     }
 
     public function saleedit($id)
     {
-        $sale = Sale::findOrFail($id);
-        $customers = Customer::all();
-        $items = $this->_getSaleItems($sale);
+        // 1. Fetch Sale with relations (including nested items.product for pre-fill)
+        $sale = Sale::with(['items.product', 'customer_relation'])->findOrFail($id);
+
+        // 2. Data for Dropdowns (Same as addsale)
+        $customer = Customer::all(); 
+        $warehouse = Warehouse::all();
+        // Filter accounts (Cash/Bank) for Receipt Voucher
+        $accounts = \App\Models\Account::whereIn('head_id', [1, 2])->orderBy('title')->get();
+        
+        // 3. Reuse nextInvoiceNumber var for current invoice no (view expects this variable name)
         $nextInvoiceNumber = $sale->invoice_no;
 
-        // We pass 'sale' as 'booking' to align with the view name/context if needed,
-        // but primarily ensuring all data is available.
-        return view('admin_panel.sale.booking_edit', [
-            'sale' => $sale,
-            'booking' => $sale,
-            'Customer' => $customers,
-            'saleItems' => $items,
-            'nextInvoiceNumber' => $nextInvoiceNumber,
-        ]);
+        // 4. Return the Edit Sale View
+        return view('admin_panel.sale.edit_sale', compact('warehouse', 'customer', 'nextInvoiceNumber', 'accounts', 'sale'));
     }
+
 
     public function updatesale(Request $request, $id)
     {
@@ -372,7 +851,7 @@ class SaleController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages(['product_id' => 'Duplicate products are not allowed in a single sale. Please merge quantities.']);
         }
 
-        $status = $request->action === 'post' ? 'posted' : 'booked';
+        $status = $request->action === 'post' ? 'posted' : 'draft';
 
         // Concurrency Safe Transaction
         return DB::transaction(function () use ($request, $sale, $status) {
@@ -385,7 +864,23 @@ class SaleController extends Controller
             $sale->sale_status = $status;
 
             if ($isNew) {
-                $sale->invoice_no = Sale::generateInvoiceNo();
+                // Check if user provided manual invoice number
+                if ($request->filled('invoice_no')) {
+                    $manualInvoice = trim($request->invoice_no);
+
+                    // Check for duplicates
+                    $exists = Sale::where('invoice_no', $manualInvoice)->exists();
+                    if ($exists) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'invoice_no' => "Invoice number '{$manualInvoice}' already exists. Please use a different number or leave blank for auto-generation.",
+                        ]);
+                    }
+
+                    $sale->invoice_no = $manualInvoice;
+                } else {
+                    // Auto-generate unique invoice number
+                    $sale->invoice_no = $this->generateUniqueInvoiceNo();
+                }
             }
 
             // We will calculate totals from verified items
@@ -418,35 +913,35 @@ class SaleController extends Controller
                     continue;
                 }
 
-                $qtyBox = (float) ($quantities[$index] ?? 0);
-                if ($qtyBox <= 0) {
+                $qtyInput = (float) ($quantities[$index] ?? 0);
+                if ($qtyInput <= 0) {
                     continue;
                 }
 
                 $product = Product::findOrFail($pid);
 
                 // USE INPUT PRICE (User might have changed it manually)
-                $inputPrice = (float) ($request->price[$index] ?? 0);
-                $dbPrice = $inputPrice > 0 ? $inputPrice : ($product->retail_price > 0 ? $product->retail_price : 0);
+                $inputPrice = (float) ($request->price_per_piece[$index] ?? 0);
+                $dbPrice = $inputPrice > 0 ? $inputPrice : ($product->sale_price_per_piece > 0 ? $product->sale_price_per_piece : 0);
 
                 \Log::info("SaleItem #{$index}: Product {$product->item_name}, InputPrice: {$inputPrice}, FinalPrice: {$dbPrice}");
-                // Or check price_level logic?
 
                 $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
-                $totalPieces = $qtyBox * $ppb; // Convert Box to Pieces
-                // + Loose?
+                
+                // User enters PIECES directly (not boxes)
+                $qtyPieces = (float) ($quantities[$index] ?? 0);
                 $loose = (float) ($request->loose_pieces[$index] ?? 0);
-                $totalPieces += $loose;
+                $totalPieces = $qtyPieces + $loose;
 
-                // Recalculate boxes for storage if needed
+                // Calculate boxes for storage (reverse calculation)
                 $storedQtyBox = $totalPieces / $ppb;
 
                 $discount = (float) ($discounts[$index] ?? 0);
 
                 // Calculate Line Total
-                // Price usually per Box or Per Piece?
-                // Invoice view shows "Price/Box".
-                $lineTotal = ($qtyBox * $dbPrice) + ($loose * ($dbPrice / $ppb)); // Approx
+                // User enters: Qty in PIECES, Price PER PIECE
+                // So: Total = Total Pieces × Price Per Piece
+                $lineTotal = $totalPieces * $dbPrice;
 
                 // Apply Discount
                 $lineTotal = $lineTotal - ($lineTotal * $discount / 100);
@@ -490,14 +985,20 @@ class SaleController extends Controller
             if ($status === 'posted') {
                 \Log::info('Proceeding to Auto-Receipt & Ledger logic for Sale #'.$sale->invoice_no);
 
-                // 1. LEGACY LEDGER: Post Invoice First (Increases Balance)
+                // 1. DEDUCT STOCK FROM WAREHOUSE
+                $this->handleStockImpact($sale, 'out');
+
+                // 2. LEGACY LEDGER: Post Invoice First (Increases Balance)
                 // This ensures the CustomerLedger has the Debit entry before we potentially Credit it with a receipt.
                 $this->updateLedger($sale);
 
                 try {
                     $journalService = app(\App\Services\JournalEntryService::class);
-                    $arAccountId = 4; // Accounts Receivable
-                    $salesAccountId = 5; // Sales Revenue
+                    $balanceService = app(\App\Services\BalanceService::class);
+                    
+                    // Get account IDs dynamically
+                    $arAccountId = $balanceService->getAccountsReceivableId();
+                    $salesAccountId = $balanceService->getSalesRevenueId();
                     $date = $sale->created_at->format('Y-m-d');
 
                     // --- PROFESSIONAL LEDGER POSTING (ENTRY 1: THE INVOICE) ---
@@ -552,6 +1053,11 @@ class SaleController extends Controller
     private function handleStockImpact(Sale $sale, $type = 'out')
     {
         // Type: 'out' (Sale Posted), 'in' (Sale Cancelled), 'return' (Returned)
+        
+        // Load items relationship if not already loaded
+        if (!$sale->relationLoaded('items')) {
+            $sale->load('items.product');
+        }
 
         foreach ($sale->items as $item) {
             $stock = WarehouseStock::where('product_id', $item->product_id)
@@ -695,16 +1201,51 @@ class SaleController extends Controller
                 'item_code' => $item->product->item_code ?? '',
                 'brand' => $item->product->brand->name ?? '',
                 'unit' => $item->product->unit->name ?? '', // Access name if relation exists
-                'qty' => (float) $item->qty, // Boxes
+                'qty' => (int) $item->total_pieces, // Use Pieces for Return Logic (Matches Price-Per-Piece)
+                'qty_box' => (float) $item->qty, // Store Box Count separately
                 'total_pieces' => (int) $item->total_pieces,
                 'loose_pieces' => (int) $item->loose_pieces,
-                'price' => (float) $item->price,
-                'discount' => (float) $item->discount_percent,
+                'price' => (float) $item->price, // Price Per Piece
+                'discount' => (float) $item->discount_percent, // Percentage
                 'total' => (float) $item->total,
-                'color' => json_decode($item->color, true),
+                'color' => json_decode($item->color, true) ?? [],
                 'pieces_per_box' => $item->product->pieces_per_box ?? 1,
                 'price_per_piece' => ($item->total_pieces > 0) ? ($item->total / $item->total_pieces) : 0,
             ];
         });
+    }
+
+    /**
+     * Generate a unique invoice number with duplicate checking
+     */
+    private function generateUniqueInvoiceNo()
+    {
+        $maxAttempts = 100;
+        $attempt = 0;
+
+        do {
+            $lastSale = Sale::orderBy('id', 'desc')->first();
+
+            if (! $lastSale || ! $lastSale->invoice_no) {
+                $invoiceNo = 'INV-0001';
+            } else {
+                // Extract numeric part
+                $lastNumber = (int) str_replace('INV-', '', $lastSale->invoice_no);
+                // Increment + format
+                $invoiceNo = 'INV-'.str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
+            }
+
+            // Check if this invoice number already exists
+            $exists = Sale::where('invoice_no', $invoiceNo)->exists();
+
+            if (! $exists) {
+                return $invoiceNo;
+            }
+
+            $attempt++;
+        } while ($attempt < $maxAttempts);
+
+        // Fallback: use timestamp-based unique number
+        return 'INV-'.date('YmdHis');
     }
 }
