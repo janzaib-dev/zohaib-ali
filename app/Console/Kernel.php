@@ -27,6 +27,9 @@ class Kernel extends ConsoleKernel
 
         // Check for overdue customer debts daily at 9 AM
         $schedule->command('debt:check')->dailyAt('09:00');
+
+        // Check for overdue sales invoices daily at 8 AM
+        $schedule->command('sales:check-overdue')->dailyAt('08:00');
     }
 
     /**

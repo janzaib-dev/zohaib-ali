@@ -271,9 +271,6 @@
               width: 90px;
           }
 
-          .col-loose {
-              width: 90px;
-          }
 
           .col-price {
               width: 110px;
@@ -374,7 +371,16 @@
                               <input type="text" class="form-control input-readonly" name="Invoice_no"
                                   style="width:150px" value="{{ $nextInvoiceNumber }}" readonly>
                               <label class="form-label fw-bold mb-0">M. Inv#</label>
-                              <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice">
+                              <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice"
+                                  value="{{ $sale->reference ?? '' }}">
+                          </div>
+
+                          {{-- Credit Days (Optional) --}}
+                          <div class="mb-2 d-flex align-items-center gap-2">
+                              <label class="form-label fw-bold mb-0" style="min-width: 90px;">Credit Days</label>
+                              <input type="number" class="form-control" name="credit_days" placeholder="Optional"
+                                  style="width:100px" min="0" value="{{ $sale->credit_days ?? '' }}">
+                              <small class="text-muted">(Leave empty for no notification)</small>
                           </div>
 
                           {{-- Type toggle --}}
@@ -420,8 +426,8 @@
 
                           <div class="mb-2 d-flex justify-content-between">
                               <span>Previous Balance</span>
-                              <input type="text" class="form-control w-25 text-end" id="previousBalance" value="0"
-                                  readonly>
+                              <input type="text" class="form-control w-25 text-end" id="previousBalance"
+                                  value="0" readonly>
                           </div>
                           <div class="mb-2 d-flex justify-content-between">
                               <span>Range Balance</span>
@@ -454,7 +460,6 @@
                                           <th class="col-stock">Stock</th>
                                           <th class="col-qty">Total Pcs</th>
                                           <th class="col-qty">Pack Size</th>
-                                          <th class="col-loose">Loose</th>
                                           <th class="col-pieces">Boxes</th>
                                           <th class="col-disc">Disc %</th>
                                           <th class="col-disc-amt">Disc Amt</th>
@@ -834,23 +839,7 @@
                   if (currentVal) $select.val(currentVal);
               }
 
-              // 🔹 Add Receipt Row
-              $('#btnAddRV').on('click', function() {
-                  let options = '<option value="">Select account</option>';
-                  accountData.forEach(acc => {
-                      options += `<option value="${acc.id}">${acc.title}</option>`;
-                  });
 
-                  $('#rvWrapper .rv-row:last').after(`
-                  <div class="d-flex gap-2 align-items-center mb-2 rv-row">
-                    <select class="form-select rv-account" name="receipt_account_id[]" style="max-width:320px">
-                      ${options}
-                    </select>
-                    <input type="text" class="form-control text-end rv-amount" name="receipt_amount[]" placeholder="0.00" style="max-width:160px">
-                    <button type="button" class="btn btn-outline-danger btn-sm btnRemRV">&times;</button>
-                  </div>
-                `);
-              });
 
           });
       </script>
@@ -961,7 +950,7 @@
                   $row.find('.pack-qty').val(pRes.pieces_per_box || 1);
 
                   // Piece Price
-                  $row.find('.price-per-piece').val(pRes.sale_price_per_piece || 0);
+                  $row.find('.price-per-piece').val(pRes.price_per_m2 || 0);
 
                   // Populate Size Info
                   $row.find('.size-h').val(pRes.height || '-');
@@ -1101,11 +1090,7 @@
        <input type="text" class="form-control pack-qty text-end input-readonly" name="pack_qty[]" readonly placeholder="Size" tabindex="-1">
     </td>
 
-    <!-- LOOSE PIECES (Editable) -->
-    <td class="col-loose">
-      <input type="text" class="form-control loose-pieces text-end" name="loose_pieces[]" placeholder="Loose">
-    </td>
-
+   
     <!-- Packet/Box (Calculated) -->
     <td class="col-pieces">
       <input type="text" class="form-control total-pieces text-end input-readonly" name="total_pieces[]" readonly placeholder="Box" tabindex="-1">
@@ -1207,8 +1192,11 @@
                   const existing = $('#booking_id').val();
 
                   let url = '{{ route('sales.store') }}';
+                  let formData = serializeForm();
+
                   if (existing) {
                       url = '{{ route('sales.update', ':id') }}'.replace(':id', existing);
+                      formData += '&_method=PUT';
                   }
 
                   $('#btnSave, #btnHeaderPosted, #btnPosted').prop('disabled', true);
@@ -1216,7 +1204,7 @@
                   $.ajax({
                       url: url,
                       type: 'POST',
-                      data: serializeForm(),
+                      data: formData,
                       success: function(res) {
                           $('#btnSave, #btnHeaderPosted, #btnPosted').prop('disabled', false);
                           if (res?.ok) {
@@ -1452,11 +1440,11 @@
           // Compute Row Logic
           function computeRow($row, isManual = false) {
               const rp = toNum($row.find('.retail-price').val()); // Box Price
-
+              const m2_per_piece = parseFloat($row.find('.size-h').val() * $row.find('.size-w').val() / 10000);
               // Input fields: 
               // sales-qty = Total Pieces (User Input)
               const qtyPieces = toNum($row.find('.sales-qty').val());
-              const loose = toNum($row.find('.loose-pieces').val()); // Extra Loose pieces
+
 
               const packQty = parseFloat($row.find('.pack-qty').val()) || 1;
 
@@ -1477,14 +1465,14 @@
               $row.find('.total-pieces').val(Number.isInteger(boxes) ? boxes : boxes.toFixed(2));
 
               // Total Pieces for Calculation
-              const totalPieces = qtyPieces + loose;
+              const totalPieces = qtyPieces;
 
               // 🔹 GROSS CALCULATION
               // "fix total amount with piece which user input"
               // Use Price Per Piece explicitly
               let unitPrice = toNum($row.find('.price-per-piece').val());
 
-              const gross = totalPieces * unitPrice;
+              const gross = m2_per_piece * totalPieces * unitPrice;
 
               /* ===== AUTO DISCOUNT ===== */
               if (!isManual) {
@@ -1512,7 +1500,7 @@
 
 
           // Main Input Trigger 
-          $(document).on('input', '.sales-qty, .pack-qty, .loose-pieces, .discount-value', function() {
+          $(document).on('input', '.sales-qty, .pack-qty, .discount-value', function() {
               const $row = $(this).closest('tr');
               computeRow($row);
               updateGrandTotals();
@@ -1559,8 +1547,7 @@
 
                   // Total Pieces
                   const qtyPcs = toNum($r.find('.sales-qty').val());
-                  const loose = toNum($r.find('.loose-pieces').val());
-                  const totalPieces = qtyPcs + loose;
+                  const totalPieces = qtyPcs;
 
                   tQty += totalPieces;
                   tGross += gross;

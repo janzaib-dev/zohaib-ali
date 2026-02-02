@@ -273,13 +273,11 @@ class ProductController extends Controller
             $m2PerBox = $m2PerPiece * $piecesPerBox;
             $totalM2 = $m2PerBox * $boxesQuantity;
 
+            // Calculate pieces per m² (inverse of m² per piece)
+
             // Custom validation for logic
-            if ($totalM2 <= 0) {
-                if ($request->wantsJson()) {
-                    return response()->json(['status' => 'error', 'errors' => ['total_m2' => ['Total m² cannot be zero.']]], 422);
-                }
-                return redirect()->back()->withErrors(['total_m2' => 'Total m² cannot be zero.']);
-            }
+            // Custom validation for logic - Removed to allow 0 stock
+            // if ($totalM2 <= 0) { ... }
 
             $totalStockQty = $boxesQuantity * $piecesPerBox; // Store in Pieces
 
@@ -306,12 +304,7 @@ class ProductController extends Controller
             $purchasePricePerPiece = $inputPurchPc;
             $purchasePricePerBox = $inputPurchPc * $piecesPerBox;
 
-            if ($totalStockQty < 1) {
-                if ($request->wantsJson()) {
-                    return response()->json(['status' => 'error', 'errors' => ['total_stock' => ['Total Stock must be at least 1.']]], 422);
-                }
-                return redirect()->back()->withErrors(['total_stock' => 'Total Stock must be at least 1.']);
-            }
+            // if ($totalStockQty < 1) { ... } - Removed to allow 0 stock
 
         } elseif ($mode === 'by_pieces') {
             // By Pieces Mode - individual units, no box concept
@@ -356,7 +349,7 @@ class ProductController extends Controller
         }
 
         DB::transaction(function () use ($request, $userId, $nextCode, $imagePath, $mode, $height, $width, $piecesPerBox, $boxesQuantity,
-            $totalM2, $pricePerM2, $purchasePricePerM2, $totalStockQty,
+            $totalM2, $pricePerM2, $purchasePricePerM2, $totalStockQty, $m2PerPiece,
             $salePricePerPiece, $salePricePerBox, $purchasePricePerPiece, $purchasePricePerBox) {
 
             // Create product
@@ -379,6 +372,7 @@ class ProductController extends Controller
                 'height' => $height,
                 'width' => $width,
                 'pieces_per_box' => $piecesPerBox,
+                'pieces_per_m2' => $m2PerPiece,
                 // Stock Qty fields removed from here as they live in WarehouseStock now
 
                 'total_m2' => $totalM2,
@@ -487,6 +481,7 @@ class ProductController extends Controller
 
         $totalM2 = 0;
         $totalStockQty = 0;
+        $piecesPerM2 = 0; // New: How many pieces fit in 1 m²
 
         // Pricing Vars
         $pricePerM2 = 0;        // Sale Price (By Size)
@@ -511,6 +506,9 @@ class ProductController extends Controller
             $m2PerPiece = ($height * $width) / 10000;
             $m2PerBox = $m2PerPiece * $piecesPerBox;
             $totalM2 = $m2PerBox * $boxesQuantity;
+
+            // Calculate pieces per m² (inverse of m² per piece)
+            $piecesPerM2 = $m2PerPiece > 0 ? (1 / $m2PerPiece) : 0;
 
             // Logic validation
             if ($totalM2 <= 0) {
@@ -571,7 +569,7 @@ class ProductController extends Controller
         }
 
         DB::transaction(function () use ($request, $id, $userId, $imagePath, $mode, $height, $width, $piecesPerBox, $boxesQuantity, $loosePieces, $pieceQuantity,
-            $totalM2, $pricePerM2, $purchasePricePerM2, $salePricePerBox, $purchasePricePerPiece, $totalPrice, $totalPurchasePrice, $totalStockQty) {
+            $totalM2, $pricePerM2, $purchasePricePerM2, $salePricePerBox, $purchasePricePerPiece, $totalPrice, $totalPurchasePrice, $totalStockQty, $piecesPerM2) {
 
             Product::where('id', $id)->update([
                 'creater_id' => $userId,
@@ -591,6 +589,7 @@ class ProductController extends Controller
                 'height' => $height,
                 'width' => $width,
                 'pieces_per_box' => $piecesPerBox,
+                'pieces_per_m2' => $piecesPerM2,
                 'boxes_quantity' => $boxesQuantity,
                 'loose_pieces' => $loosePieces,
                 'piece_quantity' => $pieceQuantity,
@@ -667,7 +666,7 @@ class ProductController extends Controller
             'sub_category_id' => 'nullable',
             'brand_id' => 'required',
             'unit' => 'nullable',
-            'model' => 'required',
+            'model' => 'nullable', // Made nullable
             'size_mode' => 'required|in:by_size,by_cartons,by_pieces',
         ];
 
@@ -679,23 +678,23 @@ class ProductController extends Controller
                 'height' => 'required|numeric|gt:0',
                 'width' => 'required|numeric|gt:0',
                 'pieces_per_box' => 'required|integer|gt:0',
-                'boxes_quantity' => 'required|integer|gt:0',
-                'price_per_m2' => 'required|numeric|gt:0',
-                'purchase_price_per_m2' => 'required|numeric|gt:0',
+                'boxes_quantity' => 'required|integer|min:0', // Allowed 0 stock
+                'price_per_m2' => 'required|numeric|min:0', // Allowed 0 price
+                'purchase_price_per_m2' => 'required|numeric|min:0',
             ]);
         } elseif ($mode === 'by_cartons') {
             $rules = array_merge($rules, [
                 'pieces_per_box' => 'required|integer|min:1',
                 'boxes_quantity' => 'required|integer|min:0',
                 'loose_pieces' => 'nullable|integer|min:0',
-                'sale_price_per_box' => 'required|numeric|gt:0',
-                'purchase_price_per_piece' => 'required|numeric|gt:0',
+                'sale_price_per_box' => 'required|numeric|min:0',
+                'purchase_price_per_piece' => 'required|numeric|min:0',
             ]);
         } elseif ($mode === 'by_pieces') {
             $rules = array_merge($rules, [
-                'piece_quantity' => 'required|integer|min:1',
-                'sale_price_per_box' => 'required|numeric|gt:0',
-                'purchase_price_per_piece' => 'required|numeric|gt:0',
+                'piece_quantity' => 'required|integer|min:0', // Allowed 0 stock
+                'sale_price_per_box' => 'required|numeric|min:0',
+                'purchase_price_per_piece' => 'required|numeric|min:0',
             ]);
         }
 

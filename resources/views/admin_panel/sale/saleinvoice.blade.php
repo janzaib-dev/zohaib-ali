@@ -10,9 +10,7 @@
     <style>
         :root {
             --primary-color: #2c3e50;
-            /* Dark Blue/Slate */
             --accent-color: #3498db;
-            /* Blue */
             --border-color: #bdc3c7;
             --text-color: #2c3e50;
         }
@@ -21,54 +19,49 @@
             background-color: #f8f9fa;
             color: var(--text-color);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 14px;
+            font-size: 12px;
+            /* Reduced base font size */
         }
 
         .invoice-container {
             max-width: 210mm;
-            /* A4 Width */
-            margin: 20px auto;
+            margin: 10px auto;
             background: #fff;
-            padding: 40px;
+            padding: 20px;
+            /* Reduced padding */
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             min-height: 297mm;
-            /* A4 Height */
             position: relative;
-        }
-
-        .header-title {
-            color: var(--primary-color);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 800;
         }
 
         .company-info {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
         .company-name {
-            font-size: 24px;
+            font-size: 22px;
+            /* Reduced */
             font-weight: bold;
             color: var(--primary-color);
-            margin-bottom: 5px;
+            margin-bottom: 2px;
         }
 
         .invoice-title {
             text-align: center;
-            font-size: 20px;
+            font-size: 18px;
+            /* Reduced */
             font-weight: bold;
             text-transform: uppercase;
             color: var(--accent-color);
-            margin: 20px 0;
+            margin: 15px 0 10px 0;
             letter-spacing: 2px;
         }
 
-        /* Bordered Boxes for Info */
         .info-box {
             border: 1px solid var(--border-color);
-            padding: 10px;
+            padding: 8px;
+            /* Reduced padding */
             height: 100%;
             border-radius: 4px;
             background-color: #fff;
@@ -77,41 +70,42 @@
         .info-box-header {
             font-weight: bold;
             border-bottom: 1px solid var(--border-color);
-            margin-bottom: 8px;
-            padding-bottom: 4px;
+            margin-bottom: 4px;
+            padding-bottom: 2px;
             color: var(--primary-color);
-            font-size: 12px;
+            font-size: 11px;
             text-transform: uppercase;
         }
 
         .info-label {
             font-weight: 600;
             color: #555;
-            min-width: 80px;
+            min-width: 70px;
             display: inline-block;
         }
 
-        /* Table Styling */
         .invoice-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 15px;
         }
 
         .invoice-table th {
             background-color: var(--primary-color);
             color: #fff;
             text-transform: uppercase;
-            font-size: 12px;
-            padding: 12px 8px;
+            font-size: 11px;
+            padding: 6px 4px;
+            /* Reduced padding */
             border: 1px solid var(--primary-color);
         }
 
         .invoice-table td {
             border: 1px solid var(--border-color);
-            padding: 8px;
+            padding: 4px 6px;
+            /* Reduced padding */
             vertical-align: middle;
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .invoice-table tbody tr:nth-of-type(even) {
@@ -126,39 +120,49 @@
             text-align: center;
         }
 
-        /* Footer Section */
         .footer-section {
-            margin-top: 30px;
+            margin-top: 20px;
             border-top: 2px solid var(--primary-color);
             padding-top: 10px;
         }
 
         .terms-box {
-            font-size: 12px;
+            font-size: 11px;
             color: #666;
+        }
+
+        .terms-box ul {
+            padding-left: 20px;
+            margin-bottom: 0;
+        }
+
+        .terms-box li {
+            margin-bottom: 2px;
         }
 
         .totals-table {
             width: 100%;
             border-collapse: collapse;
+            font-size: 12px;
         }
 
         .totals-table td {
-            padding: 5px 10px;
+            padding: 4px 8px;
+            /* Reduced padding */
             border-bottom: 1px solid #eee;
         }
 
         .totals-table .total-row td {
             border-top: 2px solid var(--primary-color);
             font-weight: bold;
-            font-size: 16px;
+            font-size: 14px;
             color: var(--primary-color);
         }
 
         .signature-area {
-            margin-top: 60px;
+            margin-top: 40px;
             border-top: 1px solid #000;
-            width: 200px;
+            width: 180px;
             text-align: center;
             padding-top: 5px;
         }
@@ -170,21 +174,21 @@
             z-index: 1000;
         }
 
-        /* Print Media Query */
         @media print {
             body {
                 background: #fff;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
+                margin: 0;
+                padding: 0;
             }
 
             .invoice-container {
                 width: 100%;
                 max-width: 100%;
                 margin: 0;
-                padding: 15px;
+                padding: 10px;
                 box-shadow: none;
                 border: none;
+                min-height: auto;
             }
 
             .print-btn-container {
@@ -194,6 +198,10 @@
             .no-print {
                 display: none;
             }
+
+            @page {
+                margin: 5mm;
+            }
         }
     </style>
 </head>
@@ -202,39 +210,40 @@
 
     <!-- Print Button -->
     <div class="print-btn-container">
-        <button onclick="window.print()" class="btn btn-primary btn-lg shadow">
+        <button onclick="window.print()" class="btn btn-primary btn-sm shadow">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                 class="bi bi-printer-fill me-2" viewBox="0 0 16 16">
                 <path
                     d="M0 9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V9zm4-6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2H4V3z" />
                 <path d="M2.5 14.5A1.5 1.5 0 0 1 1 13V9a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v4a1.5 1.5 0 0 1-1.5 1.5h-13z" />
             </svg>
-            Print Invoice
+            Print
         </button>
-        <a href="{{ route('sale.index') }}" class="btn btn-secondary btn-lg shadow ms-2">Back</a>
+        <a href="{{ route('sale.index') }}" class="btn btn-secondary btn-sm shadow ms-2">Back</a>
     </div>
 
     <div class="invoice-container">
         <!-- Company Header -->
         <div class="company-info">
-            <div class="company-name">ZOAIB ALI COMPANY </div>
-            <div>SADAR BAZAR </div>
-            <div>HYDERABAD SINDH </div>
+            <div class="company-name">ZOAIB ALI COMPANY</div>
+            <div style="font-size: 12px;">SADAR BAZAR, HYDERABAD SINDH</div>
         </div>
 
         <div class="invoice-title">Sales Invoice</div>
 
         <!-- Info Grid -->
-        <div class="row g-3 mb-4">
+        <div class="row g-2 mb-2">
             <!-- Left Box: Customer Info -->
             <div class="col-4">
                 <div class="info-box">
                     <div class="info-box-header">Bill To</div>
-                    <div style="font-size: 15px; font-weight: bold;">
+                    <div
+                        style="font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                         {{ $sale->customer_relation->customer_name ?? 'Walking Customer' }}
                     </div>
-                    <div>{{ $sale->customer_relation->address ?? '' }}</div>
-                    <div class="mt-2 text-muted small">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;">
+                        {{ $sale->customer_relation->address ?? '' }}</div>
+                    <div class="text-muted small" style="font-size: 11px;">
                         Mob: {{ $sale->customer_relation->mobile ?? '' }}
                     </div>
                 </div>
@@ -244,8 +253,8 @@
             <div class="col-4">
                 <div class="info-box">
                     <div class="info-box-header">Details</div>
-                    <div><span class="info-label">Invoice Maker:</span> {{ auth()->user()->name ?? 'Admin' }}</div>
-                    <div><span class="info-label">Sales Person:</span> {{ auth()->user()->name ?? 'Admin' }}</div>
+                    <div><span class="info-label">Maker:</span> {{ auth()->user()->name ?? 'Admin' }}</div>
+                    <div><span class="info-label">Person:</span> {{ auth()->user()->name ?? 'Admin' }}</div>
                     <div><span class="info-label">Type:</span> {{ $sale->sale_status ?? 'Final' }}</div>
                 </div>
             </div>
@@ -254,96 +263,138 @@
             <div class="col-4">
                 <div class="info-box">
                     <div class="info-box-header">Reference</div>
-                    <div><span class="info-label">Invoice No:</span> #{{ $sale->id }}</div>
+                    <div><span class="info-label">Inv #:</span> <strong>{{ $sale->id }}</strong></div>
                     <div><span class="info-label">Date:</span> {{ $sale->created_at->format('d-m-Y') }}</div>
                     <div><span class="info-label">Ref:</span> {{ $sale->reference ?? '-' }}</div>
                 </div>
             </div>
         </div>
 
-        <!-- Ship To / Remarks (Full Width if needed, or split) -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="info-box" style="min-height: auto; padding: 8px 15px; background-color: #f1f5f9;">
-                    <strong>Remarks/Note:</strong> {{ $sale->return_note ?? 'Thank you for your business.' }}
+        <!-- Remarks -->
+        @if ($sale->return_note)
+            <div class="row mb-2">
+                <div class="col-12">
+                    <div class="info-box"
+                        style="min-height: auto; padding: 4px 8px; background-color: #f1f5f9; font-style: italic;">
+                        <strong>Note:</strong> {{ $sale->return_note }}
+                    </div>
                 </div>
             </div>
-        </div>
+        @endif
 
         <!-- Table -->
         <table class="invoice-table">
             <thead>
                 <tr>
-                    <th class="text-start" style="width: 40%">Description</th>
-                    <th class="text-center">Packing</th>
-                    <th class="text-center">Quantity (Shipped)</th>
-                    <th class="text-end">Unit Price<br><small style="font-weight: normal;">(Per Piece)</small></th>
-                    <th class="text-center">Disc.</th>
-                    <th class="text-end">Extended Price</th>
+                    <th class="text-start" style="width: 45%">Description</th>
+                    <th class="text-center" style="width: 15%">Shipped</th>
+                    <th class="text-center" style="width: 15%">Quantity</th>
+                    <th class="text-end" style="width: 12%">Price</th>
+                    <th class="text-end" style="width: 13%">Total</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($saleItems as $item)
+                    @php
+                        // Get dimensions from database
+                        $height = $item['height'] ?? 0;
+                        $width = $item['width'] ?? 0;
+
+                        // Calculate m² per piece and per box
+                        $m2PerPiece = $height > 0 && $width > 0 ? ($height * $width) / 10000 : 0;
+                        $piecesPerBox = (int) ($item['pieces_per_box'] ?? 1);
+                        $m2PerBox = $m2PerPiece * $piecesPerBox;
+
+                        // Calculate boxes and loose pieces
+                        $totalPieces = (int) $item['total_pieces'];
+                        $boxes = floor($totalPieces / $piecesPerBox);
+                        $loosePieces = $totalPieces % $piecesPerBox;
+
+                        // Total M2 for line
+                        $totalM2Line = $m2PerPiece * $totalPieces;
+                    @endphp
                     <tr>
                         <td class="text-start">
-                            <strong>{{ $item['item_name'] }}</strong>
-                            @if (!empty($item['item_code']))
-                                <br><small class="text-muted">Code: {{ $item['item_code'] }}</small>
-                            @endif
-                            @if (!empty($item['color']))
-                                <br>
-                                @foreach ($item['color'] as $clr)
-                                    <span class="badge bg-light text-dark border">{{ $clr }}</span>
-                                @endforeach
-                            @endif
+                            <div style="font-weight: bold; font-size: 12px; margin-bottom: 2px;">
+                                {{ $item['item_name'] }}
+                                @if (!empty($item['item_code']))
+                                    <span class="text-muted fw-normal ms-1"
+                                        style="font-size: 11px;">({{ $item['item_code'] }})</span>
+                                @endif
+                            </div>
+
+                            <div style="font-size: 11px; color: #555; line-height: 1.2;">
+                                @if (!empty($item['color']))
+                                    <span class="badge bg-light text-dark border p-1"
+                                        style="font-size: 9px; line-height:1;">
+                                        @foreach ($item['color'] as $clr)
+                                            {{ $clr }}
+                                        @endforeach
+                                    </span>
+                                @endif
+
+                                <span class="d-inline-block ms-1">
+                                    @if ($height > 0 && $width > 0)
+                                        Dims: {{ number_format($width, 0) }}×{{ number_format($height, 0) }}
+                                    @endif
+                                </span>
+
+                                <span class="d-inline-block ms-1">
+                                    Pack: {{ $piecesPerBox }} pcs | {{ number_format($m2PerBox, 4) }} m²
+                                </span>
+                            </div>
                         </td>
-                        <td class="text-center">
-                            {{ $item['pieces_per_box'] }} Pcs/Box
-                            <div class="small text-muted">{{ $item['unit'] }}</div>
+
+                        <td class="text-center" style="vertical-align: middle;">
+                            <div style="font-weight: bold; color: #2c3e50;">
+                                @if ($boxes > 0 && $loosePieces > 0)
+                                    {{ $boxes }} Box + {{ $loosePieces }} Pc
+                                @elseif ($boxes > 0)
+                                    {{ $boxes }} Box
+                                @else
+                                    {{ $loosePieces }} Pcs
+                                @endif
+                            </div>
+                            <small class="text-muted" style="font-size: 10px;">({{ $totalPieces }} pcs)</small>
                         </td>
-                        <td class="text-center">
-                            <span style="font-size: 1.1em; font-weight: bold;">
-                                {{ (int) $item['total_pieces'] }} Pcs
-                            </span>
-                            @if ($item['loose_pieces'] > 0)
-                                <br><small
-                                    class="text-muted">({{ (int) ($item['total_pieces'] - $item['loose_pieces']) }} +
-                                    {{ $item['loose_pieces'] }} loose)</small>
-                            @endif
+
+                        <td class="text-center" style="vertical-align: middle;">
+                            <span class="fw-bold">{{ number_format($totalM2Line, 4) }}</span> m²
                         </td>
-                        <td class="text-end">{{ number_format($item['price'], 2) }}</td>
-                        <td class="text-center">
+
+                        <td class="text-end" style="vertical-align: middle;">
+                            {{ number_format($item['price'], 2) }}
                             @if ($item['discount'] > 0)
-                                {{ number_format($item['discount'], 1) }}%
-                            @else
-                                -
+                                <br><span class="badge bg-danger"
+                                    style="font-size: 9px; padding: 1px 3px;">-{{ number_format($item['discount'], 0) }}%</span>
                             @endif
                         </td>
-                        <td class="text-end fw-bold">{{ number_format($item['total'], 2) }}</td>
+
+                        <td class="text-end fw-bold" style="vertical-align: middle;">
+                            {{ number_format($item['total'], 2) }}
+                        </td>
                     </tr>
                 @endforeach
-
-                <!-- Fill empty rows if needed for visual height (Optional, skipping for dynamic content) -->
             </tbody>
         </table>
 
         <!-- Footer -->
-        <div class="row mt-4">
+        <div class="row mt-2">
             <div class="col-7">
-                <div class="terms-box pt-3">
+                <div class="terms-box pt-2">
                     <p class="fw-bold mb-1">Terms & Conditions:</p>
-                    <ul>
+                    <ul style="font-size: 10px;">
                         <li>10% will be deducted on return of purchase goods within 7 days.</li>
                         <li>Loose & Water Soak products will not be RETURNED.</li>
                         <li>Please bring this invoice for any returns or exchanges.</li>
                     </ul>
                 </div>
 
-                <div class="mt-5 pt-4">
+                <div class="mt-4 pt-2">
                     <div class="signature-area">
                         Authorized Signature
                     </div>
-                    <div class="small text-muted mt-1">
+                    <div class="small text-muted mt-1" style="font-size: 10px;">
                         Printed on: {{ date('d-m-Y h:i A') }}
                     </div>
                 </div>
@@ -353,35 +404,32 @@
                 <div class="info-box" style="border: none; padding: 0;">
                     <table class="totals-table">
                         <tr style="border-bottom: 2px solid #eee;">
-                            <td class="fw-bold text-muted">Previous Balance</td>
-                            <td class="text-end fw-bold text-muted">
+                            <td class="text-muted">Prev Bal</td>
+                            <td class="text-end text-muted">
                                 {{ number_format(abs($previousBalance), 2) }}
                                 <small>{{ $previousBalance >= 0 ? 'Dr' : 'Cr' }}</small>
                             </td>
                         </tr>
                         <tr>
-                            <td>Current Bill Amount</td>
+                            <td>Current Bill</td>
                             <td class="text-end">{{ number_format($sale->total_net, 2) }}</td>
                         </tr>
-                        <tr class="total-row" style="background-color: #f8f9fa;">
-                            <td class="fw-bold">Net Payable / Total</td>
-                            <td class="text-end fw-bold">
+                        <tr class="total-row" style="background-color: #e9ecef;">
+                            <td>Total</td>
+                            <td class="text-end">
                                 {{ number_format(abs($previousBalance + $sale->total_net), 2) }}
                                 <small>{{ $previousBalance + $sale->total_net >= 0 ? 'Dr' : 'Cr' }}</small>
                             </td>
                         </tr>
                         <tr>
-                            <td>Cash Paid</td>
+                            <td>Paid</td>
                             <td class="text-end text-success">{{ number_format($sale->cash, 2) }}</td>
                         </tr>
                         @php
-                            // Calculate final closing balance (Net Payable - Paid)
-                            // Note: Net Payable (Dr) - Paid (Cr effect).
-                            // If balance is Dr (positive), Paid reduces it.
                             $finalBalance = $previousBalance + $sale->total_net - $sale->cash;
                         @endphp
                         <tr>
-                            <td class="fw-bold">Closing Balance / Credit</td>
+                            <td class="fw-bold">Closing Bal</td>
                             <td class="text-end fw-bold">
                                 {{ number_format(abs($finalBalance), 2) }}
                                 <small>{{ $finalBalance >= 0 ? 'Dr' : 'Cr' }}</small>
@@ -390,8 +438,9 @@
                     </table>
                 </div>
 
-                <div class="text-end mt-2">
-                    <small class="text-muted fst-italic">Amount in Words: {{ $sale->total_amount_Words }}</small>
+                <div class="text-end mt-1">
+                    <small class="text-muted fst-italic"
+                        style="font-size: 10px;">{{ Str::limit($sale->total_amount_Words, 60) }}</small>
                 </div>
             </div>
         </div>

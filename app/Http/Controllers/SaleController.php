@@ -863,6 +863,20 @@ class SaleController extends Controller
             $sale->total_amount_Words = $request->total_amount_Words; // Consider auto-generating this too?
             $sale->sale_status = $status;
 
+            // Credit Days & Due Date (Optional)
+            if ($request->filled('credit_days') && $request->credit_days > 0) {
+                $creditDays = (int) $request->credit_days;
+                $sale->credit_days = $creditDays;
+                
+                // Use existing created_at for edits, or now() for new sales
+                $baseDate = $sale->created_at ? $sale->created_at->copy() : now();
+                $sale->due_date = $baseDate->addDays($creditDays);
+            } else {
+                // No credit days = no notification
+                $sale->credit_days = null;
+                $sale->due_date = null;
+            }
+
             if ($isNew) {
                 // Check if user provided manual invoice number
                 if ($request->filled('invoice_no')) {
@@ -1211,6 +1225,10 @@ class SaleController extends Controller
                 'color' => json_decode($item->color, true) ?? [],
                 'pieces_per_box' => $item->product->pieces_per_box ?? 1,
                 'price_per_piece' => ($item->total_pieces > 0) ? ($item->total / $item->total_pieces) : 0,
+                // Add dimension and m² data from product
+                'height' => $item->product->height ?? 0,
+                'width' => $item->product->width ?? 0,
+                'pieces_per_m2' => $item->product->pieces_per_m2 ?? 0,
             ];
         });
     }
