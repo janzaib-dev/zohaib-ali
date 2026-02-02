@@ -863,6 +863,20 @@ class SaleController extends Controller
             $sale->total_amount_Words = $request->total_amount_Words; // Consider auto-generating this too?
             $sale->sale_status = $status;
 
+            // Credit Days & Due Date (Optional)
+            if ($request->filled('credit_days') && $request->credit_days > 0) {
+                $creditDays = (int) $request->credit_days;
+                $sale->credit_days = $creditDays;
+                
+                // Use existing created_at for edits, or now() for new sales
+                $baseDate = $sale->created_at ? $sale->created_at->copy() : now();
+                $sale->due_date = $baseDate->addDays($creditDays);
+            } else {
+                // No credit days = no notification
+                $sale->credit_days = null;
+                $sale->due_date = null;
+            }
+
             if ($isNew) {
                 // Check if user provided manual invoice number
                 if ($request->filled('invoice_no')) {

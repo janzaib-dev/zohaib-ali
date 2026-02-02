@@ -271,7 +271,7 @@
               width: 90px;
           }
 
-         
+
           .col-price {
               width: 110px;
           }
@@ -371,7 +371,16 @@
                               <input type="text" class="form-control input-readonly" name="Invoice_no"
                                   style="width:150px" value="{{ $nextInvoiceNumber }}" readonly>
                               <label class="form-label fw-bold mb-0">M. Inv#</label>
-                              <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice">
+                              <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice"
+                                  value="{{ $sale->reference ?? '' }}">
+                          </div>
+
+                          {{-- Credit Days (Optional) --}}
+                          <div class="mb-2 d-flex align-items-center gap-2">
+                              <label class="form-label fw-bold mb-0" style="min-width: 90px;">Credit Days</label>
+                              <input type="number" class="form-control" name="credit_days" placeholder="Optional"
+                                  style="width:100px" min="0" value="{{ $sale->credit_days ?? '' }}">
+                              <small class="text-muted">(Leave empty for no notification)</small>
                           </div>
 
                           {{-- Type toggle --}}
@@ -417,8 +426,8 @@
 
                           <div class="mb-2 d-flex justify-content-between">
                               <span>Previous Balance</span>
-                              <input type="text" class="form-control w-25 text-end" id="previousBalance" value="0"
-                                  readonly>
+                              <input type="text" class="form-control w-25 text-end" id="previousBalance"
+                                  value="0" readonly>
                           </div>
                           <div class="mb-2 d-flex justify-content-between">
                               <span>Range Balance</span>
@@ -830,23 +839,7 @@
                   if (currentVal) $select.val(currentVal);
               }
 
-              // 🔹 Add Receipt Row
-              $('#btnAddRV').on('click', function() {
-                  let options = '<option value="">Select account</option>';
-                  accountData.forEach(acc => {
-                      options += `<option value="${acc.id}">${acc.title}</option>`;
-                  });
 
-                  $('#rvWrapper .rv-row:last').after(`
-                  <div class="d-flex gap-2 align-items-center mb-2 rv-row">
-                    <select class="form-select rv-account" name="receipt_account_id[]" style="max-width:320px">
-                      ${options}
-                    </select>
-                    <input type="text" class="form-control text-end rv-amount" name="receipt_amount[]" placeholder="0.00" style="max-width:160px">
-                    <button type="button" class="btn btn-outline-danger btn-sm btnRemRV">&times;</button>
-                  </div>
-                `);
-              });
 
           });
       </script>

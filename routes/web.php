@@ -258,8 +258,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/sale-return/{id}/detail', [App\Http\Controllers\SaleController::class, 'saleReturnDetail'])->middleware('permission:sales.view')->name('sale.return.detail');
     Route::post('/sales/sale-return/{id}/approve', [App\Http\Controllers\SaleController::class, 'approveReturn'])->middleware('permission:sales.edit')->name('sale.return.approve');
     Route::post('/sales/sale-return/{id}/reject', [App\Http\Controllers\SaleController::class, 'rejectReturn'])->middleware('permission:sales.edit')->name('sale.return.reject');
-    Route::get('/sales/sales/{id}/invoice', [SaleController::class, 'saleinvoice'])->middleware('permission:sales.view')->name('sales.invoice');
-    Route::get('/sales/sales/{id}/edit', [SaleController::class, 'saleedit'])->middleware('permission:sales.edit')->name('sales.edit');
+    Route::get('/sales/{id}/invoice', [SaleController::class, 'saleinvoice'])->middleware('permission:sales.view')->name('sales.invoice');
+    Route::get('/sales/{id}/edit', [SaleController::class, 'saleedit'])->middleware('permission:sales.edit')->name('sales.edit');
     Route::put('/sales/{id}', [SaleController::class, 'updatesale'])->middleware('permission:sales.edit')->name('sales.update');
     Route::get('/sales/{id}/dc', [SaleController::class, 'saledc'])->middleware('permission:sales.view')->name('sales.dc');
     Route::get('/sales/{id}/recepit', [SaleController::class, 'salerecepit'])->middleware('permission:sales.view')->name('sales.recepit');

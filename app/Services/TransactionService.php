@@ -2,10 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\VoucherMaster;
-use App\Models\Customer;
-use App\Services\VoucherService;
 
 class TransactionService
 {
@@ -30,16 +29,19 @@ class TransactionService
         // 1. Validation
         if ($sale->sale_status !== 'posted') {
             \Log::warning('TransactionService: Not posted, aborting.');
+
             return;
         }
 
         // Filter out empty or invalid entries
-        $accountIds = array_filter($accountIds, function($value) { return !empty($value); });
-        
+        $accountIds = array_filter($accountIds, function ($value) {
+            return ! empty($value);
+        });
+
         // Determine if we have valid input arrays, otherwise fallback to Sale Cash
         if (empty($accountIds)) {
             // Fallback: Check if Sale has a cash value (Legacy support or Hidden Input)
-             $cash = $sale->cash ?? 0;
+            $cash = $sale->cash ?? 0;
             if ($cash > 0) {
                 \Log::info("TransactionService: Using fallback Cash amount: $cash");
                 $balanceService = app(\App\Services\BalanceService::class);
@@ -47,6 +49,7 @@ class TransactionService
                 $amounts = [$cash];
             } else {
                 \Log::info('TransactionService: No payment info provided (Credit Sale), aborting receipt creation.');
+
                 return;
             }
         }
@@ -59,11 +62,11 @@ class TransactionService
 
             // 2. Prepare Debit Lines (Money In)
             foreach ($accountIds as $index => $accId) {
-                $amount = (float)($amounts[$index] ?? 0);
-                
+                $amount = (float) ($amounts[$index] ?? 0);
+
                 if ($amount > 0) { // Fixed: Only positive amounts
                     $totalPaid += $amount;
-                    
+
                     $lines[] = [
                         'account_id' => $accId,
                         'debit' => $amount,
@@ -76,6 +79,7 @@ class TransactionService
             // Skip if no payment (Credit Sale - customer will pay later)
             if ($totalPaid <= 0) {
                 \Log::info('TransactionService: No payment received (Credit Sale), skipping receipt voucher.');
+
                 return;
             }
 
@@ -100,7 +104,7 @@ class TransactionService
 
             // 5. Create via VoucherService
             $voucher = $this->voucherService->createVoucher($voucherData, $lines, auth()->id());
-            
+
             // 6. SYNC TO LEGACY CUSTOMER LEDGER (Critical for "Customer Balance" view)
             if ($sale->customer_id) {
                 // Fetch latest ledger to get current balance
@@ -109,20 +113,20 @@ class TransactionService
                     ->lockForUpdate() // Lock to prevent race conditions
                     ->orderBy('id', 'desc')
                     ->first();
-                
+
                 $prevBal = $lastEntry ? $lastEntry->closing_balance : 0;
                 // Receipt reduces balance (Credit Customer)
                 $newBal = $prevBal - $totalPaid;
-                
+
                 \Log::info("Legacy Ledger (Receipt): Customer #{$sale->customer_id}. Prev (Expected 9440 range): {$prevBal} - Paid: {$totalPaid} = New: {$newBal}");
 
                 \App\Models\CustomerLedger::create([
-                     'customer_id' => $sale->customer_id,
-                     'admin_or_user_id' => auth()->id() ?? 1,
-                     'description' => "Receipt #{$voucher->voucher_no} for Invoice #{$sale->invoice_no}",
-                     'previous_balance' => $prevBal, // Before payment
-                     'closing_balance' => $newBal,   // After payment
-                     'opening_balance' => 0,
+                    'customer_id' => $sale->customer_id,
+                    'admin_or_user_id' => auth()->id() ?? 1,
+                    'description' => "Receipt #{$voucher->voucher_no} for Invoice #{$sale->invoice_no}",
+                    'previous_balance' => $prevBal, // Before payment
+                    'closing_balance' => $newBal,   // After payment
+                    'opening_balance' => 0,
                 ]);
 
                 // Update Master Customer Table
@@ -134,13 +138,14 @@ class TransactionService
             }
 
             \Log::info("TransactionService: V2 Receipt Created: {$voucher->voucher_no} for amount $totalPaid");
-            
+
             return $voucher->voucher_no;
 
         } catch (\Exception $e) {
             \Log::error('TransactionService V2 Error: '.$e->getMessage());
         }
     }
+
     /**
      * Create a Payment Voucher for a Purchase.
      * Debit: Accounts Payable (Vendor) | Credit: Cash/Bank
@@ -150,23 +155,24 @@ class TransactionService
         \Log::info("TransactionService: Create Payment for Purchase #{$purchase->invoice_no}");
 
         // Filter valid inputs
-        $accountIds = array_filter($accountIds, fn($val) => !empty($val));
-        
+        $accountIds = array_filter($accountIds, fn ($val) => ! empty($val));
+
         if (empty($accountIds)) {
             \Log::info('TransactionService: No payment accounts provided, skipping payment.');
+
             return;
         }
 
         try {
             $balanceService = app(\App\Services\BalanceService::class);
             $apAccountId = $balanceService->getAccountsPayableId(); // We need to ensure this method exists
-            
+
             $totalPaid = 0;
             $lines = [];
 
             // 1. Prepare Credit Lines (Money Out - Cash/Bank)
             foreach ($accountIds as $index => $accId) {
-                $amount = (float)($amounts[$index] ?? 0);
+                $amount = (float) ($amounts[$index] ?? 0);
                 if ($amount > 0) {
                     $totalPaid += $amount;
                     $lines[] = [
@@ -178,14 +184,16 @@ class TransactionService
                 }
             }
 
-            if ($totalPaid <= 0) return;
+            if ($totalPaid <= 0) {
+                return;
+            }
 
             // 2. Prepare Debit Line (Accounts Payable - Liability Decreases)
             $vendorName = '';
             if ($purchase->vendor) {
                 $vendorName = $purchase->vendor->name;
             }
-            
+
             $lines[] = [
                 'account_id' => $apAccountId,
                 'debit' => $totalPaid,
@@ -206,21 +214,21 @@ class TransactionService
 
             // 4. Create Voucher
             $this->voucherService->createVoucher($voucherData, $lines, auth()->id());
-            
+
             // 5. Update Legacy Vendor Ledger (Optional but recommended for consistency)
             // You might want to move this inside BalanceService or similar if reused
-             // For now we rely on Journal Entries, but if you have a legacy table:
-             // \App\Models\VendorLedger::create(...)
-             
+            // For now we rely on Journal Entries, but if you have a legacy table:
+            // \App\Models\VendorLedger::create(...)
+
             // Update Paid Amount in Purchase
             $purchase->paid_amount += $totalPaid;
             $purchase->due_amount = $purchase->net_amount - $purchase->paid_amount;
             $purchase->save();
 
-             \Log::info("Payment Voucher Created for Purchase #{$purchase->invoice_no}");
+            \Log::info("Payment Voucher Created for Purchase #{$purchase->invoice_no}");
 
         } catch (\Exception $e) {
-            \Log::error("TransactionService Payment Error: " . $e->getMessage());
+            \Log::error('TransactionService Payment Error: '.$e->getMessage());
             throw $e;
         }
     }
