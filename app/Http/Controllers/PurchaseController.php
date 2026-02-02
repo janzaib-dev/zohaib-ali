@@ -59,7 +59,11 @@ class PurchaseController extends Controller
         $Purchase = Purchase::get();
         $Vendor = Vendor::get();
         $Warehouse = Warehouse::get();
-        return view('admin_panel.purchase.add_purchase', compact('Vendor', "Warehouse", 'Purchase'));
+        // Filter accounts to only show Cash (1) and Bank (2) heads to prevent logic errors
+        $accounts = \App\Models\Account::whereIn('head_id', [1, 2])->get(); 
+        
+        // Return new V2 view
+        return view('admin_panel.purchase.add_purchase_v2', compact('Vendor', "Warehouse", 'Purchase', 'accounts'));
     }
    public function store(Request $request, $gatepassId = null)
 {
@@ -201,6 +205,61 @@ class PurchaseController extends Controller
                 'closing_balance'   => $prevClosing + $netAmount,
             ]
         );
+
+        // --- ACCOUNTING INTEGRATION ---
+        try {
+            $journalService = app(\App\Services\JournalEntryService::class);
+            $balanceService = app(\App\Services\BalanceService::class);
+            $transactionService = app(\App\Services\TransactionService::class);
+
+            // Get Account IDs
+            $expenseAccountId = $balanceService->getPurchaseExpenseId();
+            $apAccountId = $balanceService->getAccountsPayableId();
+            $date = $purchase->purchase_date;
+            if (!$date) {
+                $date = now()->format('Y-m-d');
+            }
+
+            // A. Record Purchase Invoice (Dr Expense, Cr Accounts Payable)
+            // Entry 1: Debit Purchase Expense
+            $journalService->recordEntry(
+                $purchase,
+                $expenseAccountId,
+                $purchase->net_amount,
+                0,
+                "Purchase Invoice #{$purchase->invoice_no}",
+                $date
+            );
+
+            // Entry 2: Credit Accounts Payable (with Vendor link)
+            $journalService->recordEntry(
+                $purchase,
+                $apAccountId,
+                0,
+                $purchase->net_amount,
+                "Purchase Invoice #{$purchase->invoice_no}",
+                $date,
+                $purchase->vendor // Polymorphic party link
+            );
+
+            // B. Record Payment (if provided)
+            $paymentAccountIds = $request->input('payment_account_id', []);
+            $paymentAmounts = $request->input('payment_amount', []);
+
+            if (!empty(array_filter($paymentAccountIds))) {
+                $transactionService->createPaymentForPurchase(
+                    $purchase,
+                    $paymentAccountIds,
+                    $paymentAmounts
+                );
+            }
+
+            \Log::info("Purchase #{$purchase->invoice_no} accounting entries created successfully");
+
+        } catch (\Exception $e) {
+            \Log::error('Purchase Accounting Error: ' . $e->getMessage());
+            // Don't throw - let purchase save, but log the error
+        }
 
         // link gatepass -> purchase (and keep status)
         if ($gatepass) {

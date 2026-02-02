@@ -39,6 +39,70 @@ class SettingsController extends Controller
     }
 
     /**
+     * Display return policy settings page
+     */
+    public function returnSettings()
+    {
+        $settings = \App\Models\SystemSetting::where('group', 'returns')->get();
+        
+        return view('admin_panel.settings.return_policy', compact('settings'));
+    }
+
+    /**
+     * Update return policy settings
+     */
+    public function updateReturnSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'return_deadline_days' => 'required|integer|min:0|max:365',
+            'return_require_approval' => 'nullable|boolean',
+            'return_auto_approve_threshold' => 'nullable|numeric|min:0',
+        ]);
+
+        foreach ($validated as $key => $value) {
+            \App\Models\SystemSetting::set($key, $value);
+        }
+
+        return redirect()->back()->with('success', 'Return policy settings updated successfully!');
+    }
+
+    /**
+     * Show return approvers management page
+     */
+    public function returnApprovers()
+    {
+        $users = \App\Models\User::with('roles')
+            ->where('id', '!=', auth()->id()) // Exclude current user
+            ->orderBy('name')
+            ->get();
+        
+        return view('admin_panel.settings.return_approvers', compact('users'));
+    }
+
+    /**
+     * Update return approval permissions for users
+     */
+    public function updateReturnApprovers(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'can_approve_returns' => 'nullable|boolean',
+            'can_approve_past_deadline_returns' => 'nullable|boolean',
+        ]);
+
+        $user = \App\Models\User::findOrFail($validated['user_id']);
+        
+        $user->can_approve_returns = $request->has('can_approve_returns');
+        $user->can_approve_past_deadline_returns = $request->has('can_approve_past_deadline_returns');
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Permissions updated for {$user->name}",
+        ]);
+    }
+
+    /**
      * Get notifications for current user
      */
     public function notifications()

@@ -1,6 +1,15 @@
   @extends('admin_panel.layout.app')
 
   @section('content')
+      <!-- Loader Overlay -->
+      <div id="pageLoader"
+          class="{{ isset($sale) ? '' : 'd-none' }} position-fixed top-0 start-0 w-100 h-100 d-flex flex-column gap-3 justify-content-center align-items-center"
+          style="background: rgba(255,255,255,0.9); z-index: 1055;">
+          <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+              <span class="visually-hidden">Loading...</span>
+          </div>
+          <div class="fw-bold text-primary fs-5">Loading Sale Data...</div>
+      </div>
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
       <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
       <style>
@@ -439,13 +448,14 @@
                                   <thead>
                                       <tr>
                                           <th class="col-product">Product</th>
+                                          <th style="width: 140px;">Size (H x W)</th>
+                                          <th style="width: 100px;">Mode</th>
                                           <th class="col-warehouse">Warehouse</th>
                                           <th class="col-stock">Stock</th>
                                           <th class="col-qty">Total Pcs</th>
                                           <th class="col-qty">Pack Size</th>
                                           <th class="col-loose">Loose</th>
                                           <th class="col-pieces">Boxes</th>
-                                          <th class="col-price">Retail Price</th>
                                           <th class="col-disc">Disc %</th>
                                           <th class="col-disc-amt">Disc Amt</th>
                                           <th class="col-price-p">Price/Pc</th>
@@ -476,10 +486,10 @@
                               <div class="d-flex gap-2 align-items-center mb-2 rv-row">
                                   <select class="form-select rv-account" name="receipt_account_id[]"
                                       style="max-width: 320px">
-                                      {{-- @foreach ($accounts as $acc)
-                  <option value="" disabled>Select account</option>
-                  <option value="{{ $acc->id }}">{{ $acc->title }}</option>
-                  @endforeach --}}
+                                      <option value="" selected disabled>Select account</option>
+                                      @foreach ($accounts as $acc)
+                                          <option value="{{ $acc->id }}">{{ $acc->title }}</option>
+                                      @endforeach
                                   </select>
                                   <input type="text" class="form-control text-end rv-amount" name="receipt_amount[]"
                                       placeholder="0.00" style="max-width:160px">
@@ -789,10 +799,12 @@
                   $.get(
                       '{{ route('salecustomers.show', '__ID__') }}'.replace('__ID__', id),
                       function(d) {
+
                           $('#address').val(d.address || '');
                           $('#tel').val(d.mobile || '');
                           $('#remarks').val(d.status || '');
                           $('#previousBalance').val((+d.previous_balance || 0).toFixed(2));
+                          $('#rangeBalance').val((+d.balance_range || 0).toFixed(2));
 
                           // Reload receipt vouchers for this customer
                           $('.rv-account').each(function() {
@@ -809,18 +821,35 @@
                   $('#previousBalance').val('0');
               });
 
+              // 🔹 Account Data
+              const accountData = @json($accounts);
+
+              function loadAccountsInto($select, customerId) {
+                  const currentVal = $select.val();
+                  let options = '<option value="">Select account</option>';
+                  accountData.forEach(acc => {
+                      options += `<option value="${acc.id}">${acc.title}</option>`;
+                  });
+                  $select.html(options);
+                  if (currentVal) $select.val(currentVal);
+              }
+
               // 🔹 Add Receipt Row
               $('#btnAddRV').on('click', function() {
+                  let options = '<option value="">Select account</option>';
+                  accountData.forEach(acc => {
+                      options += `<option value="${acc.id}">${acc.title}</option>`;
+                  });
+
                   $('#rvWrapper .rv-row:last').after(`
                   <div class="d-flex gap-2 align-items-center mb-2 rv-row">
                     <select class="form-select rv-account" name="receipt_account_id[]" style="max-width:320px">
-                      <option value="">Select account</option>
+                      ${options}
                     </select>
                     <input type="text" class="form-control text-end rv-amount" name="receipt_amount[]" placeholder="0.00" style="max-width:160px">
                     <button type="button" class="btn btn-outline-danger btn-sm btnRemRV">&times;</button>
                   </div>
                 `);
-                  loadAccountsInto($('#rvWrapper .rv-row:last .rv-account'));
               });
 
           });
@@ -829,7 +858,6 @@
 
 
 
-      {{-- jsdakjdskldjlasd --}}
 
       <script>
           function initProductSelect2($el) {
@@ -935,6 +963,11 @@
                   // Piece Price
                   $row.find('.price-per-piece').val(pRes.sale_price_per_piece || 0);
 
+                  // Populate Size Info
+                  $row.find('.size-h').val(pRes.height || '-');
+                  $row.find('.size-w').val(pRes.width || '-');
+                  $row.find('.size-mode-text').val(pRes.size_mode || '-');
+
                   // Store Metadata for calculations
                   $row.data('size_mode', pRes.size_mode);
                   $row.data('pieces_per_box', pRes.pieces_per_box || 1);
@@ -1031,6 +1064,20 @@
       </select>
     </td>
 
+    <!-- SIZE INFO (H x W) -->
+    <td>
+      <div class="d-flex align-items-center gap-1 justify-content-center">
+        <input type="text" class="form-control text-center px-0 size-h input-readonly" readonly placeholder="H" style="font-size: 0.8rem; width: 45px;" tabindex="-1">
+        <span class="text-muted small">x</span>
+        <input type="text" class="form-control text-center px-0 size-w input-readonly" readonly placeholder="W" style="font-size: 0.8rem; width: 45px;" tabindex="-1">
+      </div>
+    </td>
+
+    <!-- MODE -->
+    <td>
+       <input type="text" class="form-control text-center px-1 size-mode-text input-readonly" readonly tabindex="-1" style="font-size: 0.8rem; background-color: #f8f9fa;">
+    </td>
+
     <!-- WAREHOUSE -->
     <td class="col-warehouse">
       <select class="form-select warehouse" name="warehouse_id[]">
@@ -1064,11 +1111,7 @@
       <input type="text" class="form-control total-pieces text-end input-readonly" name="total_pieces[]" readonly placeholder="Box" tabindex="-1">
     </td>
 
-    <!-- RETAIL PRICE -->
-    <td class="col-price">
-      <input type="text" class="form-control retail-price text-end input-readonly" name="price[]" value="0" readonly tabindex="-1">
-    </td>
-
+ 
     <!-- DISCOUNT -->
     <td class="col-disc">
       <div class="discount-wrapper">
@@ -1162,28 +1205,37 @@
           function ensureSaved() {
               return new Promise(function(resolve, reject) {
                   const existing = $('#booking_id').val();
-                  if (existing) return resolve(existing);
 
-                  $('#btnSave, #btnHeaderPosted, #btnPosted').prop('disabled', true); // disable while saving
+                  let url = '{{ route('sales.store') }}';
+                  if (existing) {
+                      url = '{{ route('sales.update', ':id') }}'.replace(':id', existing);
+                  }
 
-                  $.post('{{ route('sales.store') }}', serializeForm())
-                      .done(function(res) {
+                  $('#btnSave, #btnHeaderPosted, #btnPosted').prop('disabled', true);
+
+                  $.ajax({
+                      url: url,
+                      type: 'POST',
+                      data: serializeForm(),
+                      success: function(res) {
                           $('#btnSave, #btnHeaderPosted, #btnPosted').prop('disabled', false);
                           if (res?.ok) {
-                              $('#booking_id').val(res.booking_id);
-                              Swal.fire('Saved', 'Booking #' + res.booking_id + ' saved successfully', 'success');
-                              resolve(res.booking_id);
+                              const bid = res.booking_id || existing;
+                              $('#booking_id').val(bid);
+                              Swal.fire('Saved', 'Sale saved successfully', 'success');
+                              resolve(bid);
                           } else {
                               Swal.fire('Error', res.msg || 'Save failed', 'error');
                               reject(res);
                           }
-                      })
-                      .fail(function(xhr) {
+                      },
+                      error: function(xhr) {
                           $('#btnSave, #btnHeaderPosted, #btnPosted').prop('disabled', false);
                           console.error(xhr.responseText);
                           Swal.fire('Error', 'Save error: ' + (xhr.statusText || 'Unknown'), 'error');
                           reject(xhr);
-                      });
+                      }
+                  });
               });
           }
 
@@ -1274,6 +1326,7 @@
           $(document).on('change', '#customerSelect', function() {
               let id = $(this).val();
               if (!id) return;
+
 
               // Reset fields
               $('#previousBalance').val('...');

@@ -65,8 +65,8 @@ class JournalEntryService
         // Let's adopt: Positive = Debit Balance, Negative = Credit Balance.
 
         $netChange = $debit - $credit;
-
-        $account->current_balance += $netChange;
+        $currentBalance = $account->current_balance ?? 0;
+        $account->current_balance = $currentBalance + $netChange;
         $account->save();
     }
 }

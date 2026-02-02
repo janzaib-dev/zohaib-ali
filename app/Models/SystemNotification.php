@@ -75,4 +75,34 @@ class SystemNotification extends Model
             self::create(array_merge($data, ['user_id' => $userId]));
         }
     }
+
+    /**
+     * Create sale return notification for super admins
+     */
+    public static function createSaleReturnNotification($saleReturn, $sale): void
+    {
+        // Get all super admin users
+        $superAdmins = \App\Models\User::whereHas('roles', function ($query) {
+            $query->where('name', 'Super Admin');
+        })->pluck('id')->toArray();
+
+        if (empty($superAdmins)) {
+            return;
+        }
+
+        $customer = \App\Models\Customer::find($saleReturn->customer);
+        $customerName = $customer ? $customer->name : 'Unknown Customer';
+        
+        $data = [
+            'title' => '🔄 New Sale Return Request',
+            'message' => "Sale Return #{$saleReturn->id} created for Invoice #{$sale->invoice_no} by {$customerName}. Amount: PKR " . number_format($saleReturn->total_net, 2),
+            'type' => 'sale_return',
+            'source_id' => $saleReturn->id,
+            'source_type' => 'App\Models\SalesReturn',
+            'action_url' => route('sale.return.detail', $saleReturn->id),
+            'is_read' => false,
+        ];
+
+        self::createForUsers($superAdmins, $data);
+    }
 }

@@ -9,6 +9,25 @@
                         <h3 class="card-title">ERP Settings</h3>
                     </div>
                     <div class="card-body">
+                        <!-- Advanced Settings & Navigation -->
+                        <div class="mb-4 pb-3 border-bottom">
+                            <h6 class="text-muted mb-3 font-weight-bold text-uppercase"
+                                style="font-size: 0.8rem; letter-spacing: 1px;">Advanced Actions</h6>
+                            <div class="d-flex flex-wrap">
+                                <a href="{{ route('settings.return-policy') }}"
+                                    class="btn btn-outline-primary mr-2 mb-2 shadow-sm">
+                                    <i class="fas fa-undo-alt mr-2"></i> Return Policy
+                                </a>
+                                <a href="{{ route('settings.return-approvers') }}"
+                                    class="btn btn-outline-info mr-2 mb-2 shadow-sm">
+                                    <i class="fas fa-user-shield mr-2"></i> Return Approvers
+                                </a>
+                                <a href="#" class="btn btn-outline-dark mr-2 mb-2 shadow-sm">
+                                    <i class="fas fa-exchange-alt mr-2"></i> Switch Account
+                                </a>
+                            </div>
+                        </div>
+
                         <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
                             <li class="nav-item">
                                 <a class="nav-link active" id="company-tab" data-toggle="tab" href="#company"

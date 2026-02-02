@@ -173,27 +173,49 @@ class CustomerController extends Controller
     public function customer_ledger(Request $request)
     {
         if (Auth::check()) {
-            $userId = Auth::id();
             
-            // Start Query
-            $query = CustomerLedger::with('customer')
-                ->where('admin_or_user_id', $userId);
-
-            // Filters
+            $customers = Customer::all();
+            $ledgerData = [];
+            
             if ($request->filled('customer_id')) {
-                $query->where('customer_id', $request->customer_id);
-            }
-            if ($request->filled('from_date')) {
-                $query->whereDate('created_at', '>=', $request->from_date);
-            }
-            if ($request->filled('to_date')) {
-                $query->whereDate('created_at', '<=', $request->to_date);
+                // Use Balance Service for accurate Statement
+                $balanceService = app(\App\Services\BalanceService::class);
+                
+                $startDate = $request->from_date ?? '2000-01-01';
+                $endDate = $request->to_date ?? date('Y-m-d');
+                
+                $data = $balanceService->getCustomerLedger($request->customer_id, $startDate, $endDate);
+                
+                // transform for view
+                $ledgerData = collect($data['transactions'])->map(function($t) use ($data) {
+                    return (object) [
+                        'created_at' => \Carbon\Carbon::parse($t['date']),
+                        'customer' => $data['customer'],
+                        'description' => $t['description'],
+                        'debit' => $t['debit'],
+                        'credit' => $t['credit'],
+                        'closing_balance' => $t['balance'],
+                        // We act as if previous balance is calculated, but views usually use these explicitly now
+                        'previous_balance' => $t['balance'] - ($t['debit'] - $t['credit']) 
+                    ];
+                });
+                
+                // Add Opening Balance as first row if needed?
+                // The BalanceService includes opening balance in the calculation but returns transactions.
+                // We might want to pass opening balance to view.
+                
+            } else {
+                // If no customer selected, show empty or recent journal entries?
+                // For now, let's keep it empty to encourage selection or just basic legacy entries if needed
+                // But legacy entries are wrong. Let's return empty to force selection.
+                $ledgerData = collect([]);
             }
 
-            $CustomerLedgers = $query->latest()->get();
-            $customers = Customer::all(); // For Dropdown
-
-            return view('admin_panel.customers.customer_ledger', compact('CustomerLedgers', 'customers'));
+            return view('admin_panel.customers.customer_ledger', [
+                'CustomerLedgers' => $ledgerData,
+                'customers' => $customers
+            ]);
+            
         } else {
             return redirect()->back();
         }

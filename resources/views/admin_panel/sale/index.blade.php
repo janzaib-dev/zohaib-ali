@@ -11,6 +11,8 @@
                     @endcan
                     <span class="fw-bold text-dark"><a href="{{ url('bookings') }}" class="btn btn-primary">All
                             Booking</a></span>
+                    <span class="fw-bold text-dark ms-1"><a href="{{ route('sale.returns.index') }}"
+                            class="btn btn-secondary text-white">All Returns</a></span>
                 </div>
             </div>
 
@@ -48,10 +50,23 @@
                                 $status = '<span class="badge bg-secondary">Draft</span>';
                                 if ($sale->sale_status === 'posted') {
                                     $status = '<span class="badge bg-primary">Posted</span>';
+                                } elseif ($sale->sale_status === 'returned') {
+                                    $status = '<span class="badge bg-danger">Returned</span>';
                                 } elseif ($sale->sale_status == 1) {
                                     $status = '<span class="badge bg-danger">Return</span>';
                                 } elseif ($sale->sale_status === null) {
                                     $status = '<span class="badge bg-success">Sale</span>';
+                                }
+
+                                // Check for returns
+                                if ($sale->returns) {
+                                    if ($sale->returns->where('return_status', 'approved')->isNotEmpty()) {
+                                        $status .=
+                                            '<br><span class="badge bg-warning text-dark mt-1">Return Approved</span>';
+                                    } elseif ($sale->returns->where('return_status', 'pending')->isNotEmpty()) {
+                                        $status .=
+                                            '<br><span class="badge bg-info text-dark mt-1">Return Pending</span>';
+                                    }
                                 }
                             @endphp
                             <tr>
@@ -68,16 +83,29 @@
                                 <td>{!! $status !!}</td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        @if ($sale->sale_status === 'draft')
+                                        @if ($sale->sale_status === 'draft' || $sale->sale_status === 'booked')
+                                            {{-- Draft: Edit/Confirm + Invoice --}}
                                             <a href="{{ route('sales.edit', $sale->id) }}"
                                                 class="btn btn-sm btn-warning">Confirm</a>
+                                            <a href="{{ route('sales.invoice', $sale->id) }}" target="_blank"
+                                                class="btn btn-sm btn-info text-white">Invoice</a>
+                                        @else
+                                            {{-- Posted: All Actions --}}
+                                            <a href="{{ route('sales.invoice', $sale->id) }}" target="_blank"
+                                                class="btn btn-sm btn-info text-white">Invoice</a>
+                                            <a href="{{ route('sales.dc', $sale->id) }}" target="_blank"
+                                                class="btn btn-sm btn-secondary text-white">DC</a>
+                                            <a href="{{ route('sales.recepit', $sale->id) }}" target="_blank"
+                                                class="btn btn-sm btn-success text-white">Receipt</a>
+
+                                            @if ($sale->sale_status !== 'returned')
+                                                <a href="{{ route('sales.return.create', $sale->id) }}"
+                                                    class="btn btn-sm btn-danger text-white">Return</a>
+                                            @else
+                                                <button class="btn btn-sm btn-secondary text-white"
+                                                    disabled>Returned</button>
+                                            @endif
                                         @endif
-                                        <a href="{{ route('sales.invoice', $sale->id) }}"
-                                            class="btn btn-sm btn-info text-white">Invoice</a>
-                                        <a href="{{ route('sales.dc', $sale->id) }}"
-                                            class="btn btn-sm btn-secondary text-white">DC</a>
-                                        <a href="{{ route('sales.recepit', $sale->id) }}"
-                                            class="btn btn-sm btn-success text-white">Receipt</a>
                                     </div>
                                 </td>
                             </tr>

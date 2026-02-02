@@ -161,13 +161,13 @@ class VoucherController extends Controller
 
     public function print($id)
     {
-        \Log::info("Print Voucher Requested. ID: " . $id);
+        \Log::info('Print Voucher Requested. ID: '.$id);
 
         // 1. Try V2 VoucherMaster First
         $voucherV2 = \App\Models\VoucherMaster::find($id);
 
         if ($voucherV2) {
-            \Log::info("Found V2 Voucher: " . $voucherV2->voucher_no);
+            \Log::info('Found V2 Voucher: '.$voucherV2->voucher_no);
 
             // Lazy load relationships to avoid eager loading weirdness
             $voucherV2->load(['details.account', 'party']);
@@ -180,15 +180,17 @@ class VoucherController extends Controller
                 'remarks' => $voucherV2->remarks,
                 'type' => 'unknown', // Default
             ];
-            
-            if (!isset($voucher->total_amount)) $voucher->total_amount = $voucherV2->total_amount;
+
+            if (! isset($voucher->total_amount)) {
+                $voucher->total_amount = $voucherV2->total_amount;
+            }
 
             $rows = [];
             foreach ($voucherV2->details as $detail) {
                 $rows[] = [
                     'narration' => $detail->narration,
                     'reference' => '-',
-                    'account_head' => $detail->account->account_head_id ?? '-', 
+                    'account_head' => $detail->account->account_head_id ?? '-',
                     'account_name' => $detail->account->title ?? '-',
                     'account_code' => $detail->account->account_code ?? '-',
                     'amount' => $detail->credit > 0 ? $detail->credit : $detail->debit,
@@ -201,24 +203,24 @@ class VoucherController extends Controller
 
             if ($party) {
                 if ($party instanceof \App\Models\Customer) {
-                     $voucher->type = ($party->customer_type == 'Walking Customer') ? 'walkin' : 'customer';
-                     
-                     // Ensure fields expected by view exist
-                     $party->name = $party->customer_name; // Fallback
-                     $party->address = $party->address ?? '-';
-                     $party->mobile = $party->mobile ?? '-';
-                     
-                     $previousBalance = \App\Models\CustomerLedger::where('customer_id', $party->id)
+                    $voucher->type = ($party->customer_type == 'Walking Customer') ? 'walkin' : 'customer';
+
+                    // Ensure fields expected by view exist
+                    $party->name = $party->customer_name; // Fallback
+                    $party->address = $party->address ?? '-';
+                    $party->mobile = $party->mobile ?? '-';
+
+                    $previousBalance = \App\Models\CustomerLedger::where('customer_id', $party->id)
                         ->where('created_at', '<', $voucherV2->created_at)
                         ->orderBy('id', 'desc')
                         ->value('closing_balance') ?? ($party->opening_balance ?? 0);
 
                 } elseif ($party instanceof \App\Models\Vendor) {
-                     $voucher->type = 'vendor';
-                     $party->address = $party->address ?? '-';
-                     $party->phone = $party->phone ?? '-'; // View uses phone
+                    $voucher->type = 'vendor';
+                    $party->address = $party->address ?? '-';
+                    $party->phone = $party->phone ?? '-'; // View uses phone
 
-                     $previousBalance = \App\Models\VendorLedger::where('vendor_id', $party->id)
+                    $previousBalance = \App\Models\VendorLedger::where('vendor_id', $party->id)
                         ->where('created_at', '<', $voucherV2->created_at)
                         ->orderBy('id', 'desc')
                         ->value('closing_balance') ?? ($party->opening_balance ?? 0);
@@ -228,8 +230,8 @@ class VoucherController extends Controller
                     $party->name = $party->title;
                     $party->phone = $party->account_code;
                     $party->head_name = $party->accountHead->name ?? 'Account';
-                    
-                    $previousBalance = $party->opening_balance; 
+
+                    $previousBalance = $party->opening_balance;
                 }
             } else {
                 $previousBalance = 0;
@@ -445,6 +447,47 @@ class VoucherController extends Controller
                     ]);
                 }
             } elseif ($request->vendor_type == 'customer') {
+                // ✅ Create Journal Entry for Customer Receipt (CREDIT reduces balance)
+                try {
+                    $customer = Customer::find($request->vendor_id);
+                    if ($customer) {
+                        $journalService = app(\App\Services\JournalEntryService::class);
+                        $balanceService = app(\App\Services\BalanceService::class);
+                        $receiptVoucher = ReceiptsVoucher::where('rvid', $rvid)->first();
+                        $date = $request->receipt_date ?? now()->format('Y-m-d');
+
+                        // Get account IDs dynamically
+                        $arAccountId = $balanceService->getAccountsReceivableId();
+                        $cashAccountId = $request->row_account_id[0] ?? $balanceService->getCashAccountId();
+
+                        // Dr Cash/Bank (receive money)
+                        $journalService->recordEntry(
+                            $receiptVoucher ?? new \App\Models\ReceiptsVoucher(['id' => 0]),
+                            $cashAccountId,
+                            $amount,
+                            0,
+                            "Receipt #{$rvid} from {$customer->customer_name}",
+                            $date
+                        );
+
+                        // Cr Accounts Receivable (reduce customer debt) - with Party link
+                        $journalService->recordEntry(
+                            $receiptVoucher ?? new \App\Models\ReceiptsVoucher(['id' => 0]),
+                            $arAccountId,
+                            0,
+                            $amount,
+                            "Receipt #{$rvid} from {$customer->customer_name}",
+                            $date,
+                            $customer
+                        );
+
+                        \Log::info("Journal Entry created for Receipt #{$rvid}, Amount: {$amount}, Customer: {$customer->id}");
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Journal Entry Error in Receipt: '.$e->getMessage());
+                }
+
+                // Legacy ledger update (keeping for backward compatibility)
                 $ledger = CustomerLedger::where('customer_id', $request->vendor_id)->latest()->first();
                 if ($ledger) {
                     $ledger->previous_balance = $ledger->closing_balance;
@@ -655,6 +698,8 @@ class VoucherController extends Controller
 
     public function all_Payment_vochers()
     {
+        $receipts = \App\Models\PaymentVoucher::orderBy('id', 'DESC')->get();
+
         foreach ($receipts as $voucher) {
             $partyName = '-';
             $typeLabel = '-';

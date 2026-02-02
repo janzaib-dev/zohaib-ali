@@ -79,7 +79,7 @@ class ProductController extends Controller
         $term = $request->get('term') ?? $request->get('q') ?? '';
 
         $query = Product::query()
-            ->select('id', 'item_name', 'item_code', 'barcode_path')
+            ->select('id', 'item_name', 'item_code', 'barcode_path', 'size_mode', 'height', 'width')
             ->withSum('warehouseStocks', 'total_pieces') /* Efficient Stock Sum */
             ->where(function ($q) use ($term) {
                 $q->where('item_name', 'like', "%{$term}%")
@@ -99,6 +99,9 @@ class ProductController extends Controller
                 'sku' => $p->item_code ?? '',
                 'stock' => $stock,
                 'name' => $p->item_name,
+                'size_mode' => $p->size_mode,
+                'height' => $p->height ?? 0,
+                'width' => $p->width ?? 0,
             ];
         });
 

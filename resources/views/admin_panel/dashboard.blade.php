@@ -506,7 +506,56 @@
                     @endcan
                 </div>
 
-                <!-- Main Stats -->
+                <!-- Financial Health (Accounting Based) -->
+                @if (isset($financialSummary) && !empty($financialSummary))
+                    <h5 class="mb-3 text-muted"
+                        style="font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Financial Health (This Month)
+                    </h5>
+                    <div class="stats-grid mb-4">
+                        <!-- Sales Revenue -->
+                        <div class="stat-card success">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-hand-holding-usd"></i></div>
+                                <div class="stat-trend up">Accounting</div>
+                            </div>
+                            <div class="stat-value">Rs {{ number_format($financialSummary['sales'] ?? 0, 0) }}</div>
+                            <div class="stat-label">Sales Revenue</div>
+                        </div>
+
+                        <!-- Purchase Expense -->
+                        <div class="stat-card danger">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-money-bill-wave"></i></div>
+                                <div class="stat-trend down">Accounting</div>
+                            </div>
+                            <div class="stat-value">Rs {{ number_format($financialSummary['purchases'] ?? 0, 0) }}</div>
+                            <div class="stat-label">Purchase Expenses</div>
+                        </div>
+
+                        <!-- Receivables (Money coming in) -->
+                        <div class="stat-card info">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-user-clock"></i></div>
+                                <div class="stat-trend">Assets</div>
+                            </div>
+                            <div class="stat-value">Rs {{ number_format($financialSummary['receivables'] ?? 0, 0) }}</div>
+                            <div class="stat-label">Total Receivables (Due)</div>
+                        </div>
+
+                        <!-- Payables (Money going out) -->
+                        <div class="stat-card warning">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-file-invoice"></i></div>
+                                <div class="stat-trend">Liabilities</div>
+                            </div>
+                            <div class="stat-value">Rs {{ number_format($financialSummary['payables'] ?? 0, 0) }}</div>
+                            <div class="stat-label">Total Payables (Owe)</div>
+                        </div>
+                    </div>
+                @endif
+
+                <!-- Main Stats (Legacy/Ops) -->
                 <div class="stats-grid">
                     @can('sales.view')
                         <div class="stat-card success">

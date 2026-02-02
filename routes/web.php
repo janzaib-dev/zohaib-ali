@@ -143,7 +143,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/customer-payments/{id}', [CustomerController::class, 'destroy_payment'])->name('customer.payments.destroy');
 
     // Vendor Routes
-    Route::get('/vendor', [VendorController::class, 'index'])->middleware('permission:vendors.view');
+    Route::get('/vendor', [VendorController::class, 'index'])->middleware('permission:vendors.view')->name('vendors.index');
     Route::post('/vendor/store', [VendorController::class, 'store'])->name('vendors.store.ajax')->middleware('permission:vendors.create|vendors.edit');
     Route::get('/vendor/delete/{id}', [VendorController::class, 'delete'])->middleware('permission:vendors.delete');
     Route::get('/vendors-ledger', [VendorController::class, 'vendors_ledger'])->middleware('permission:vendors.view')->name('vendors-ledger');
@@ -151,6 +151,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/vendor/payments', [VendorController::class, 'store_vendor_payment'])->middleware('permission:vendors.create')->name('vendor.payments.store');
     Route::get('/vendor/bilties', [VendorController::class, 'vendor_bilties'])->middleware('permission:vendors.view')->name('vendor.bilties');
     Route::post('/vendor/bilties', [VendorController::class, 'store_vendor_bilty'])->middleware('permission:vendors.create')->name('vendor.bilties.store');
+    Route::get('/vendor/{vendor}/ledger', [VendorController::class, 'ledger'])->middleware('permission:vendors.view')->name('vendor.ledger');
+    Route::get('/vendor/{vendor}/balance', [VendorController::class, 'getVendorBalance'])->name('vendor.balance');
 
     // Warehouse Routes
     // ///
@@ -251,10 +253,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/sales/store', [SaleController::class, 'store'])->middleware('permission:sales.create')->name('sales.store');
     Route::post('/sales/post-final', [SaleController::class, 'postFinal'])->middleware('permission:sales.create')->name('sales.post_final');
     Route::get('/sales/{id}/return', [SaleController::class, 'saleretun'])->middleware('permission:sales.create')->name('sales.return.create');
-    Route::post('/sales-return/store', [SaleController::class, 'storeSaleReturn'])->middleware('permission:sales.create')->name('sales.return.store');
-    Route::get('/sale-returns', [App\Http\Controllers\SaleController::class, 'salereturnview'])->middleware('permission:sales.view')->name('sale.returns.index');
-    Route::get('/sales/{id}/invoice', [SaleController::class, 'saleinvoice'])->middleware('permission:sales.view')->name('sales.invoice');
-    Route::get('/sales/{id}/edit', [SaleController::class, 'saleedit'])->middleware('permission:sales.edit')->name('sales.edit');
+    Route::post('/sales/sales-return/store', [SaleController::class, 'storeSaleReturn'])->middleware('permission:sales.create')->name('sales.return.store');
+    Route::get('/sale/sale-returns', [App\Http\Controllers\SaleController::class, 'salereturnview'])->middleware('permission:sales.view')->name('sale.returns.index');
+    Route::get('/sales/sale-return/{id}/detail', [App\Http\Controllers\SaleController::class, 'saleReturnDetail'])->middleware('permission:sales.view')->name('sale.return.detail');
+    Route::post('/sales/sale-return/{id}/approve', [App\Http\Controllers\SaleController::class, 'approveReturn'])->middleware('permission:sales.edit')->name('sale.return.approve');
+    Route::post('/sales/sale-return/{id}/reject', [App\Http\Controllers\SaleController::class, 'rejectReturn'])->middleware('permission:sales.edit')->name('sale.return.reject');
+    Route::get('/sales/sales/{id}/invoice', [SaleController::class, 'saleinvoice'])->middleware('permission:sales.view')->name('sales.invoice');
+    Route::get('/sales/sales/{id}/edit', [SaleController::class, 'saleedit'])->middleware('permission:sales.edit')->name('sales.edit');
     Route::put('/sales/{id}', [SaleController::class, 'updatesale'])->middleware('permission:sales.edit')->name('sales.update');
     Route::get('/sales/{id}/dc', [SaleController::class, 'saledc'])->middleware('permission:sales.view')->name('sales.dc');
     Route::get('/sales/{id}/recepit', [SaleController::class, 'salerecepit'])->middleware('permission:sales.view')->name('sales.recepit');
@@ -351,11 +356,20 @@ Route::middleware('auth')->group(function () {
     Route::get('/modules/list', function () {
         return response()->json(\Illuminate\Support\Facades\DB::table('modules')->pluck('name'));
     })->name('modules.list');
-    
+
     // Settings & Notifications
     Route::get('/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings', [App\Http\Controllers\SettingsController::class, 'update'])->name('settings.update');
-    Route::get('/notifications', [App\Http\Controllers\SettingsController::class, 'notifications'])->name('notifications.index');
+
+    // Return Policy Settings
+    Route::get('/settings/return-policy', [App\Http\Controllers\SettingsController::class, 'returnSettings'])->name('settings.return-policy');
+    Route::post('/settings/return-policy', [App\Http\Controllers\SettingsController::class, 'updateReturnSettings'])->name('settings.return-policy.update');
+
+    // Return Approvers Management
+    Route::get('/settings/return-approvers', [App\Http\Controllers\SettingsController::class, 'returnApprovers'])->name('settings.return-approvers');
+    Route::post('/settings/return-approvers/update', [App\Http\Controllers\SettingsController::class, 'updateReturnApprovers'])->name('settings.return-approvers.update');
+
+    Route::get('/notifications', [App\Http\Controllers\SystemNotificationController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/count', [App\Http\Controllers\SettingsController::class, 'notificationCount'])->name('notifications.count');
     Route::post('/notifications/{id}/read', [App\Http\Controllers\SettingsController::class, 'markAsRead'])->name('notifications.read');
     Route::post('/notifications/read-all', [App\Http\Controllers\SettingsController::class, 'markAllAsRead'])->name('notifications.readAll');
@@ -376,6 +390,10 @@ Route::get('/debug-perms', function () {
         'can_any_products_or_users' => $u->canAny(['products.read', 'users.read']),
     ]);
 })->middleware('auth');
+
+Route::get('/notifications/fetch', [\App\Http\Controllers\SystemNotificationController::class, 'fetch'])
+    ->middleware('auth')
+    ->name('notifications.fetch');
 
 require __DIR__.'/auth.php';
 
