@@ -1211,6 +1211,10 @@ class SaleController extends Controller
                 'color' => json_decode($item->color, true) ?? [],
                 'pieces_per_box' => $item->product->pieces_per_box ?? 1,
                 'price_per_piece' => ($item->total_pieces > 0) ? ($item->total / $item->total_pieces) : 0,
+                // Add dimension and m² data from product
+                'height' => $item->product->height ?? 0,
+                'width' => $item->product->width ?? 0,
+                'pieces_per_m2' => $item->product->pieces_per_m2 ?? 0,
             ];
         });
     }
