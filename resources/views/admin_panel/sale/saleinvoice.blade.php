@@ -311,7 +311,8 @@
                         $loosePieces = $totalPieces % $piecesPerBox;
 
                         // Total M2 for line
-                        $totalM2Line = $m2PerPiece * $totalPieces; $sizeMode = $item["size_mode"] ?? "by_size";
+                        $totalM2Line = $m2PerPiece * $totalPieces;
+                        $sizeMode = $item['size_mode'] ?? 'by_size';
                     @endphp
                     <tr>
                         <td class="text-start">
@@ -333,7 +334,13 @@
                                     </span>
                                 @endif
 
-                                @if($sizeMode == 'by_size') <span class='d-inline-block ms-1'> @if ($height > 0 && $width > 0) Dims: {{ number_format($width, 0) }}x{{ number_format($height, 0) }} @endif </span> @endif
+                                @if ($sizeMode == 'by_size')
+                                    <span class='d-inline-block ms-1'>
+                                        @if ($height > 0 && $width > 0)
+                                            Dims: {{ number_format($width, 0) }}x{{ number_format($height, 0) }}
+                                        @endif
+                                    </span>
+                                @endif
 
                                 <span class="d-inline-block ms-1">
                                     PACKTEST: {{ $piecesPerBox }} pcs | {{ number_format($m2PerBox, 4) }} m²
@@ -343,7 +350,18 @@
 
                         <td class="text-center" style="vertical-align: middle;">
                             <div style="font-weight: bold; color: #2c3e50;">
-                                @if($sizeMode == 'by_pieces') {{ $totalPieces }} Pcs @else @if ($boxes > 0 && $loosePieces > 0) {{ $boxes }} {{ $sizeMode == 'by_cartons' ? 'Carton' : 'Box' }} + {{ $loosePieces }} Pc @elseif ($boxes > 0) {{ $boxes }} {{ $sizeMode == 'by_cartons' ? 'Carton' : 'Box' }} @else {{ $loosePieces }} Pcs @endif @endif
+                                @if ($sizeMode == 'by_pieces')
+                                    {{ $totalPieces }} Pcs
+                                @else
+                                    @if ($boxes > 0 && $loosePieces > 0)
+                                        {{ $boxes }} {{ $sizeMode == 'by_cartons' ? 'Carton' : 'Box' }} +
+                                        {{ $loosePieces }} Pc
+                                    @elseif ($boxes > 0)
+                                        {{ $boxes }} {{ $sizeMode == 'by_cartons' ? 'Carton' : 'Box' }}
+                                    @else
+                                        {{ $loosePieces }} Pcs
+                                    @endif
+                                @endif
                             </div>
                             <small class="text-muted" style="font-size: 10px;">({{ $totalPieces }} pcs)</small>
                         </td>
@@ -354,7 +372,13 @@
 
                         <td class="text-end" style="vertical-align: middle;">
                             {{ number_format($item['price'], 2) }}
-                            @if ($item['discount'] > 0)
+                            @if (($item['discount_percent'] ?? 0) > 0)
+                                <br><span class="badge bg-danger"
+                                    style="font-size: 9px; padding: 1px 3px;">-{{ number_format($item['discount_percent'], 0) }}%</span>
+                            @elseif (($item['discount_amount'] ?? 0) > 0)
+                                <br><span class="badge bg-danger"
+                                    style="font-size: 9px; padding: 1px 3px;">-{{ number_format($item['discount_amount'], 2) }}</span>
+                            @elseif (($item['discount'] ?? 0) > 0)
                                 <br><span class="badge bg-danger"
                                     style="font-size: 9px; padding: 1px 3px;">-{{ number_format($item['discount'], 0) }}%</span>
                             @endif
@@ -439,12 +463,3 @@
 </body>
 
 </html>
-
-
-
-
-
-
-
-
-

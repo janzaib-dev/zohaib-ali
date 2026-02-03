@@ -991,12 +991,10 @@
 
               if (sizeMode === 'by_cartons') {
                   // For by_cartons mode - hide only Size column, keep Pack Size and Boxes
-                  $row.find('.size-col').hide();
                   $row.find('.pack-size-col').show();
                   $row.find('.boxes-col').show();
 
                   // Hide only Size header column
-                  $table.find('thead .size-col').hide();
                   $table.find('thead .pack-size-col').show();
                   $table.find('thead .boxes-col').show();
 
@@ -1006,12 +1004,10 @@
 
               } else if (sizeMode === 'by_pieces') {
                   // Hide columns for by_pieces mode (both row and header)
-                  $row.find('.size-col').hide();
                   $row.find('.pack-size-col').hide();
                   $row.find('.boxes-col').hide();
 
                   // Hide header columns
-                  $table.find('thead .size-col').hide();
                   $table.find('thead .pack-size-col').hide();
                   $table.find('thead .boxes-col').hide();
 
@@ -1172,6 +1168,7 @@
                class="form-control discount-value text-end"
                name="item_disc[]"
                placeholder="">
+        <input type="hidden" name="discount_type[]" class="discount-type-input" value="percent">
 
         <button type="button"
                 class="btn btn-outline-secondary discount-toggle"
@@ -1211,12 +1208,16 @@
           $(document).on('click', '.discount-toggle', function() {
 
               const $btn = $(this);
+              const $wrapper = $btn.closest('.discount-wrapper');
+              const $input = $wrapper.find('.discount-type-input');
               const currentType = $btn.data('type');
 
               if (currentType === 'percent') {
                   $btn.data('type', 'pkr').text('PKR');
+                  $input.val('fixed');
               } else {
                   $btn.data('type', 'percent').text('%');
+                  $input.val('percent');
               }
 
               // re-calc row

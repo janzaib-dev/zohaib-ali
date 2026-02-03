@@ -1367,20 +1367,22 @@
                     .catch(err => console.error('Validation error:', err));
             }
 
-            // Attach listeners
+            // Attach listeners - LIVE VALIDATION REMOVED BY REQUEST
+            /*
             const inputs = form.querySelectorAll('input, select, textarea');
             inputs.forEach(el => {
                 // Skip hidden inputs to avoid excessive triggers (unless necessary)
                 if (el.type !== 'hidden') {
-                    el.addEventListener('input', debounce(() => validateData(false), 500));
-                    el.addEventListener('change', debounce(() => validateData(false), 500));
+                    // el.addEventListener('input', debounce(() => validateData(false), 500));
+                    // el.addEventListener('change', debounce(() => validateData(false), 500));
                 }
             });
 
             // Handle Select2 Change Events (jQuery)
             if (window.jQuery) {
-                $(form).find('select').on('change', debounce(() => validateData(false), 500));
+                // $(form).find('select').on('change', debounce(() => validateData(false), 500));
             }
+            */
 
             // Submit Handler
             form.addEventListener('submit', function(e) {
