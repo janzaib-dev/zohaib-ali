@@ -951,6 +951,7 @@ class SaleController extends Controller
                 $storedQtyBox = $totalPieces / $ppb;
 
                 $discount = (float) ($discounts[$index] ?? 0);
+                $discType = $request->discount_type[$index] ?? 'percent';
 
                 // Calculate Line Total
                 // User enters: Qty in PIECES, Price PER PIECE
@@ -958,7 +959,17 @@ class SaleController extends Controller
                 $lineTotal = $totalPieces * $dbPrice;
 
                 // Apply Discount
-                $lineTotal = $lineTotal - ($lineTotal * $discount / 100);
+                if ($discType === 'fixed') {
+                    // Fixed Amount Discount
+                    $calcDiscountAmount = $discount;
+                    $calcDiscountPercent = 0; // Or calculate back: ($discount / $lineTotal) * 100
+                    $lineTotal = $lineTotal - $discount;
+                } else {
+                    // Percentage Discount
+                    $calcDiscountAmount = ($lineTotal * $discount / 100);
+                    $calcDiscountPercent = $discount;
+                    $lineTotal = $lineTotal - $calcDiscountAmount;
+                }
 
                 $saleItem = new SaleItem;
                 $saleItem->sale_id = $sale->id;
@@ -971,7 +982,8 @@ class SaleController extends Controller
                 $saleItem->loose_pieces = $loose;
 
                 $saleItem->price = $dbPrice;
-                $saleItem->discount_percent = $discount;
+                $saleItem->discount_percent = $calcDiscountPercent;
+                $saleItem->discount_amount = $calcDiscountAmount;
                 $saleItem->total = $lineTotal;
 
                 // Meta
@@ -1220,7 +1232,9 @@ class SaleController extends Controller
                 'total_pieces' => (int) $item->total_pieces,
                 'loose_pieces' => (int) $item->loose_pieces,
                 'price' => (float) $item->price, // Price Per Piece
-                'discount' => (float) $item->discount_percent, // Percentage
+                'discount' => (float) $item->discount_percent, // Legacy
+                'discount_percent' => (float) $item->discount_percent,
+                'discount_amount' => (float) $item->discount_amount,
                 'total' => (float) $item->total,
                 'color' => json_decode($item->color, true) ?? [],
                 'pieces_per_box' => $item->product->pieces_per_box ?? 1,
