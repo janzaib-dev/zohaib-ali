@@ -454,16 +454,16 @@
                                   <thead>
                                       <tr>
                                           <th class="col-product">Product</th>
-                                          <th style="width: 140px;">Size (H x W)</th>
+                                          <th class="size-col" style="width: 140px;">Size (H x W)</th>
                                           <th style="width: 100px;">Mode</th>
                                           <th class="col-warehouse">Warehouse</th>
                                           <th class="col-stock">Stock</th>
-                                          <th class="col-qty">Total Pcs</th>
-                                          <th class="col-qty">Pack Size</th>
-                                          <th class="col-pieces">Boxes</th>
+                                          <th class="col-qty qty-header">Total Pcs</th>
+                                          <th class="col-qty pack-size-col">Pack Size</th>
+                                          <th class="col-pieces boxes-col">Boxes</th>
                                           <th class="col-disc">Disc %</th>
                                           <th class="col-disc-amt">Disc Amt</th>
-                                          <th class="col-price-p">Price/Pc</th>
+                                          <th class="col-price-p price-pc-header">Price/Pc</th>
                                           <th class="col-amount">Amount</th>
                                           <th class="col-action">—</th>
                                       </tr>
@@ -942,15 +942,25 @@
               }).done(function(pRes) {
                   console.log('Price fetched:', pRes);
 
-                  // Populate Fields
-                  // Retail Price = Box Price (if by_carton)
-                  $row.find('.retail-price').val(pRes.retail_price || 0);
+                  // Populate Fields based on size_mode
+                  const sizeMode = pRes.size_mode;
+
+                  if (sizeMode === 'by_size') {
+                      // By Size: use price_per_m2 for piece price
+                      $row.find('.retail-price').val(pRes.retail_price || 0);
+                      $row.find('.price-per-piece').val(pRes.price_per_m2 || 0);
+                  } else if (sizeMode === 'by_cartons') {
+                      // By Cartons: use sale_price_per_box for carton price
+                      $row.find('.retail-price').val(pRes.sale_price_per_box || 0);
+                      $row.find('.price-per-piece').val(pRes.sale_price_per_piece || 0);
+                  } else if (sizeMode === 'by_pieces') {
+                      // By Pieces: use sale_price_per_piece
+                      $row.find('.retail-price').val(pRes.sale_price_per_piece || 0);
+                      $row.find('.price-per-piece').val(pRes.sale_price_per_piece || 0);
+                  }
 
                   // Pack Size
                   $row.find('.pack-qty').val(pRes.pieces_per_box || 1);
-
-                  // Piece Price
-                  $row.find('.price-per-piece').val(pRes.price_per_m2 || 0);
 
                   // Populate Size Info
                   $row.find('.size-h').val(pRes.height || '-');
@@ -961,11 +971,69 @@
                   $row.data('size_mode', pRes.size_mode);
                   $row.data('pieces_per_box', pRes.pieces_per_box || 1);
                   $row.data('price_per_m2', pRes.price_per_m2 || 0);
+                  $row.data('sale_price_per_box', pRes.sale_price_per_box || 0);
+                  $row.data('sale_price_per_piece', pRes.sale_price_per_piece || 0);
+
+                  // Apply UI changes based on size mode
+                  applyModeBasedUI($row, pRes.size_mode);
 
                   computeRow($row);
               }).fail(function(err) {
                   console.error('Price fetch failed', err);
               });
+          }
+
+          function applyModeBasedUI($row, sizeMode) {
+              console.log('Applying UI for mode:', sizeMode);
+
+              // Get the table
+              const $table = $row.closest('table');
+
+              if (sizeMode === 'by_cartons') {
+                  // For by_cartons mode - hide only Size column, keep Pack Size and Boxes
+                  $row.find('.size-col').hide();
+                  $row.find('.pack-size-col').show();
+                  $row.find('.boxes-col').show();
+
+                  // Hide only Size header column
+                  $table.find('thead .size-col').hide();
+                  $table.find('thead .pack-size-col').show();
+                  $table.find('thead .boxes-col').show();
+
+                  // Update header labels
+                  $table.find('.qty-header').text('Total Cartons');
+                  $table.find('.price-pc-header').text('Carton Price');
+
+              } else if (sizeMode === 'by_pieces') {
+                  // Hide columns for by_pieces mode (both row and header)
+                  $row.find('.size-col').hide();
+                  $row.find('.pack-size-col').hide();
+                  $row.find('.boxes-col').hide();
+
+                  // Hide header columns
+                  $table.find('thead .size-col').hide();
+                  $table.find('thead .pack-size-col').hide();
+                  $table.find('thead .boxes-col').hide();
+
+                  // Update header labels
+                  $table.find('.qty-header').text('Total Pcs');
+                  $table.find('.price-pc-header').text('Price/Pc');
+
+              } else {
+                  // by_size mode - show all columns (both row and header)
+                  $row.find('.size-col').show();
+                  $row.find('.pack-size-col').show();
+                  $row.find('.boxes-col').show();
+
+                  // Show header columns
+                  $table.find('thead .size-col').show();
+                  $table.find('thead .pack-size-col').show();
+                  $table.find('thead .boxes-col').show();
+
+                  // Reset header labels
+                  $table.find('.qty-header').text('Total Pcs');
+                  $table.find('.price-pc-header').text('Price/Pc');
+              }
           }
 
           function loadWarehousesForProduct($row, productId) {
@@ -1054,7 +1122,7 @@
     </td>
 
     <!-- SIZE INFO (H x W) -->
-    <td>
+    <td class="size-col">
       <div class="d-flex align-items-center gap-1 justify-content-center">
         <input type="text" class="form-control text-center px-0 size-h input-readonly" readonly placeholder="H" style="font-size: 0.8rem; width: 45px;" tabindex="-1">
         <span class="text-muted small">x</span>
@@ -1086,13 +1154,13 @@
 
     <!-- PACK QTY (Hidden) -->
     <!-- Pack Size (Readonly) -->
-    <td class="col-qty">
+    <td class="col-qty pack-size-col">
        <input type="text" class="form-control pack-qty text-end input-readonly" name="pack_qty[]" readonly placeholder="Size" tabindex="-1">
     </td>
 
    
     <!-- Packet/Box (Calculated) -->
-    <td class="col-pieces">
+    <td class="col-pieces boxes-col">
       <input type="text" class="form-control total-pieces text-end input-readonly" name="total_pieces[]" readonly placeholder="Box" tabindex="-1">
     </td>
 
@@ -1467,12 +1535,25 @@
               // Total Pieces for Calculation
               const totalPieces = qtyPieces;
 
-              // 🔹 GROSS CALCULATION
-              // "fix total amount with piece which user input"
-              // Use Price Per Piece explicitly
+              // 🔹 GROSS CALCULATION - MODE SPECIFIC
+              // Get size mode from row data
+              const sizeMode = $row.data('size_mode');
               let unitPrice = toNum($row.find('.price-per-piece').val());
-
-              const gross = m2_per_piece * totalPieces * unitPrice;
+              let gross = 0;
+              console.log(unitPrice);
+              if (sizeMode === 'by_size') {
+                  // BY SIZE MODE - Keep original calculation (DO NOT TOUCH)
+                  gross = m2_per_piece * totalPieces * unitPrice;
+              } else if (sizeMode === 'by_cartons') {
+                  // BY CARTONS MODE - Price per piece * total pieces
+                  gross = unitPrice * totalPieces;
+              } else if (sizeMode === 'by_pieces') {
+                  // BY PIECES MODE - Price per piece * total pieces
+                  gross = unitPrice * totalPieces;
+              } else {
+                  // Fallback to by_size calculation
+                  gross = m2_per_piece * totalPieces * unitPrice;
+              }
 
               /* ===== AUTO DISCOUNT ===== */
               if (!isManual) {

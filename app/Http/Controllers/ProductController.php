@@ -239,6 +239,7 @@ class ProductController extends Controller
 
         $totalM2 = 0;
         $totalStockQty = 0;
+        $m2PerPiece = 0; // Initialize to avoid undefined variable error
 
         // Pricing Vars
         $pricePerM2 = 0;        // Sale Price (By Size)
@@ -372,7 +373,7 @@ class ProductController extends Controller
                 'height' => $height,
                 'width' => $width,
                 'pieces_per_box' => $piecesPerBox,
-                'pieces_per_m2' => $m2PerPiece,
+                'pieces_per_m2' => $m2PerPiece ?: 0,
                 // Stock Qty fields removed from here as they live in WarehouseStock now
 
                 'total_m2' => $totalM2,

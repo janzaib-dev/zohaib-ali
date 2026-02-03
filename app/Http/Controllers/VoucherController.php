@@ -698,39 +698,47 @@ class VoucherController extends Controller
 
     public function all_Payment_vochers()
     {
-        $receipts = \App\Models\PaymentVoucher::orderBy('id', 'DESC')->get();
+        // V2: Fetch from VoucherMaster where type is PAYMENT
+        $receipts = \App\Models\VoucherMaster::where('voucher_type', \App\Models\VoucherMaster::TYPE_PAYMENT)
+            ->with('party') // Eager load the polymorphic party
+            ->orderBy('id', 'DESC')
+            ->get();
 
         foreach ($receipts as $voucher) {
-            $partyName = '-';
             $typeLabel = '-';
+            $partyName = '-';
 
-            // 🧩 If type is numeric → Account Head / Account
-            if (is_numeric($voucher->type)) {
-                $accountHead = DB::table('account_heads')->where('id', $voucher->type)->first();
-                $account = DB::table('accounts')->where('id', $voucher->party_id)->first();
-
-                $typeLabel = $accountHead->name ?? 'Account';
-                $partyName = $account->title ?? '-';
-            } elseif ($voucher->type === 'vendor') {
-                $vendor = DB::table('vendors')->where('id', $voucher->party_id)->first();
-                $typeLabel = 'Vendor';
-                $partyName = $vendor->name ?? '-';
-            } elseif ($voucher->type === 'customer') {
-                $customer = DB::table('customers')->where('id', $voucher->party_id)->first();
-                $typeLabel = 'Customer';
-                $partyName = $customer->customer_name ?? '-';
-            } elseif ($voucher->type === 'walkin') {
-                $walkin = DB::table('customers')
-                    ->where('id', $voucher->party_id)
-                    ->where('customer_type', 'Walking Customer')
-                    ->first();
-                $typeLabel = 'Walk-in';
-                $partyName = $walkin->customer_name ?? '-';
+            if ($voucher->party) {
+                // Determine Label from Class Name
+                $class = get_class($voucher->party);
+                if (str_contains($class, 'Customer')) {
+                    $typeLabel = 'Customer';
+                    $partyName = $voucher->party->customer_name ?? $voucher->party->name ?? '-';
+                } elseif (str_contains($class, 'Vendor')) {
+                    $typeLabel = 'Vendor';
+                    $partyName = $voucher->party->name ?? '-';
+                } elseif (str_contains($class, 'Account')) {
+                    $typeLabel = 'Account';
+                    $partyName = $voucher->party->title ?? '-';
+                } else {
+                    $typeLabel = class_basename($class);
+                    $partyName = $voucher->party->name ?? '-';
+                }
             }
 
-            // Attach extra fields for Blade
+            // Attach for View
             $voucher->type_label = $typeLabel;
             $voucher->party_name = $partyName;
+
+            // Map fields for View compatibility
+            $voucher->pvid = $voucher->voucher_no;
+            $voucher->receipt_date = $voucher->date->format('Y-m-d');
+            $voucher->entry_date = $voucher->created_at->format('Y-m-d');
+            
+            // Fix for view expecting 'amount' field
+            if (!isset($voucher->amount)) {
+                $voucher->amount = $voucher->total_amount;
+            }
         }
 
         return view('admin_panel.vochers.payment_vochers.all_payment_vochers', compact('receipts'));
@@ -738,6 +746,87 @@ class VoucherController extends Controller
 
     public function Paymentprint($id)
     {
+        // 1. Try V2 VoucherMaster First
+        $voucherV2 = \App\Models\VoucherMaster::find($id);
+
+        if ($voucherV2) {
+            // Lazy load relationships
+            $voucherV2->load(['details.account', 'party']);
+
+            // -- Adapter for V2 to V1 View --
+            $voucher = (object) [
+                'pvid' => $voucherV2->voucher_no,
+                'receipt_date' => $voucherV2->date->format('Y-m-d'),
+                'total_amount' => $voucherV2->amount,
+                'remarks' => $voucherV2->remarks,
+                'type' => 'unknown', // Default
+            ];
+
+            if (! isset($voucher->total_amount)) {
+                $voucher->total_amount = $voucherV2->total_amount;
+            }
+
+            $rows = [];
+            foreach ($voucherV2->details as $detail) {
+                // Determine account name/code/head
+                $headName = $detail->account->accountHead->name ?? '-';
+                $accName = $detail->account->title ?? '-';
+                $accCode = $detail->account->account_code ?? '-';
+
+                // For Payment: Logic is typically Debit the party/expense?
+                // But here rows show where money went?
+                // Legacy view shows "account_head", "account_name".
+
+                $rows[] = [
+                    'narration' => $detail->narration,
+                    'reference' => '-',
+                    'account_head' => $headName,
+                    'account_name' => $accName,
+                    'account_code' => $accCode,
+                    'amount' => $detail->debit > 0 ? $detail->debit : $detail->credit,
+                ];
+            }
+
+            // Party Logic
+            $party = $voucherV2->party;
+            $previousBalance = 0;
+
+            if ($party) {
+                if ($party instanceof \App\Models\Customer) {
+                    $voucher->type = ($party->customer_type == 'Walking Customer') ? 'walkin' : 'customer';
+
+                    $party->name = $party->customer_name;
+                    $party->address = $party->address ?? '-';
+                    $party->mobile = $party->mobile ?? '-'; // View uses mobile/phone? View uses mobile for customer
+
+                    $previousBalance = \App\Models\CustomerLedger::where('customer_id', $party->id)
+                        ->where('created_at', '<', $voucherV2->created_at)
+                        ->orderBy('id', 'desc')
+                        ->value('closing_balance') ?? ($party->opening_balance ?? 0);
+
+                } elseif ($party instanceof \App\Models\Vendor) {
+                    $voucher->type = 'vendor';
+                    $party->address = $party->address ?? '-';
+                    $party->phone = $party->phone ?? '-'; // View uses phone
+
+                    $previousBalance = \App\Models\VendorLedger::where('vendor_id', $party->id)
+                        ->where('created_at', '<', $voucherV2->created_at)
+                        ->orderBy('id', 'desc')
+                        ->value('closing_balance') ?? ($party->opening_balance ?? 0);
+
+                } elseif ($party instanceof \App\Models\Account) {
+                    $voucher->type = '1'; // Numeric triggers Account Block
+                    $party->name = $party->title;
+                    $party->phone = $party->account_code; // View uses phone
+                    $party->head_name = $party->accountHead->name ?? 'Account';
+
+                    $previousBalance = $party->opening_balance;
+                }
+            }
+
+            return view('admin_panel.vochers.payment_vochers.print', compact('voucher', 'rows', 'party', 'previousBalance'));
+        }
+
         $voucher = \App\Models\PaymentVoucher::findOrFail($id);
 
         // Decode JSON arrays
