@@ -411,6 +411,7 @@
             $(document).on('click', '.search-result-item', function() {
                 const $li = $(this);
                 const $row = $li.closest('tr');
+                console.log($li);
 
                 $row.find('.product_id').val($li.data('id'));
                 $row.find('.productSearch').val($li.data('name'));

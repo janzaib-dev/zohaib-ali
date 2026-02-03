@@ -232,4 +232,53 @@ class TransactionService
             throw $e;
         }
     }
+
+    public function createPurchaseVoucher(\App\Models\Purchase $purchase)
+    {
+        \Log::info("TransactionService: Create Voucher for Purchase #{$purchase->invoice_no}");
+
+        try {
+            $balanceService = app(\App\Services\BalanceService::class);
+            $expenseAccountId = $balanceService->getPurchaseExpenseId();
+            $apAccountId = $balanceService->getAccountsPayableId();
+
+            $lines = [];
+
+            // 1. Debit Purchase Expense
+            $lines[] = [
+                'account_id' => $expenseAccountId,
+                'debit' => $purchase->net_amount,
+                'credit' => 0,
+                'narration' => "Purchase Invoice #{$purchase->invoice_no}",
+            ];
+
+            // 2. Credit Accounts Payable (Vendor Liability)
+            $lines[] = [
+                'account_id' => $apAccountId,
+                'debit' => 0,
+                'credit' => $purchase->net_amount,
+                'narration' => "Payable to Vendor " . ($purchase->vendor->name ?? ''),
+            ];
+
+            // 3. Voucher Header
+            // Using TYPE_PAYMENT so it appears in 'all_Payment_vochers' listing as requested
+            $voucherData = [
+                'voucher_type' => \App\Models\VoucherMaster::TYPE_PAYMENT, 
+                'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                'status' => \App\Models\VoucherMaster::STATUS_POSTED,
+                'party_type' => \App\Models\Vendor::class,
+                'party_id' => $purchase->vendor_id,
+                'remarks' => "Purchase Voucher #{$purchase->invoice_no}",
+            ];
+
+            // 4. Create Voucher
+            $this->voucherService->createVoucher($voucherData, $lines, auth()->id());
+
+            \Log::info("Purchase Voucher Created for Invoice #{$purchase->invoice_no}");
+
+        } catch (\Exception $e) {
+            \Log::error('TransactionService Purchase Voucher Error: ' . $e->getMessage());
+            // We log but don't rethrow to avoid blocking main flow if config is missing
+        }
+    }
 }

@@ -165,6 +165,7 @@ public function assemblySummary()
         return response()->json($products);
     }
 
+    
     // ===== List page =====
     public function product()
     {
