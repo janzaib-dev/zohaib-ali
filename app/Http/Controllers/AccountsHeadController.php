@@ -74,4 +74,12 @@ class AccountsHeadController extends Controller
 
         return view('admin_panel.accounts.ledger', compact('account', 'entries'));
     }
+    public function toggleStatus($id)
+    {
+        $account = \App\Models\Account::findOrFail($id);
+        $account->status = ! $account->status;
+        $account->save();
+
+        return back()->with('success', 'Account status updated successfully!');
+    }
 }

@@ -150,6 +150,10 @@ class EmployeeController extends Controller
         }
 
         // Auto-sync to biometric device when creating new employee
+        // Auto-sync to biometric device when creating new employee
+        // DISABLED FOR PERFORMANCE: This causes the request to hang if the device is slow.
+        // Users should sync manually from the Device Manager page.
+        /*
         if (! $request->filled('edit_id')) {
             try {
                 $activeDevice = \App\Models\BiometricDevice::active()->first();
@@ -162,6 +166,7 @@ class EmployeeController extends Controller
                 // Don't fail the employee creation if sync fails
             }
         }
+        */
 
         return response()->json(['success' => 'Employee saved successfully']);
     }

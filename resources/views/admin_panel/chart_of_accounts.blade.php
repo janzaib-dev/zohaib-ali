@@ -134,6 +134,15 @@
                                                 class="btn btn-sm btn-info text-white" title="View Ledger">
                                                 <i class="bi bi-eye"></i> Ledger
                                             </a>
+                                            <form action="{{ route('accounts.toggleStatus', $acc->id) }}" method="POST"
+                                                style="display:inline-block;">
+                                                @csrf
+                                                <button type="submit"
+                                                    class="btn btn-sm {{ $acc->status ? 'btn-outline-danger' : 'btn-outline-success' }}"
+                                                    title="Toggle Status">
+                                                    {{ $acc->status ? 'Deactivate' : 'Activate' }}
+                                                </button>
+                                            </form>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -181,6 +190,10 @@
                                 <input type="number" step="0.01" name="opening_balance" class="form-control"
                                     value="0">
                             </div>
+                            <div class="mb-3 form-check">
+                                <input type="checkbox" class="form-check-input" id="statusCheck" name="status" checked>
+                                <label class="form-check-label" for="statusCheck">Active</label>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -197,7 +210,8 @@
                         @csrf
                         <div class="modal-header">
                             <h5 class="modal-title" id="addHeadLabel">Add New Category</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
                             <div class="mb-3">

@@ -1,112 +1,428 @@
-@extends('admin_panel.layout.app')
+<!DOCTYPE html>
+<html lang="en">
 
-@section('content')
-<div class="main-content">
-    <div class="main-content-inner">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-12">
-                    <div class="card shadow border-0">
-                        <div class="card-body p-5">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Challan - {{ $sale->id }}</title>
+    <!-- Use Bootstrap for grid and utilities -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --border-color: #bdc3c7;
+            --text-color: #2c3e50;
+        }
 
-                            <!-- Header -->
-                            <div class="d-flex justify-content-between align-items-start border-bottom pb-4 mb-4">
-                                <!-- Logo & Company Info -->
-                                <div>
-                                    <img src="{{ asset('assets/images/wijdan_logo.png') }}" alt="Company Logo" height="70">
-                                    <h4 class="mt-3 mb-1 fw-bold">Wijdan Exclusive Store</h4>
-                                    <p class="text-muted mb-1">Chandni market, Salahuddin Road, Cantonment, Hyderabad</p>
-                                    <p class="text-muted mb-0">Phone: +92 327 9226901 | Email: info@wijdanstore.com</p>
-                                </div>
+        body {
+            background-color: #f8f9fa;
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 12px;
+            /* Reduced base font size */
+        }
 
-                                <!-- DC Info -->
-                                <div class="text-end">
-                                    <h2 class="fw-bold text-uppercase text-primary mb-2">DELIVERY CHALLAN</h2>
-                                    <p class="mb-1"><strong>DC #:</strong> DC-{{ $sale->id }}</p>
-                                    <p class="mb-1"><strong>Reference:</strong> {{ $sale->reference ?? 'N/A' }}</p>
-                                    <p class="mb-0"><strong>Date:</strong> {{ \Carbon\Carbon::parse($sale->created_at)->format('d M Y, h:i A') }}</p>
-                                </div>
-                            </div>
+        .invoice-container {
+            max-width: 210mm;
+            margin: 10px auto;
+            background: #fff;
+            padding: 20px;
+            /* Reduced padding */
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            min-height: 297mm;
+            position: relative;
+        }
 
-                            <!-- Customer Info -->
-                            <div class="row mb-4">
-                                <div class="col-md-6">
-                                    <h6 class="fw-bold text-uppercase text-secondary">Customer Details</h6>
-                                    <p class="mb-1"><strong>Name:</strong> {{ $sale->customer_relation->customer_name ?? 'N/A' }}</p>
-                                    <p class="mb-1"><strong>Mobile:</strong> {{ $sale->customer_relation->mobile ?? 'N/A' }}</p>
-                                    <p class="mb-0"><strong>Email:</strong> {{ $sale->customer_relation->email_address ?? 'N/A' }}</p>
-                                </div>
-                                <div class="col-md-6 text-md-end">
-                                    <h6 class="fw-bold text-uppercase text-secondary">Address</h6>
-                                    <p class="mb-0">{{ $sale->customer_relation->address ?? 'N/A' }}</p>
-                                </div>
-                            </div>
+        .company-info {
+            text-align: center;
+            margin-bottom: 20px;
+        }
 
-                            <!-- Items Table -->
-                            <div class="table-responsive mb-4">
-                                <table class="table table-bordered table-hover align-middle text-center">
-                                    <thead class="bg-light">
-                                        <tr>
-                                            <th>#</th>
-                                            <th class="text-start">Product</th>
-                                            <th>Code</th>
-                                            <th>Brand</th>
-                                            <th>Unit</th>
-                                            <th>Qty</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($saleItems as $index => $item)
-                                        <tr>
-                                            <td>{{ $index+1 }}</td>
-                                            <td class="text-start">{{ $item['item_name'] }}</td>
-                                            <td>{{ $item['item_code'] }}</td>
-                                            <td>{{ $item['brand'] }}</td>
-                                            <td>{{ $item['unit'] }}</td>
-                                            <td class="fw-bold">{{ $item['qty'] }}</td>
-                                        </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
+        .company-name {
+            font-size: 22px;
+            /* Reduced */
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 2px;
+        }
 
-                            <!-- Footer -->
-                            <div class="border-top pt-5 mt-5 d-flex justify-content-between no-print">
-                                <div class="text-center">
-                                    <p class="fw-bold mb-5">Received By:</p>
-                                    <p class="border-top pt-2">Signature & Stamp</p>
-                                </div>
-                                <div class="text-end">
-                                    <a href="javascript:window.print()" class="btn btn-primary btn-sm">
-                                        <i class="bi bi-printer"></i> Print DC
-                                    </a>
-                                </div>
-                            </div>
+        .invoice-title {
+            text-align: center;
+            font-size: 18px;
+            /* Reduced */
+            font-weight: bold;
+            text-transform: uppercase;
+            color: var(--accent-color);
+            margin: 15px 0 10px 0;
+            letter-spacing: 2px;
+        }
 
-                        </div>
+        .info-box {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            /* Reduced padding */
+            height: 100%;
+            border-radius: 4px;
+            background-color: #fff;
+        }
+
+        .info-box-header {
+            font-weight: bold;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 4px;
+            padding-bottom: 2px;
+            color: var(--primary-color);
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #555;
+            min-width: 70px;
+            display: inline-block;
+        }
+
+        .invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .invoice-table th {
+            background-color: var(--primary-color);
+            color: #fff;
+            text-transform: uppercase;
+            font-size: 11px;
+            padding: 6px 4px;
+            /* Reduced padding */
+            border: 1px solid var(--primary-color);
+        }
+
+        .invoice-table td {
+            border: 1px solid var(--border-color);
+            padding: 4px 6px;
+            /* Reduced padding */
+            vertical-align: middle;
+            font-size: 12px;
+        }
+
+        .invoice-table tbody tr:nth-of-type(even) {
+            background-color: #f8f9fa;
+        }
+
+        .text-end {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .footer-section {
+            margin-top: 20px;
+            border-top: 2px solid var(--primary-color);
+            padding-top: 10px;
+        }
+
+        .terms-box {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .terms-box ul {
+            padding-left: 20px;
+            margin-bottom: 0;
+        }
+
+        .terms-box li {
+            margin-bottom: 2px;
+        }
+
+        .totals-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .totals-table td {
+            padding: 4px 8px;
+            /* Reduced padding */
+            border-bottom: 1px solid #eee;
+        }
+
+        .totals-table .total-row td {
+            border-top: 2px solid var(--primary-color);
+            font-weight: bold;
+            font-size: 14px;
+            color: var(--primary-color);
+        }
+
+        .signature-area {
+            margin-top: 40px;
+            border-top: 1px solid #000;
+            width: 180px;
+            text-align: center;
+            padding-top: 5px;
+        }
+
+        .print-btn-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        @media print {
+            body {
+                background: #fff;
+                margin: 0;
+                padding: 0;
+            }
+
+            .invoice-container {
+                width: 100%;
+                max-width: 100%;
+                margin: 0;
+                padding: 10px;
+                box-shadow: none;
+                border: none;
+                min-height: auto;
+            }
+
+            .print-btn-container {
+                display: none;
+            }
+
+            .no-print {
+                display: none;
+            }
+
+            @page {
+                margin: 5mm;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Print Button -->
+    <div class="print-btn-container">
+        <button onclick="window.print()" class="btn btn-primary btn-sm shadow">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                class="bi bi-printer-fill me-2" viewBox="0 0 16 16">
+                <path
+                    d="M0 9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V9zm4-6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2H4V3z" />
+                <path d="M2.5 14.5A1.5 1.5 0 0 1 1 13V9a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v4a1.5 1.5 0 0 1-1.5 1.5h-13z" />
+            </svg>
+            Print
+        </button>
+        <a href="{{ route('sale.index') }}" class="btn btn-secondary btn-sm shadow ms-2">Back</a>
+    </div>
+
+    <div class="invoice-container">
+        <!-- Company Header -->
+        <div class="company-info">
+            <div class="company-name">ZOAIB ALI COMPANY</div>
+            <div style="font-size: 12px;">SADAR BAZAR, HYDERABAD SINDH</div>
+        </div>
+
+        <div class="invoice-title">Delivery Challan</div>
+
+        <!-- Info Grid -->
+        <div class="row g-2 mb-2">
+            <!-- Left Box: Customer Info -->
+            <div class="col-4">
+                <div class="info-box">
+                    <div class="info-box-header">Deliver To</div>
+                    <div
+                        style="font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        {{ $sale->customer_relation->customer_name ?? 'Walking Customer' }}
+                    </div>
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;">
+                        {{ $sale->customer_relation->address ?? '' }}</div>
+                    <div class="text-muted small" style="font-size: 11px;">
+                        Mob: {{ $sale->customer_relation->mobile ?? '' }}
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
 
-<style>
-    @media print {
-        .no-print {
-            display: none !important;
-        }
-        .card {
-            border: none !important;
-            box-shadow: none !important;
-        }
-        body {
-            background: #fff !important;
-            font-size: 12pt;
-        }
-        table {
-            border-collapse: collapse !important;
-        }
-    }
-</style>
-@endsection
+            <!-- Middle Box: Sales Person / Meta -->
+            <div class="col-4">
+                <div class="info-box">
+                    <div class="info-box-header">Details</div>
+                    <div><span class="info-label">Maker:</span> {{ auth()->user()->name ?? 'Admin' }}</div>
+                    <div><span class="info-label">Person:</span> {{ auth()->user()->name ?? 'Admin' }}</div>
+                    <div><span class="info-label">Type:</span> {{ $sale->sale_status ?? 'Delivery' }}</div>
+                </div>
+            </div>
+
+            <!-- Right Box: Invoice Specifics -->
+            <div class="col-4">
+                <div class="info-box">
+                    <div class="info-box-header">Reference</div>
+                    <div><span class="info-label">DC #:</span> <strong>{{ $sale->id }}</strong></div>
+                    <div><span class="info-label">Date:</span> {{ $sale->created_at->format('d-m-Y') }}</div>
+                    <div><span class="info-label">Ref:</span> {{ $sale->reference ?? '-' }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Remarks -->
+        @if ($sale->return_note)
+            <div class="row mb-2">
+                <div class="col-12">
+                    <div class="info-box"
+                        style="min-height: auto; padding: 4px 8px; background-color: #f1f5f9; font-style: italic;">
+                        <strong>Note:</strong> {{ $sale->return_note }}
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        <!-- Table -->
+        <table class="invoice-table">
+            <thead>
+                <tr>
+                    <th class="text-start" style="width: 55%">Description</th>
+                    <th class="text-center" style="width: 20%">Shipped</th>
+                    <th class="text-center" style="width: 25%">UOM</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($saleItems as $item)
+                    @php
+                        // Get dimensions from database
+                        $height = $item['height'] ?? 0;
+                        $width = $item['width'] ?? 0;
+
+                        // Calculate m² per piece and per box
+                        $m2PerPiece = $height > 0 && $width > 0 ? ($height * $width) / 10000 : 0;
+                        $piecesPerBox = (int) ($item['pieces_per_box'] ?? 1);
+                        $m2PerBox = $m2PerPiece * $piecesPerBox;
+
+                        // Calculate boxes and loose pieces
+                        $totalPieces = (int) $item['total_pieces'];
+                        $boxes = floor($totalPieces / $piecesPerBox);
+                        $loosePieces = $totalPieces % $piecesPerBox;
+
+                        // Total M2 for line
+                        $totalM2Line = $m2PerPiece * $totalPieces;
+                        // Use size_mode directly from item if available (from DB), else fallback
+                        $sizeMode = $item['size_mode'] ?? 'std';
+                    @endphp
+                    <tr>
+                        <td class="text-start">
+                            <div style="font-weight: bold; font-size: 12px; margin-bottom: 2px;">
+                                {{ $item['item_name'] }}
+                                @if (!empty($item['item_code']))
+                                    <span class="text-muted fw-normal ms-1"
+                                        style="font-size: 11px;">({{ $item['item_code'] }})</span>
+                                @endif
+                            </div>
+
+                            <div style="font-size: 11px; color: #555; line-height: 1.2;">
+                                @if (!empty($item['color']))
+                                    <span class="badge bg-light text-dark border p-1"
+                                        style="font-size: 9px; line-height:1;">
+                                        @foreach ($item['color'] as $clr)
+                                            {{ $clr }}
+                                        @endforeach
+                                    </span>
+                                @endif
+
+                                @if ($sizeMode == 'by_size')
+                                    <span class='d-inline-block ms-1'>
+                                        @if ($height > 0 && $width > 0)
+                                            Dims: {{ number_format($width, 0) }}x{{ number_format($height, 0) }}
+                                        @endif
+                                    </span>
+                                @endif
+
+                                <span class="d-inline-block ms-1">
+                                    PACKTEST: {{ $piecesPerBox }} pcs | {{ number_format($m2PerBox, 4) }} m²
+                                </span>
+                            </div>
+                        </td>
+
+                        <td class="text-center" style="vertical-align: middle;">
+                            <div style="font-weight: bold; color: #2c3e50;">
+                                @if ($sizeMode == 'by_pieces')
+                                    {{ $totalPieces }} Pcs
+                                @else
+                                    @if ($boxes > 0 && $loosePieces > 0)
+                                        {{ $boxes }} {{ $sizeMode == 'by_cartons' ? 'Carton' : 'Box' }} +
+                                        {{ $loosePieces }} Pc
+                                    @elseif ($boxes > 0)
+                                        {{ $boxes }} {{ $sizeMode == 'by_cartons' ? 'Carton' : 'Box' }}
+                                    @else
+                                        {{ $loosePieces }} Pcs
+                                    @endif
+                                @endif
+                            </div>
+                            <small class="text-muted" style="font-size: 10px;">({{ $totalPieces }} pcs)</small>
+                        </td>
+
+                        <td class="text-center" style="vertical-align: middle;">
+                            @if ($sizeMode == 'by_pieces')
+                            <span class="fw-bold">
+                            Peices
+                        </span> 
+                            @elseif ($sizeMode == 'by_cartons')
+                            <span class="fw-bold">
+                            Cartons
+                        </span> 
+                            @elseif ($sizeMode == 'by_size')
+                            <span class="fw-bold">
+                                    {{ number_format($totalM2Line, 4) }}
+                                </span> m²
+                                @endif
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+
+        <!-- Footer -->
+        <div class="row mt-2">
+            <div class="col-7">
+                <div class="terms-box pt-2">
+                    <p class="fw-bold mb-1">Terms & Conditions:</p>
+                    <ul style="font-size: 10px;">
+                        <li>Please check items upon delivery.</li>
+                        <li>This is a Delivery Challan, not a final invoice.</li>
+                        <li>Goods once sold will not be returned without this challan.</li>
+                    </ul>
+                </div>
+
+                <div class="mt-4 pt-2">
+                    <div class="d-flex justify-content-between" style="width: 700px;">
+                        <div>
+                            <div class="signature-area">
+                                Authorized Signature
+                            </div>
+                        </div>
+                        <div>
+                            <div class="signature-area">
+                                Receiver's Signature
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="small text-muted mt-1" style="font-size: 10px;">
+                        Printed on: {{ date('d-m-Y h:i A') }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-5">
+                <!-- No totals for DC -->
+            </div>
+        </div>
+
+    </div>
+</body>
+
+</html>

@@ -677,6 +677,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         function showSaveBar(element) {
+
             let bar = document.getElementById('saveBar');
             if (bar) bar.classList.add('visible');
 

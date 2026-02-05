@@ -127,7 +127,7 @@ class BalanceService
             ->where('party_id', $vendorId)
             ->selectRaw('COALESCE(SUM(credit) - SUM(debit), 0) as balance')
             ->value('balance');
-        
+
         $journalBalance = $journalBalance ?? 0;
 
         return $openingBalance + $journalBalance;
@@ -150,7 +150,7 @@ class BalanceService
             ->where('entry_date', '<', $date)
             ->selectRaw('COALESCE(SUM(credit) - SUM(debit), 0) as balance')
             ->value('balance');
-        
+
         $journalBalance = $journalBalance ?? 0;
 
         return $openingBalance + $journalBalance;
@@ -164,17 +164,17 @@ class BalanceService
         // 1. Sales Revenue (Credit entries in Sales Account)
         // Assuming Sales Account ID is 4 (Standard) or fetch by code
         $salesHeadId = 4; // Income
-        $sales = JournalEntry::whereHas('account', function($q) use ($salesHeadId) {
-                $q->where('head_id', $salesHeadId);
-            })
+        $sales = JournalEntry::whereHas('account', function ($q) use ($salesHeadId) {
+            $q->where('head_id', $salesHeadId);
+        })
             ->whereBetween('entry_date', [$startDate, $endDate])
             ->sum('credit');
 
         // 2. Purchase Expense (Debit entries in Expense Account)
         $expenseHeadId = 3; // Expense
-        $purchases = JournalEntry::whereHas('account', function($q) use ($expenseHeadId) {
-                $q->where('head_id', $expenseHeadId);
-            })
+        $purchases = JournalEntry::whereHas('account', function ($q) use ($expenseHeadId) {
+            $q->where('head_id', $expenseHeadId);
+        })
             ->whereBetween('entry_date', [$startDate, $endDate])
             ->sum('debit');
 
@@ -192,7 +192,7 @@ class BalanceService
             'purchases' => $purchases,
             'receivables' => $receivables,
             'payables' => $payables,
-            'net_cash_flow' => $sales - $purchases // Rough estimate
+            'net_cash_flow' => $sales - $purchases, // Rough estimate
         ];
     }
 
@@ -439,7 +439,18 @@ class BalanceService
             ->orWhere('account_code', 'AR')
             ->first();
 
-        return $account?->id ?? 4; // Default to ID 4 if not found
+        if (! $account) {
+            $account = Account::create([
+                'title' => 'Accounts Receivable',
+                'account_code' => 'AR',
+                'type' => 'Debit',
+                'head_id' => null,
+                'opening_balance' => 0,
+                'status' => 1,
+            ]);
+        }
+
+        return $account->id;
     }
 
     /**
@@ -451,7 +462,18 @@ class BalanceService
             ->orWhere('account_code', 'SALES')
             ->first();
 
-        return $account?->id ?? 5; // Default to ID 5 if not found
+        if (! $account) {
+            $account = Account::create([
+                'title' => 'Sales Revenue',
+                'account_code' => 'SALES',
+                'type' => 'Credit', // Income is Credit nature
+                'head_id' => null,
+                'opening_balance' => 0,
+                'status' => 1,
+            ]);
+        }
+
+        return $account->id;
     }
 
     /**
@@ -463,7 +485,18 @@ class BalanceService
             ->orWhere('account_code', 'CASH')
             ->first();
 
-        return $account?->id ?? 1; // Default to ID 1 if not found
+        if (! $account) {
+            $account = Account::create([
+                'title' => 'Cash Account',
+                'account_code' => 'CASH',
+                'type' => 'Debit', // Asset is Debit nature
+                'head_id' => null,
+                'opening_balance' => 0,
+                'status' => 1,
+            ]);
+        }
+
+        return $account->id;
     }
 
     /**

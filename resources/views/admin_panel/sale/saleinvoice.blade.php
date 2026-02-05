@@ -288,7 +288,7 @@
                 <tr>
                     <th class="text-start" style="width: 45%">Description</th>
                     <th class="text-center" style="width: 15%">Shipped</th>
-                    <th class="text-center" style="width: 15%">Quantity</th>
+                    <th class="text-center" style="width: 15%">UOM</th>
                     <th class="text-end" style="width: 12%">Price</th>
                     <th class="text-end" style="width: 13%">Total</th>
                 </tr>
@@ -350,6 +350,7 @@
 
                         <td class="text-center" style="vertical-align: middle;">
                             <div style="font-weight: bold; color: #2c3e50;">
+                              
                                 @if ($sizeMode == 'by_pieces')
                                     {{ $totalPieces }} Pcs
                                 @else
@@ -367,7 +368,21 @@
                         </td>
 
                         <td class="text-center" style="vertical-align: middle;">
-                            <span class="fw-bold">{{ number_format($totalM2Line, 4) }}</span> m²
+
+                            @if ($sizeMode == 'by_pieces')
+                            <span class="fw-bold">
+                            Peices
+                        </span> 
+                            @elseif ($sizeMode == 'by_cartons')
+                            <span class="fw-bold">
+                            Cartons
+                        </span> 
+                            @elseif ($sizeMode == 'by_size')
+                            <span class="fw-bold">
+                                    
+                                {{ number_format($totalM2Line, 4) }}
+                            </span> m²
+                                @endif
                         </td>
 
                         <td class="text-end" style="vertical-align: middle;">
@@ -426,7 +441,10 @@
                         </tr>
                         <tr>
                             <td>Current Bill</td>
-                            <td class="text-end">{{ number_format($sale->total_net, 2) }}</td>
+                            <td class="text-end">
+                                {{ number_format($sale->total_net, 2) }}
+                             
+                            </td>
                         </tr>
                         <tr class="total-row" style="background-color: #e9ecef;">
                             <td>Total</td>

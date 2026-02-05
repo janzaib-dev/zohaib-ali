@@ -143,15 +143,21 @@ class VoucherService
         
         $year = date('Y');
         
-        $last = VoucherMaster::where('voucher_type', $type)
-            ->whereYear('created_at', $year)
-            ->max('id'); // using ID as proxy for sequence, or count
+        // Find last voucher of this type in this year
+        $lastVoucher = VoucherMaster::where('voucher_type', $type)
+            ->where('voucher_no', 'like', "{$prefix}-{$year}-%")
+            ->orderBy('id', 'desc')
+            ->first();
             
-        // Better to check specific column part or sequence table
-        // For MVP: Count + 1
-        $count = VoucherMaster::where('voucher_type', $type)->count() + 1;
+        if ($lastVoucher) {
+            // Extract number part (Last 4 digits)
+            $parts = explode('-', $lastVoucher->voucher_no);
+            $nextNum = (int)end($parts) + 1;
+        } else {
+            $nextNum = 1;
+        }
         
-        return sprintf('%s-%s-%04d', $prefix, $year, $count);
+        return sprintf('%s-%s-%04d', $prefix, $year, $nextNum);
     }
     
     private function getCurrentFiscalYear()

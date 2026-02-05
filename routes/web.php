@@ -262,7 +262,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales/{id}/edit', [SaleController::class, 'saleedit'])->middleware('permission:sales.edit')->name('sales.edit');
     Route::put('/sales/{id}', [SaleController::class, 'updatesale'])->middleware('permission:sales.edit')->name('sales.update');
     Route::get('/sales/{id}/dc', [SaleController::class, 'saledc'])->middleware('permission:sales.view')->name('sales.dc');
-    Route::get('/sales/{id}/recepit', [SaleController::class, 'salerecepit'])->middleware('permission:sales.view')->name('sales.recepit');
+    Route::get('/sales/{id}/recepit', [SaleController::class, 'salereceipt'])->middleware('permission:sales.view')->name('sales.receipt');
 
     // booking system
 
@@ -335,6 +335,7 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/accounts-head/store', [AccountsHeadController::class, 'storeHead'])->name('account-heads.store');
     Route::post('/accounts/store', [AccountsHeadController::class, 'storeAccount'])->name('accounts.store');
+    Route::post('/accounts/{id}/toggle-status', [AccountsHeadController::class, 'toggleStatus'])->name('accounts.toggleStatus');
 
     // reporting routes
 

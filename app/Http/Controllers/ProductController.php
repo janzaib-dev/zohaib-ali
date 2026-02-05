@@ -79,7 +79,7 @@ class ProductController extends Controller
         $term = $request->get('term') ?? $request->get('q') ?? '';
 
         $query = Product::query()
-            ->select('id', 'item_name', 'item_code', 'barcode_path', 'size_mode', 'height', 'width')
+            ->select('id', 'item_name', 'item_code', 'barcode_path', 'size_mode', 'height', 'width', 'pieces_per_box')
             ->withSum('warehouseStocks', 'total_pieces') /* Efficient Stock Sum */
             ->where(function ($q) use ($term) {
                 $q->where('item_name', 'like', "%{$term}%")
@@ -90,16 +90,27 @@ class ProductController extends Controller
         $products = $query->paginate(10); // Lazy loading (10 per request)
 
         $results = $products->map(function ($p) {
-            $stock = (float) ($p->warehouse_stocks_sum_total_pieces ?? 0);
+            $stockPieces = (float) ($p->warehouse_stocks_sum_total_pieces ?? 0);
+
+            // Calculate Stock Display (Boxes vs Pieces)
+            $stockDisplay = $stockPieces;
+            if (($p->size_mode === 'by_cartons' || $p->size_mode === 'by_size') && $p->pieces_per_box > 0) {
+                $ppb = $p->pieces_per_box;
+                $boxes = floor($stockPieces / $ppb);
+                $loose = $stockPieces % $ppb;
+                $stockDisplay = $loose > 0 ? "$boxes.$loose" : $boxes;
+            }
 
             return [
                 'id' => $p->id,
                 'text' => $p->item_name." (SKU: {$p->item_code})", // Enhanced text for selection
                 // Custom attributes for template
                 'sku' => $p->item_code ?? '',
-                'stock' => $stock,
+                'stock' => $stockDisplay,
                 'name' => $p->item_name,
                 'size_mode' => $p->size_mode,
+                'ppb' => $p->pieces_per_box > 0 ? $p->pieces_per_box : 1,
+                'trade_price' => $p->purchase_price_per_piece ?? 0,
                 'height' => $p->height ?? 0,
                 'width' => $p->width ?? 0,
             ];
@@ -117,6 +128,7 @@ class ProductController extends Controller
         $term = $request->get('q', '');
 
         $products = Product::with('category_relation', 'sub_category_relation', 'brand')
+            ->withSum('warehouseStocks', 'total_pieces')
             ->when($term, function ($query) use ($term) {
                 $query->where('item_name', 'like', "%{$term}%")
                     ->orWhere('item_code', 'like', "%{$term}%")
@@ -128,6 +140,18 @@ class ProductController extends Controller
             ->get();
 
         return response()->json($products->map(function ($p, $key) {
+            $stockPieces = (float) ($p->warehouse_stocks_sum_total_pieces ?? 0);
+
+            // Calculate Stock Display (Boxes vs Pieces)
+            $stockDisplay = $stockPieces;
+            $ppb = $p->pieces_per_box > 0 ? $p->pieces_per_box : 1;
+
+            if (($p->size_mode === 'by_cartons' || $p->size_mode === 'by_size') && $p->pieces_per_box > 0) {
+                $boxes = floor($stockPieces / $ppb);
+                $loose = $stockPieces % $ppb;
+                $stockDisplay = $loose > 0 ? "$boxes.$loose" : $boxes;
+            }
+
             return [
                 'id' => $p->id,
                 'item_code' => $p->item_code,
@@ -137,6 +161,10 @@ class ProductController extends Controller
                 'sub_category_name' => $p->sub_category_relation->name ?? '-',
                 'height' => $p->height ?? null,
                 'width' => $p->width ?? null,
+                'pieces_per_box' => $ppb,
+                'size_mode' => $p->size_mode,
+                'stock' => $stockDisplay,
+                'trade_price' => $p->purchase_price_per_piece ?? 0,
                 'total_m2' => number_format($p->total_m2 ?? 0, 2),
                 'price_per_m2' => number_format($p->price_per_m2 ?? 0, 2),
                 'total_price' => number_format($p->total_price ?? 0, 2),
@@ -168,8 +196,35 @@ class ProductController extends Controller
             'category_relation',
             'sub_category_relation',
             'brand',
-            'stock',
+            'unit',
+            'warehouseStocks'
         ])->find($id);
+
+        if (!$product) {
+            return response()->json(['error' => 'Product not found'], 404);
+        }
+
+        // Calculate derived fields
+        $totalPieces = $product->warehouseStocks->sum('total_pieces');
+        $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
+        
+        $boxes = 0;
+        $loose = 0;
+
+        if ($product->size_mode === 'by_cartons' || $product->size_mode === 'by_size') {
+            $boxes = floor($totalPieces / $ppb);
+            $loose = $totalPieces % $ppb;
+        } else {
+             // For by_pieces, boxes is essentially the piece count if we treat it largely
+             // But strict interpretation:
+             $boxes = $totalPieces; 
+             $loose = 0;
+        }
+
+        // Append these purely for the view (not saved in DB)
+        $product->setAttribute('calculated_total_stock_qty', $totalPieces);
+        $product->setAttribute('calculated_boxes_quantity', $boxes);
+        $product->setAttribute('calculated_loose_pieces', $loose);
 
         return response()->json($product);
     }
@@ -210,21 +265,23 @@ class ProductController extends Controller
     }
 
     // ===== Store product =====
+    // ===== Store product =====
     public function store_product(Request $request)
     {
         if (! Auth::id()) {
-            return redirect()->back();
+            return $request->wantsJson()
+                ? response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401)
+                : redirect()->route('login');
         }
 
-        if ($request->wantsJson()) {
-            $validation = $this->validateProductRequest($request);
-            if ($validation->fails()) {
+        // 1. Validate
+        $validation = $this->validateProductRequest($request);
+        if ($validation->fails()) {
+            if ($request->wantsJson()) {
                 return response()->json(['status' => 'error', 'errors' => $validation->errors()], 422);
             }
-            $validated = $validation->validated();
-        } else {
-            $validation = $this->validateProductRequest($request);
-            $validation->validate();
+
+            return redirect()->back()->withErrors($validation)->withInput();
         }
 
         $mode = $request->size_mode;
@@ -239,32 +296,28 @@ class ProductController extends Controller
 
         $totalM2 = 0;
         $totalStockQty = 0;
-        $m2PerPiece = 0; // Initialize to avoid undefined variable error
+        $m2PerPiece = 0;
+        $piecesPerM2 = 0; // New: How many pieces fit in 1 m²
 
         // Pricing Vars
-        $pricePerM2 = 0;        // Sale Price (By Size)
-        $purchasePricePerM2 = 0; // Purchase Price (By Size)
+        $pricePerM2 = 0;
+        $purchasePricePerM2 = 0;
 
-        $salePricePerBox = 0;       // Sale Price (Cartons/Pieces)
-        $purchasePricePerPiece = 0;   // Purchase Price (Cartons/Pieces)
-
-        $totalPrice = 0;        // Total Sale Price
-        $totalPurchasePrice = 0; // Total Purchase Price
-
-        // Initialize pricing variables
-        $salePricePerPiece = 0;
         $salePricePerBox = 0;
         $purchasePricePerPiece = 0;
         $purchasePricePerBox = 0;
+        $salePricePerPiece = 0;
 
-        \Illuminate\Support\Facades\Log::info('Product Create Request', $request->all());
+        $totalPrice = 0;
+        $totalPurchasePrice = 0;
 
         if ($mode === 'by_size') {
-            // By Size Mode - uses dimensions to calculate m² pricing
+            // By Size Mode
             $height = (float) $request->height;
             $width = (float) $request->width;
             $piecesPerBox = (int) $request->pieces_per_box;
             $boxesQuantity = (int) $request->boxes_quantity;
+            // No loose pieces in by_size usually, but if needed add here
 
             // Pricing inputs
             $pricePerM2 = (float) $request->price_per_m2;
@@ -272,13 +325,10 @@ class ProductController extends Controller
 
             $m2PerPiece = ($height * $width) / 10000;
             $m2PerBox = $m2PerPiece * $piecesPerBox;
-            $totalM2 = $m2PerBox * $boxesQuantity;
+            $totalM2 = $m2PerBox; // Storing m2 per box as requested instead of total stock m2
 
-            // Calculate pieces per m² (inverse of m² per piece)
-
-            // Custom validation for logic
-            // Custom validation for logic - Removed to allow 0 stock
-            // if ($totalM2 <= 0) { ... }
+            // Store m2 per piece (0.72) directly as requested, even though column name is pieces_per_m2
+            $piecesPerM2 = $m2PerPiece;
 
             $totalStockQty = $boxesQuantity * $piecesPerBox; // Store in Pieces
 
@@ -289,14 +339,14 @@ class ProductController extends Controller
             $purchasePricePerBox = $m2PerBox * $purchasePricePerM2;
 
         } elseif ($mode === 'by_cartons') {
-            // By Cartons Mode - boxes with pieces per box
+            // By Cartons Mode
             $piecesPerBox = (int) $request->pieces_per_box;
             $boxesQuantity = (int) $request->boxes_quantity;
             $loosePieces = (int) $request->loose_pieces;
 
             $totalStockQty = ($piecesPerBox * $boxesQuantity) + $loosePieces;
 
-            $inputSalePc = (float) $request->sale_price_per_box;
+            $inputSalePc = (float) $request->sale_price_per_box; // Actually per piece input in this mode
             $inputPurchPc = (float) $request->purchase_price_per_piece;
 
             $salePricePerPiece = $inputSalePc;
@@ -305,13 +355,11 @@ class ProductController extends Controller
             $purchasePricePerPiece = $inputPurchPc;
             $purchasePricePerBox = $inputPurchPc * $piecesPerBox;
 
-            // if ($totalStockQty < 1) { ... } - Removed to allow 0 stock
-
         } elseif ($mode === 'by_pieces') {
-            // By Pieces Mode - individual units, no box concept
+            // By Pieces Mode
             $pieceQuantity = (int) $request->piece_quantity;
-            $piecesPerBox = 1; // Default to 1 for piece-based products
-            $boxesQuantity = $pieceQuantity; // Set Boxes = Pieces so Quantity column is not 0
+            $piecesPerBox = 1;
+            $boxesQuantity = $pieceQuantity;
             $totalStockQty = $pieceQuantity;
 
             $inputSalePc = (float) $request->sale_price_per_box;
@@ -323,17 +371,6 @@ class ProductController extends Controller
             $purchasePricePerBox = $inputPurchPc;
         }
 
-        \Illuminate\Support\Facades\Log::info('Calculated Pricing', [
-            'mode' => $mode,
-            'piecesPerBox' => $piecesPerBox,
-            'salePricePerPiece' => $salePricePerPiece,
-            'salePricePerBox' => $salePricePerBox,
-            'purchasePricePerPiece' => $purchasePricePerPiece,
-            'purchasePricePerBox' => $purchasePricePerBox,
-            'boxesQuantity' => $boxesQuantity,
-            'totalStockQty' => $totalStockQty,
-        ]);
-
         $userId = Auth::id();
 
         // Auto item_code
@@ -341,16 +378,17 @@ class ProductController extends Controller
         $nextCode = $lastProduct ? ('ITEM-'.str_pad($lastProduct->id + 1, 4, '0', STR_PAD_LEFT)) : 'ITEM-0001';
 
         // Image upload
-        $imagePath = null;
         if ($request->hasFile('image')) {
             $file = $request->file('image');
             $filename = time().'.'.$file->getClientOriginalExtension();
             $file->move(public_path('uploads/products'), $filename);
             $imagePath = $filename;
+        } else {
+            $imagePath = null;
         }
 
-        DB::transaction(function () use ($request, $userId, $nextCode, $imagePath, $mode, $height, $width, $piecesPerBox, $boxesQuantity,
-            $totalM2, $pricePerM2, $purchasePricePerM2, $totalStockQty, $m2PerPiece,
+        DB::transaction(function () use ($request, $userId, $nextCode, $imagePath, $mode, $height, $width, $piecesPerBox, $boxesQuantity, $loosePieces, $pieceQuantity,
+            $totalM2, $pricePerM2, $purchasePricePerM2, $totalStockQty, $piecesPerM2,
             $salePricePerPiece, $salePricePerBox, $purchasePricePerPiece, $purchasePricePerBox) {
 
             // Create product
@@ -373,8 +411,11 @@ class ProductController extends Controller
                 'height' => $height,
                 'width' => $width,
                 'pieces_per_box' => $piecesPerBox,
-                'pieces_per_m2' => $m2PerPiece ?: 0,
-                // Stock Qty fields removed from here as they live in WarehouseStock now
+                'pieces_per_m2' => $piecesPerM2,
+                // 'boxes_quantity' => $boxesQuantity, // Removed: Not in DB
+                // 'loose_pieces' => $loosePieces,     // Removed: Not in DB
+                // 'piece_quantity' => $pieceQuantity, // Removed: Not in DB
+                // 'total_stock_qty' => $totalStockQty, // Removed: Not in DB
 
                 'total_m2' => $totalM2,
 
@@ -383,11 +424,9 @@ class ProductController extends Controller
                 'purchase_price_per_m2' => $purchasePricePerM2,
 
                 'sale_price_per_box' => $salePricePerBox,
-                'sale_price_per_piece' => $salePricePerPiece, // Added
+                'sale_price_per_piece' => $salePricePerPiece,
                 'purchase_price_per_piece' => $purchasePricePerPiece,
-                'purchase_price_per_box' => $purchasePricePerBox, // Added
-
-                // Inventory Value not stored in Product
+                'purchase_price_per_box' => $purchasePricePerBox,
 
                 'is_part' => 0,
                 'is_assembled' => 0,
@@ -396,13 +435,11 @@ class ProductController extends Controller
             ]);
 
             // Create Warehouse Stock
-            // Create Warehouse Stock
-            // Create Warehouse Stock
             WarehouseStock::create([
-                'warehouse_id' => $request->warehouse_id ?? 1,
+                'warehouse_id' => $request->warehouse_id ?? 1, // Default to 1 if not selected
                 'product_id' => $product->id,
-                'quantity' => $boxesQuantity ?? 0,     // Stores TOTAL BOXES
-                'total_pieces' => $totalStockQty,      // Stores TOTAL PIECES (Calculated)
+                'quantity' => $boxesQuantity ?? 0,
+                'total_pieces' => $totalStockQty,
                 'remarks' => 'Initial Stock',
             ]);
 
@@ -508,7 +545,8 @@ class ProductController extends Controller
             $m2PerBox = $m2PerPiece * $piecesPerBox;
             $totalM2 = $m2PerBox * $boxesQuantity;
 
-            // Calculate pieces per m² (inverse of m² per piece)
+            // Calculate pieces per m²
+            $piecesPerM2 = $m2PerPiece > 0 ? (1 / $m2PerPiece) : 0;
             $piecesPerM2 = $m2PerPiece > 0 ? (1 / $m2PerPiece) : 0;
 
             // Logic validation
@@ -591,10 +629,10 @@ class ProductController extends Controller
                 'width' => $width,
                 'pieces_per_box' => $piecesPerBox,
                 'pieces_per_m2' => $piecesPerM2,
-                'boxes_quantity' => $boxesQuantity,
-                'loose_pieces' => $loosePieces,
-                'piece_quantity' => $pieceQuantity,
-                'total_stock_qty' => $totalStockQty,
+                // 'boxes_quantity' => $boxesQuantity,
+                // 'loose_pieces' => $loosePieces,
+                // 'piece_quantity' => $pieceQuantity,
+                // 'total_stock_qty' => $totalStockQty,
 
                 'total_m2' => $totalM2,
 
@@ -605,8 +643,8 @@ class ProductController extends Controller
                 'sale_price_per_box' => $salePricePerBox,
                 'purchase_price_per_piece' => $purchasePricePerPiece,
 
-                'total_price' => $totalPrice,
-                'total_purchase_price' => $totalPurchasePrice,
+                // 'total_price' => $totalPrice, // Removed: Not in DB
+                // 'total_purchase_price' => $totalPurchasePrice, // Removed: Not in DB
 
                 'is_part' => 0,
                 'is_assembled' => 0,
