@@ -13,32 +13,32 @@ return new class extends Migration
     {
         Schema::table('products', function (Blueprint $table) {
             // Drop columns
-             // Using array to drop multiple columns is cleaner if database driver supports it (MySQL does)
+            // Using array to drop multiple columns is cleaner if database driver supports it (MySQL does)
             $table->dropColumn([
                 'wholesale_price',
                 'alert_quantity',
-                'initial_stock', 
+                'initial_stock',
                 'price',          // Retail Price
                 'pack_type',      // Packaging Type
                 'pack_qty',       // Packaging Quantity
                 'piece_per_pack', // Unit per Packing
-                'loose_piece'     // Loose Piece
+                'loose_piece',     // Loose Piece
             ]);
         });
 
         Schema::table('products', function (Blueprint $table) {
             // Limit `size_mode` to configured enum or string. Default 'by_size'.
             $table->string('size_mode')->default('by_size')->after('item_name');
-            
+
             // Dimensions
             $table->decimal('height', 8, 2)->nullable()->after('size_mode')->comment('Height in cm');
             $table->decimal('width', 8, 2)->nullable()->after('height')->comment('Width in cm');
-            
+
             // Box/Packing
             // "pieces_per_box" replaces maybe "piece_per_pack"
             $table->integer('pieces_per_box')->default(0)->after('width');
             $table->integer('boxes_quantity')->default(0)->after('pieces_per_box');
-            
+
             // Calculated fields
             $table->decimal('total_m2', 12, 4)->default(0)->after('boxes_quantity');
             $table->decimal('price_per_m2', 12, 2)->default(0)->after('total_m2'); // Sale Price per m2
@@ -52,8 +52,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('products', function (Blueprint $table) {
-             // Drop added columns
-             $table->dropColumn([
+            // Drop added columns
+            $table->dropColumn([
                 'size_mode',
                 'height',
                 'width',
@@ -61,12 +61,12 @@ return new class extends Migration
                 'boxes_quantity',
                 'total_m2',
                 'price_per_m2',
-                'total_price'
+                'total_price',
             ]);
         });
 
         Schema::table('products', function (Blueprint $table) {
-             // Restore removed columns (types must match original migrations)
+            // Restore removed columns (types must match original migrations)
             $table->text('price')->nullable();
             $table->text('wholesale_price')->nullable();
             $table->text('initial_stock')->nullable();

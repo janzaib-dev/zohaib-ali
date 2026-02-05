@@ -71,8 +71,8 @@ class BiometricDeviceService
         try {
             // Try JSON format first (since it worked for user push)
             $logs = $this->getAttendanceLogsJson($device);
-            
-            if (!empty($logs)) {
+
+            if (! empty($logs)) {
                 return $logs;
             }
 
@@ -80,11 +80,15 @@ class BiometricDeviceService
             return $this->getAttendanceLogsXml($device);
 
         } catch (Exception $e) {
-            Log::error('Hikvision Log Pull Failed: ' . $e->getMessage());
+            Log::error('Hikvision Log Pull Failed: '.$e->getMessage());
+
             return [];
         }
     }
 
+    /**
+     * Get Attendance Logs via JSON API
+     */
     /**
      * Get Attendance Logs via JSON API
      */
@@ -105,6 +109,10 @@ class BiometricDeviceService
             $searchPosition = 0;
             $hasMore = true;
 
+            // Filter logs for the last 30 days to ensure performance
+            $startTime = date('Y-m-d\TH:i:s', strtotime('-30 days'));
+            $endTime = date('Y-m-d\TH:i:s');
+
             while ($hasMore) {
                 // JSON Query for attendance events
                 $searchData = [
@@ -112,8 +120,10 @@ class BiometricDeviceService
                         'searchID' => '1',
                         'searchResultPosition' => $searchPosition,
                         'maxResults' => 100,
-                        'major' => 0, // 0 = All events
-                        'minor' => 0, // 0 = All sub-types
+                        'major' => 0,
+                        'minor' => 0,
+                        'startTime' => $startTime,
+                        'endTime' => $endTime,
                     ],
                 ];
 
@@ -128,6 +138,7 @@ class BiometricDeviceService
                 if ($statusCode !== 200) {
                     Log::warning("JSON pull failed at position {$searchPosition}: Status {$statusCode}");
                     $hasMore = false;
+
                     continue;
                 }
 
@@ -146,21 +157,28 @@ class BiometricDeviceService
                         $batchCount++;
                     }
                 }
-                
+
                 Log::info("JSON batch pulled: {$batchCount} logs at position {$searchPosition}");
 
                 if ($batchCount < 100) {
-                    $hasMore = false; // Less than maxResults means we reached the end
+                    $hasMore = false;
                 } else {
                     $searchPosition += 100;
                 }
+
+                // Safety break
+                if ($searchPosition > 10000) {
+                    $hasMore = false;
+                }
             }
 
-            Log::info("Total JSON logs found: " . count($allLogs));
+            Log::info('Total JSON logs found: '.count($allLogs));
+
             return $allLogs;
 
         } catch (Exception $e) {
-            Log::warning("JSON attendance pull failed: " . $e->getMessage());
+            Log::warning('JSON attendance pull failed: '.$e->getMessage());
+
             return [];
         }
     }
@@ -173,49 +191,84 @@ class BiometricDeviceService
         try {
             $client = $this->getClient($device);
 
-            $xmlQuery = '<?xml version="1.0" encoding="utf-8"?>
-                        <AcsEventCond version="2.0">
-                            <searchID>1</searchID>
-                            <searchResultPosition>0</searchResultPosition>
-                            <maxResults>100</maxResults>
-                            <major>0</major>
-                            <minor>0</minor>
-                        </AcsEventCond>';
+            $allLogs = [];
+            $searchPosition = 0;
+            $hasMore = true;
 
-            $response = $client->post('ISAPI/AccessControl/AcsEvent', [
-                'body' => $xmlQuery,
-                'http_errors' => false,
-            ]);
+            // Filter logs for the last 30 days to ensure performance
+            $startTime = date('Y-m-d\TH:i:s', strtotime('-30 days'));
+            $endTime = date('Y-m-d\TH:i:s');
 
-            $statusCode = $response->getStatusCode();
-            $xmlString = (string) $response->getBody();
-            
-            Log::info("Attendance XML pull - Status: {$statusCode}");
-            Log::info("Attendance XML response (first 500 chars): " . substr($xmlString, 0, 500));
+            while ($hasMore) {
+                $xmlQuery = '<?xml version="1.0" encoding="utf-8"?>
+                            <AcsEventCond version="2.0">
+                                <searchID>1</searchID>
+                                <searchResultPosition>'.$searchPosition.'</searchResultPosition>
+                                <maxResults>100</maxResults>
+                                <major>0</major>
+                                <minor>0</minor>
+                                <startTime>'.$startTime.'</startTime>
+                                <endTime>'.$endTime.'</endTime>
+                            </AcsEventCond>';
 
-            if ($statusCode !== 200) {
-                return [];
-            }
+                $response = $client->post('ISAPI/AccessControl/AcsEvent', [
+                    'body' => $xmlQuery,
+                    'http_errors' => false,
+                ]);
 
-            $xml = simplexml_load_string($xmlString);
-            $logs = [];
+                $statusCode = $response->getStatusCode();
+                $xmlString = (string) $response->getBody();
 
-            if (isset($xml->InfoList) && isset($xml->InfoList->Info)) {
-                foreach ($xml->InfoList->Info as $info) {
-                    $logs[] = [
-                        'id' => (string) ($info->employeeNoString ?? $info->employeeNo ?? '0'),
-                        'timestamp' => (string) ($info->time->time ?? $info->time),
-                        'state' => 1,
-                        'uid' => (string) ($info->serialNo ?? 0),
-                    ];
+                if ($statusCode !== 200) {
+                    Log::warning("XML pull failed at position {$searchPosition}: Status {$statusCode}");
+                    $hasMore = false;
+
+                    continue;
+                }
+
+                $xml = simplexml_load_string($xmlString);
+                if ($xml === false) {
+                    Log::warning("XML parse error at position {$searchPosition}");
+                    $hasMore = false;
+
+                    continue;
+                }
+
+                $batchCount = 0;
+
+                if (isset($xml->InfoList) && isset($xml->InfoList->Info)) {
+                    foreach ($xml->InfoList->Info as $info) {
+                        $allLogs[] = [
+                            'id' => (string) ($info->employeeNoString ?? $info->employeeNo ?? '0'),
+                            'timestamp' => (string) ($info->time->time ?? $info->time),
+                            'state' => 1,
+                            'uid' => (string) ($info->serialNo ?? 0),
+                        ];
+                        $batchCount++;
+                    }
+                }
+
+                Log::info("XML batch pulled: {$batchCount} logs at position {$searchPosition}");
+
+                if ($batchCount < 100) {
+                    $hasMore = false; // Less than maxResults means we reached the end
+                } else {
+                    $searchPosition += 100;
+                }
+
+                // Safety break
+                if ($searchPosition > 10000) {
+                    $hasMore = false;
                 }
             }
 
-            Log::info("XML format found " . count($logs) . " attendance logs");
-            return $logs;
+            Log::info('Total XML logs found: '.count($allLogs));
+
+            return $allLogs;
 
         } catch (Exception $e) {
-            Log::warning("XML attendance pull failed: " . $e->getMessage());
+            Log::warning('XML attendance pull failed: '.$e->getMessage());
+
             return [];
         }
     }
@@ -277,7 +330,7 @@ class BiometricDeviceService
                         [
                             'doorNo' => 1,
                             'planTemplateNo' => '1',
-                        ]
+                        ],
                     ],
                 ],
             ];
@@ -290,8 +343,8 @@ class BiometricDeviceService
 
             $statusCode = $response->getStatusCode();
             $body = (string) $response->getBody();
-            
-            Log::info("Add user attempt for {$userId}: Status {$statusCode}, Body: " . substr($body, 0, 200));
+
+            Log::info("Add user attempt for {$userId}: Status {$statusCode}, Body: ".substr($body, 0, 200));
 
             // If user exists, try to modify instead
             if ($statusCode === 409 || $statusCode === 400 || strpos($body, 'userExisted') !== false || strpos($body, 'exist') !== false) {
@@ -305,15 +358,83 @@ class BiometricDeviceService
             }
 
             if ($statusCode === 200 || $statusCode === 201) {
-                Log::info("User {$userId} ({$name}) pushed to device {$device->ip_address}");
+                Log::info("User {$userId} ({$name}) pushed to device {$device->ip_address} via JSON");
+
                 return true;
             }
 
-            Log::warning("Failed to push user to device. Status: {$statusCode}, Response: {$body}");
+            Log::warning("JSON Push failed. Status: {$statusCode}. Trying XML fallback...");
+
+            return $this->addUserToDeviceXml($device, $userId, $name, $password);
+
+        } catch (Exception $e) {
+            Log::warning("Hikvision Add User JSON Failed for {$userId}: ".$e->getMessage().'. Trying XML fallback...');
+
+            return $this->addUserToDeviceXml($device, $userId, $name, $password);
+        }
+    }
+
+    /**
+     * Add/Update user on device via Hikvision ISAPI (XML format)
+     */
+    protected function addUserToDeviceXml(BiometricDevice $device, string $userId, string $name, string $password = ''): bool
+    {
+        try {
+            $client = $this->getClient($device);
+
+            // Minimal XML Helper
+            $xmlBody = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+            <UserInfo version=\"2.0\" xmlns=\"http://www.hikvision.com/ver20/XMLSchema\">
+                <employeeNo>{$userId}</employeeNo>
+                <name>{$name}</name>
+                <userType>normal</userType>
+                <closeDelayEnabled>false</closeDelayEnabled>
+                <Valid>
+                    <enable>true</enable>
+                    <beginTime>2020-01-01T00:00:00</beginTime>
+                    <endTime>2037-12-31T23:59:59</endTime>
+                    <timeType>local</timeType>
+                </Valid>
+                <doorRight>1</doorRight>
+                <RightPlan>
+                    <doorNo>1</doorNo>
+                    <planTemplateNo>1</planTemplateNo>
+                </RightPlan>
+            </UserInfo>";
+
+            // Try to add user first (POST)
+            try {
+                $response = $client->post('ISAPI/AccessControl/UserInfo/Record', [
+                    'body' => $xmlBody,
+                    'http_errors' => false, // Handle 4xx manually
+                ]);
+                $statusCode = $response->getStatusCode();
+            } catch (Exception $ex) {
+                $statusCode = 500;
+            }
+
+            // If user exists (409/old firmware behavior), try PUT to Modify
+            if ($statusCode !== 200 && $statusCode !== 201) {
+                $response = $client->put('ISAPI/AccessControl/UserInfo/Modify', [
+                    'body' => $xmlBody,
+                    'http_errors' => false,
+                ]);
+                $statusCode = $response->getStatusCode();
+            }
+
+            if ($statusCode === 200 || $statusCode === 201) {
+                Log::info("User {$userId} ({$name}) pushed to device {$device->ip_address} via XML");
+
+                return true;
+            }
+
+            Log::error("XML Push User Failed. Status: {$statusCode}");
+
             return false;
 
         } catch (Exception $e) {
-            Log::error("Hikvision Add User Failed for {$userId}: " . $e->getMessage());
+            Log::error("Hikvision Add User XML Failed for {$userId}: ".$e->getMessage());
+
             return false;
         }
     }

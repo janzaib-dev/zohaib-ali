@@ -7,68 +7,7 @@
     </style>
 
 
-    <style>
-        /* Product View Modal Fields */
-        /* ===== Professional Product View Modal ===== */
 
-        #productViewModal {
-            --label-size: 13px;
-            --value-size: 16px;
-            --heading-size: 17px;
-        }
-
-        /* Section headings */
-        #productViewModal h6 {
-            font-size: var(--heading-size);
-            font-weight: 600;
-            margin-bottom: 14px;
-        }
-
-        /* Labels */
-        #productViewModal .label {
-            display: block;
-            font-size: var(--label-size);
-            font-weight: 500;
-            color: #6c757d;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-        }
-
-        /* Values */
-        #productViewModal .value {
-            display: block;
-            font-size: var(--value-size);
-            font-weight: 600;
-            color: #212529;
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 6px;
-            padding: 10px 12px;
-            min-height: 42px;
-        }
-
-        /* Right panel emphasis */
-        #productViewModal #view_wholesale,
-        #productViewModal #view_retail {
-            font-size: 17px;
-        }
-
-        /* Stock visibility */
-        #productViewModal #view_stock {
-            font-size: 17px;
-            font-weight: 700;
-        }
-
-        /* Card padding balance */
-        #productViewModal .card-body {
-            padding: 18px;
-        }
-
-        /* Modal overall text comfort */
-        #productViewModal .modal-body {
-            font-size: 15px;
-        }
-    </style>
     <div class="card shadow-sm border-0">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
             <div>
@@ -205,117 +144,156 @@
         </div>
     </div>
 
-    <!-- Product Detail View Modal -->
-    <div class="modal fade" id="productViewModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content border-0 shadow-lg rounded-3">
+    <!-- Product Detail View Modal (BS4 Simple 3-Panel) -->
+    <div class="modal fade" id="productViewModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content border-0 shadow-sm">
 
                 <!-- Header -->
-                <div class="modal-header bg-white border-bottom">
+                <div class="modal-header bg-white border-bottom-0 pb-0">
                     <div>
-                        <h5 class="modal-title fw-semibold mb-0">
-                            <i class="las la-cube text-primary me-1"></i> Product Details
-                        </h5>
-                        <small class="text-muted">Complete product information</small>
+                        <h5 class="modal-title font-weight-bold text-dark" id="view_item_name">Product Name</h5>
+                        <p class="text-muted small mb-0"><i class="las la-barcode"></i> <span
+                                id="view_item_code">CODE</span></p>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
 
                 <!-- Body -->
-                <div class="modal-body py-4 bg-light">
-                    <div class="row g-4">
+                <div class="modal-body bg-light p-3">
 
-                        <!-- LEFT: Basic & Physical Specs -->
-                        <div class="col-md-7">
-                            <div class="card border-0 shadow-sm h-100">
-                                <div class="card-header bg-white border-bottom-0 pb-0 pt-3">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <h6 class="fw-semibold text-primary mb-0">
-                                            <i class="las la-info-circle me-1"></i> Basic Information
-                                        </h6>
-                                        <span class="badge bg-secondary fs-6" id="view_size_mode_badge">Mode</span>
+                    <!-- Loading Spinner -->
+                    <div id="modalLoadingSpinner" class="text-center py-5 d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                    </div>
+
+                    <!-- Main Content -->
+                    <div class="row" id="modalContentRow">
+
+                        <!-- Panel 1: Information -->
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="card h-100 border-0 shadow-sm rounded">
+                                <div class="card-body p-3">
+                                    <h6 class="text-uppercase text-primary font-weight-bold small mb-3 border-bottom pb-2">
+                                        1. Information</h6>
+
+                                    <div class="text-center mb-3">
+                                        <div class="bg-light rounded d-flex align-items-center justify-content-center mx-auto"
+                                            style="width: 100px; height: 100px; overflow: hidden; border: 1px solid #eee;">
+                                            <img id="view_image_preview" src="" class="img-fluid d-none">
+                                            <div id="view_image_placeholder" class="text-center">
+                                                <i class="las la-image text-muted" style="font-size: 2rem;"></i>
+                                                <small class="d-block text-muted" style="font-size: 10px;">No
+                                                    Image</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-2">
+                                        <small class="text-muted d-block">Category</small>
+                                        <span class="font-weight-bold text-dark" id="view_cat_sub">-</span>
+                                    </div>
+                                    <div class="mb-2">
+                                        <small class="text-muted d-block">Brand / Model</small>
+                                        <span class="font-weight-bold text-dark" id="view_brand_model">-</span>
+                                    </div>
+                                    <div class="mb-2">
+                                        <small class="text-muted d-block">Colors</small>
+                                        <span class="text-dark" id="view_color" style="font-size: 0.9rem;">-</span>
+                                    </div>
+                                    <div class="mb-2">
+                                        <small class="text-muted d-block">HS Code</small>
+                                        <span class="text-secondary font-weight-bold" id="view_hs_code">-</span>
+                                    </div>
+                                    <div class="mb-0 border-top pt-2 mt-2">
+                                        <small class="text-muted d-block">Created On</small>
+                                        <span class="text-dark small" id="view_created_at">-</span>
                                     </div>
                                 </div>
-                                <div class="card-body">
-                                    <div class="row g-3">
-                                        <!-- Shared Basic Fields -->
-                                        <div class="col-sm-6">
-                                            <span class="label">Item Name</span>
-                                            <span class="value" id="view_item_name"></span>
-                                        </div>
-                                        <div class="col-sm-6">
-                                            <span class="label">Item Code</span>
-                                            <span class="value" id="view_item_code"></span>
-                                        </div>
-                                        <div class="col-sm-6">
-                                            <span class="label">Category / Sub</span>
-                                            <span class="value" id="view_cat_sub"></span>
-                                        </div>
-                                        <div class="col-sm-6">
-                                            <span class="label">Brand / Model</span>
-                                            <span class="value" id="view_brand_model"></span>
-                                        </div>
-                                        <div class="col-sm-6">
-                                            <span class="label">Barcode</span>
-                                            <span class="value" id="view_barcode"></span>
-                                        </div>
-                                        <div class="col-sm-6">
-                                            <span class="label">HS Code</span>
-                                            <span class="value" id="view_hs_code"></span>
-                                        </div>
-                                        <div class="col-sm-12">
-                                            <span class="label">Color</span>
-                                            <span class="value" id="view_color"></span>
-                                        </div>
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Measurement & Stock -->
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="card h-100 border-0 shadow-sm rounded">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                        <h6 class="text-uppercase text-info font-weight-bold small mb-0">2. Measurement
+                                        </h6>
+                                        <span class="badge badge-secondary" id="view_size_mode_badge">Mode</span>
                                     </div>
 
-                                    <hr class="my-4">
-
-                                    <!-- SECTION: By Size Details -->
+                                    <!-- By Size -->
                                     <div id="sec_by_size" class="d-none">
-                                        <h6 class="fw-semibold text-dark mb-3"><i class="las la-ruler-combined"></i> Size
-                                            Dimensions</h6>
-                                        <div class="row g-3">
-                                            <div class="col-sm-6">
-                                                <span class="label">Dimensions (H x W)</span>
-                                                <span class="value" id="view_dimensions"></span>
+                                        <div class="row no-gutters mb-2">
+                                            <div class="col-6 pr-1">
+                                                <small class="text-muted d-block">Dim (HxW)</small>
+                                                <span class="font-weight-bold text-dark" id="view_dimensions">-</span>
                                             </div>
-                                            <div class="col-sm-6">
-                                                <span class="label">m² per Piece</span>
-                                                <span class="value" id="view_m2_piece"></span>
+                                            <div class="col-6 pl-1">
+                                                <small class="text-muted d-block">m²/Pc</small>
+                                                <span class="font-weight-bold text-dark" id="view_m2_piece">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="bg-light p-2 rounded mb-2 border">
+                                            <div class="d-flex justify-content-between">
+                                                <small class="text-muted">Box Qty</small>
+                                                <strong class="text-dark" id="view_boxes_qty_size">-</strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <small class="text-muted">Pcs/Box</small>
+                                                <strong class="text-dark" id="view_pcs_box_size">-</strong>
+                                            </div>
+                                        </div>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted d-block Uppercase">Total Area (m²)</small>
+                                            <div class="h5 font-weight-bold text-info" id="view_total_m2">-</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- By Box/Carton -->
+                                    <div id="sec_packing" class="d-none">
+                                        <div class="row text-center mb-2 mx-0">
+                                            <div class="col-4 px-1">
+                                                <div class="bg-light p-1 rounded border">
+                                                    <small class="d-block" style="font-size: 0.6rem;">PCS/BOX</small>
+                                                    <strong class="text-dark" id="view_pcs_box">-</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-4 px-1">
+                                                <div class="bg-light p-1 rounded border">
+                                                    <small class="d-block" style="font-size: 0.6rem;">BOXES</small>
+                                                    <strong class="text-primary" id="view_boxes_qty">-</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-4 px-1">
+                                                <div class="bg-light p-1 rounded border">
+                                                    <small class="d-block" style="font-size: 0.6rem;">LOOSE</small>
+                                                    <strong class="text-warning" id="view_loose_pcs">-</strong>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <!-- SECTION: Packaging (Size & Cartons) -->
-                                    <div id="sec_packing" class="d-none mt-3">
-                                        <h6 class="fw-semibold text-dark mb-3"><i class="las la-box"></i> Packaging
-                                            Details</h6>
-                                        <div class="row g-3">
-                                            <div class="col-sm-4">
-                                                <span class="label">Pieces / Box</span>
-                                                <span class="value" id="view_pcs_box"></span>
-                                            </div>
-                                            <div class="col-sm-4">
-                                                <span class="label">Boxes Qty</span>
-                                                <span class="value" id="view_boxes_qty"></span>
-                                            </div>
-                                            <div class="col-sm-4" id="grp_loose_pcs">
-                                                <span class="label">Loose Pieces</span>
-                                                <span class="value" id="view_loose_pcs"></span>
-                                            </div>
+                                    <!-- By Piece -->
+                                    <div id="sec_by_piece" class="d-none text-center mb-3">
+                                        <div class="alert alert-light border">
+                                            <i class="las la-layer-group text-primary" style="font-size: 1.5rem;"></i>
+                                            <br>
+                                            <span class="text-muted small">Unit Tracking Only</span>
                                         </div>
                                     </div>
 
-                                    <!-- SECTION: By Pieces -->
-                                    <div id="sec_by_piece" class="d-none">
-                                        <h6 class="fw-semibold text-dark mb-3"><i class="las la-cube"></i> Quantity
-                                            Details</h6>
-                                        <div class="row g-3">
-                                            <div class="col-sm-6">
-                                                <span class="label">Unit Quantity</span>
-                                                <span class="value" id="view_u_qty"></span>
-                                            </div>
+                                    <!-- Total Stock -->
+                                    <div class="mt-auto pt-3 border-top">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted font-weight-bold">TOTAL PCS</small>
+                                            <span class="h4 mb-0 font-weight-bold text-success"
+                                                id="view_total_stock_qty">0</span>
                                         </div>
                                     </div>
 
@@ -323,53 +301,44 @@
                             </div>
                         </div>
 
-                        <!-- RIGHT: Financials & Stock -->
-                        <div class="col-md-5">
+                        <!-- Panel 3: Financial -->
+                        <div class="col-md-4">
+                            <div class="card h-100 border-0 shadow-sm rounded">
+                                <div class="card-body p-3">
+                                    <h6 class="text-uppercase text-success font-weight-bold small mb-3 border-bottom pb-2">
+                                        3. Financials</h6>
 
-                            <!-- Stock Summary Card -->
-                            <div class="card border-0 shadow-sm mb-3">
-                                <div class="card-header bg-white fw-bold text-success pt-3">
-                                    <i class="las la-warehouse"></i> Stock Summary
-                                </div>
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="text-muted">Total Stock Qty</span>
-                                        <span class="fs-5 fw-bold text-dark" id="view_total_stock_qty"></span>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center" id="grp_total_m2">
-                                        <span class="text-muted">Total m²</span>
-                                        <span class="fs-5 fw-bold text-dark" id="view_total_m2"></span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Pricing Card -->
-                            <div class="card border-0 shadow-sm h-100">
-                                <div class="card-header bg-white fw-bold text-primary pt-3">
-                                    <i class="las la-tags"></i> Pricing Details
-                                </div>
-                                <div class="card-body">
-
-                                    <!-- Unit Prices -->
                                     <div class="mb-3">
-                                        <span class="label" id="lbl_price_unit">Sale Price</span>
-                                        <span class="value text-primary" id="view_price_unit"></span>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <small class="text-muted font-weight-bold" id="lbl_price_unit">Sale
+                                                Price</small>
+                                            <span class="font-weight-bold text-dark" id="view_price_unit">-</span>
+                                        </div>
+                                        <div class="progress" style="height: 4px;">
+                                            <div class="progress-bar bg-success" style="width: 100%"></div>
+                                        </div>
                                     </div>
+
                                     <div class="mb-3">
-                                        <span class="label" id="lbl_purch_unit">Purchase Price</span>
-                                        <span class="value text-secondary" id="view_purch_unit"></span>
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <small class="text-muted font-weight-bold" id="lbl_purch_unit">Purch
+                                                Price</small>
+                                            <span class="text-secondary" id="view_purch_unit">-</span>
+                                        </div>
+                                        <div class="progress" style="height: 4px;">
+                                            <div class="progress-bar bg-secondary" style="width: 60%"></div>
+                                        </div>
                                     </div>
 
-                                    <hr>
-
-                                    <!-- Totals -->
-                                    <div class="mb-2 d-flex justify-content-between">
-                                        <span class="fw-semibold">Sale Total:</span>
-                                        <span class="fw-bold text-success fs-5" id="view_sale_total"></span>
+                                    <div class="alert alert-success p-2 mb-0 mt-4 mx-0 text-center"
+                                        style="background-color: #d1e7dd; border-color: #badbcc;">
+                                        <small class="d-block text-success font-weight-bold text-uppercase"
+                                            style="font-size: 0.7rem;">Est. Sale Value</small>
+                                        <div class="font-weight-bold text-dark h4 mb-0" id="view_sale_total">-</div>
                                     </div>
-                                    <div class="d-flex justify-content-between">
-                                        <span class="fw-semibold">Purchase Total:</span>
-                                        <span class="fw-bold text-danger fs-5" id="view_purch_total"></span>
+                                    <div class="text-center mt-2">
+                                        <small class="text-muted">Total Purch: <span id="view_purch_total"
+                                                class="text-danger">-</span></small>
                                     </div>
 
                                 </div>
@@ -379,11 +348,10 @@
                     </div>
                 </div>
 
-                <!-- Footer -->
-                <div class="modal-footer bg-white border-top">
-                    <button type="button" class="btn btn-outline-secondary btn-sm px-4" data-bs-dismiss="modal">
-                        Close
-                    </button>
+                <!-- Simple Footer -->
+                <div class="modal-footer border-top-0 py-2 bg-white rounded-bottom">
+                    <button type="button" class="btn btn-secondary btn-sm rounded-pill px-4"
+                        data-dismiss="modal">Close</button>
                 </div>
 
             </div>
@@ -404,21 +372,43 @@
         $(document).on('click', '.viewProductBtn', function() {
             let productId = $(this).data('id');
 
+            // 1. Reset & Loading State
+            $('#modalContentRow').addClass('d-none');
+            $('#modalLoadingSpinner').removeClass('d-none');
+            $('#productViewModal').modal('show');
+
             $.ajax({
                 url: "/productview/" + productId,
                 type: "GET",
                 success: function(product) {
 
-                    // --- Basic ---
-                    $('#view_item_name').text(product.item_name ?? '-');
-                    $('#view_item_code').text(product.item_code ?? '-');
-                    $('#view_cat_sub').text((product.category_relation?.name ?? '-') + ' / ' + (product
-                        .sub_category_relation?.name ?? '-'));
-                    $('#view_brand_model').text((product.brand?.name ?? '-') + ' / ' + (product.model ??
-                        '-'));
-                    $('#view_barcode').text(product.barcode_path ?? '-');
-                    $('#view_hs_code').text(product.hs_code ?? '-');
+                    // 2. Hide Spinner, Show Content
+                    $('#modalLoadingSpinner').addClass('d-none');
+                    $('#modalContentRow').removeClass('d-none');
 
+                    // --- Basic ---
+                    $('#view_item_name').text(product.item_name ?? 'Unknown Product');
+                    $('#view_item_code').text(product.item_code ?? 'N/A');
+                    $('#view_cat_sub').text((product.category_relation?.name ?? '') + (product
+                        .sub_category_relation ? ' • ' + product.sub_category_relation.name : ''
+                    ));
+                    $('#view_brand_model').text((product.brand?.name ?? '-') + (product.model ? ' / ' +
+                        product.model : ''));
+                    $('#view_hs_code').text(product.hs_code ?? '-');
+                    $('#view_created_at').text(product.created_at ? new Date(product.created_at)
+                        .toLocaleDateString() : '-');
+
+                    // --- Image ---
+                    if (product.image) {
+                        $('#view_image_preview').attr('src', '/uploads/products/' + product.image)
+                            .removeClass('d-none');
+                        $('#view_image_placeholder').addClass('d-none');
+                    } else {
+                        $('#view_image_preview').addClass('d-none');
+                        $('#view_image_placeholder').removeClass('d-none');
+                    }
+
+                    // --- Colors ---
                     if (product.color) {
                         try {
                             let colors = JSON.parse(product.color);
@@ -430,113 +420,111 @@
                         $('#view_color').text('-');
                     }
 
-                    // --- Mode Logic ---
+                    // --- Mode & Layout Switching ---
                     let mode = product.size_mode ?? 'by_size';
 
-                    // Reset sections
-                    $('#sec_by_size, #sec_packing, #sec_by_piece, #grp_loose_pcs, #grp_total_m2')
-                        .addClass('d-none');
-                    let modeBadge = $('#view_size_mode_badge');
+                    // Defaults
+                    $('#sec_by_size, #sec_packing, #sec_by_piece').addClass('d-none');
 
-                    // Common Vars
+                    let calcBoxes = product.calculated_boxes_quantity ?? 0;
+                    let calcLoose = product.calculated_loose_pieces ?? 0;
+                    let calcTotal = product.calculated_total_stock_qty ?? 0;
+
                     let salePrice = 0;
                     let purchPrice = 0;
+                    let estSaleVal = 0;
+                    let estPurchVal = 0;
 
                     if (mode === 'by_size') {
-                        modeBadge.text('By Size').removeClass('bg-info bg-warning').addClass(
-                            'bg-secondary');
-
-                        // Show Sections
+                        $('#view_size_mode_badge').text('By Size').removeClass('bg-info bg-warning')
+                            .addClass('bg-light text-primary border-primary');
                         $('#sec_by_size').removeClass('d-none');
-                        $('#sec_packing').removeClass('d-none');
-                        $('#grp_total_m2').removeClass('d-none').addClass('d-flex');
 
-                        // Fill Values
-                        let dims = (product.height ?? '0') + ' x ' + (product.width ?? '0') + ' cm';
-                        $('#view_dimensions').text(dims);
-
+                        // Fill Size Data
+                        $('#view_dimensions').text((product.height ?? 0) + ' x ' + (product.width ??
+                            0));
                         let m2Piece = ((product.height * product.width) / 10000).toFixed(4);
-                        $('#view_m2_piece').text(m2Piece + ' m²');
+                        $('#view_m2_piece').text(m2Piece);
+                        $('#view_boxes_qty_size').text(calcBoxes); // Box count for Size mode
+                        $('#view_pcs_box_size').text(product.pieces_per_box ?? 0);
+                        $('#view_total_m2').text(parseFloat(product.total_m2 ?? 0).toFixed(2));
 
-                        $('#view_pcs_box').text(product.pieces_per_box ?? 0);
-                        $('#view_boxes_qty').text(product.boxes_quantity ?? 0);
+                        // Stock
+                        $('#view_total_stock_qty').text(calcTotal);
 
-                        $('#view_total_m2').text((product.total_m2 ?? 0) + ' m²');
-                        $('#view_total_stock_qty').text(product.total_stock_qty ?? 0);
-
-                        // Prices
-                        $('#lbl_price_unit').text('Sale Price (per m²)');
-                        $('#lbl_purch_unit').text('Purchase Price (per m²)');
-
+                        // Price Labels
+                        $('#lbl_price_unit').text('Price per m²');
+                        $('#lbl_purch_unit').text('Cost per m²');
                         salePrice = product.price_per_m2;
                         purchPrice = product.purchase_price_per_m2;
 
+                        estSaleVal = (product.total_m2 ?? 0) * calcBoxes * salePrice;
+                        estPurchVal = (product.total_m2 ?? 0) * calcBoxes * purchPrice;
+
                     } else if (mode === 'by_cartons') {
-                        modeBadge.text('By Box').removeClass('bg-secondary bg-warning').addClass(
-                            'bg-info');
-
-                        // Show Sections
+                        $('#view_size_mode_badge').text('By Box').removeClass(
+                            'bg-light text-primary border-primary bg-warning').addClass(
+                            'bg-info text-white border-0');
                         $('#sec_packing').removeClass('d-none');
-                        $('#grp_loose_pcs').removeClass('d-none'); // Show loose pieces
 
-                        // Fill Values
-                        $('#view_pcs_box').text(product.pieces_per_box ?? 0);
-                        $('#view_boxes_qty').text(product.boxes_quantity ?? 0);
-                        $('#view_loose_pcs').text(product.loose_pieces ?? 0);
+                        $('#view_boxes_qty').text(calcBoxes);
+                        $('#view_loose_pcs').text(calcLoose);
+                        $('#view_pcs_box').text(product.pieces_per_box ?? '-');
 
-                        $('#view_total_stock_qty').text(product.total_stock_qty ?? 0);
+                        // Stock
+                        $('#view_total_stock_qty').text(calcTotal);
 
-                        // Prices
-                        $('#lbl_price_unit').text('Sale Price (per Piece)');
-                        $('#lbl_purch_unit').text('Purchase Price (per Piece)');
-
+                        // Price Labels
+                        $('#lbl_price_unit').text('Price per Box');
+                        $('#lbl_purch_unit').text('Cost per Piece');
                         salePrice = product.sale_price_per_box;
                         purchPrice = product.purchase_price_per_piece;
 
-                    } else if (mode === 'by_pieces') {
-                        modeBadge.text('By Piece').removeClass('bg-secondary bg-info').addClass(
-                            'bg-warning text-dark');
+                        // Calc Value
+                        // Sale Value: Boxes * SalePricePerBox + Loose * (SalePricePerBox/PcsPerBox)
+                        let ppb = product.pieces_per_box > 0 ? product.pieces_per_box : 1;
+                        let pricePerPieceScale = salePrice / ppb;
+                        estSaleVal = calcTotal * pricePerPieceScale;
+                        estPurchVal = calcTotal * purchPrice;
 
-                        // Show Sections
+                    } else { // by_pieces
+                        $('#view_size_mode_badge').text('By Piece').removeClass(
+                            'bg-light text-primary border-primary bg-info text-white').addClass(
+                            'bg-warning text-dark border-0');
                         $('#sec_by_piece').removeClass('d-none');
 
-                        // Fill Values
-                        $('#view_u_qty').text(product.piece_quantity ?? 0);
-                        $('#view_total_stock_qty').text(product.total_stock_qty ?? 0);
+                        // Stock
+                        $('#view_total_stock_qty').text(calcTotal);
 
-                        // Prices
-                        $('#lbl_price_unit').text('Sale Price (per Piece)');
-                        $('#lbl_purch_unit').text('Purchase Price (per Piece)');
-
+                        // Price Labels
+                        $('#lbl_price_unit').text('Price per Piece');
+                        $('#lbl_purch_unit').text('Cost per Piece');
                         salePrice = product.sale_price_per_box;
                         purchPrice = product.purchase_price_per_piece;
+
+                        estSaleVal = calcTotal * salePrice;
+                        estPurchVal = calcTotal * purchPrice;
                     }
 
-                    // Set Prices
+                    // Format Financials
                     $('#view_price_unit').text('Rs. ' + parseFloat(salePrice || 0).toFixed(2));
                     $('#view_purch_unit').text('Rs. ' + parseFloat(purchPrice || 0).toFixed(2));
-
-                    $('#view_sale_total').text('Rs. ' + parseFloat(product.total_price || 0).toFixed(
-                        2));
-                    $('#view_purch_total').text('Rs. ' + parseFloat(product.total_purchase_price || 0)
-                        .toFixed(2));
-
-                    // Show Image
-                    if (product.image) {
-                        // If you had an image tag in the new modal, but I didn't verify if I left #view_image.
-                        // Checking the HTML I inserted, I realized I removed the image logic from the previous HTML which was inside the table (or logic).
-                        // Wait, the previous modal didn't seem to have a big image preview in lines 201-334.
-                        // The original code had an image column in the database but the modal (lines 201-334) didn't actually show an image in the view I replaced!
-                        // Oh, I see lines 386-388 in original JS: `$('#view_image').attr...`
-                        // But `view_image` was NOT in the previous modal HTML I read (lines 201-334).
-                        // It might have been there and I missed it? Or it was missing HTML but had JS.
-                        // Let's stick to the structure I designed which is data focused. If user needs image, I can add it, but it wasn't explicitly requested in "Required Fix".
-                    }
+                    $('#view_sale_total').text('Rs. ' + parseFloat(estSaleVal || 0).toLocaleString(
+                        'en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        }));
+                    $('#view_purch_total').text('Rs. ' + parseFloat(estPurchVal || 0).toLocaleString(
+                        'en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        }));
 
                     $('#productViewModal').modal('show');
                 },
                 error: function() {
-                    Swal.fire('Error', 'Could not fetch product details', 'error');
+                    $('#modalLoadingSpinner').addClass('d-none');
+                    Swal.fire('Error', 'Could not fetch details', 'error');
                 }
             });
         });
@@ -608,7 +596,7 @@
                 table.search(this.value).draw();
             });
             // ===== Initialize Products DataTable =====
-          
+
         });
     </script>
 

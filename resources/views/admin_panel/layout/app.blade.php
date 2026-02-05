@@ -140,11 +140,8 @@
     <link rel="stylesheet" href="{{ asset('assets/vendors/data-table/css/jquery.dataTables.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendors/data-table/css/dataTables.bootstrap4.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/vendors/data-table/css/responsive.bootstrap.min.css') }}">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
-        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ asset('assets/vendors/data-table/css/responsive.jqueryui.min.css') }}">
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    {{-- Removed Duplicate External CDN Scripts (BS5/jQuery) to prevent conflicts with Template BS4 --}}
     {{-- Online Links --}}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/brands.min.css"
         integrity="sha512-58P9Hy7II0YeXLv+iFiLCv1rtLW47xmiRpC1oFafeKNShp8V5bKV/ciVtYqbk2YfxXQMt58DjNfkXFOn62xE+g=="
@@ -438,12 +435,17 @@
                                             </div>
                                         @endcanany
                                         <!-- Purchase & Inventory -->
-                                        @canany(['vendors.view'])
+                                        @canany(['vendors.view', 'purchases.view'])
                                             <div class="col-group col-md-3">
                                                 <p class="category-heading">Purchase & Inventory</p>
                                                 <ul class="submenu-item">
                                                     @can('vendors.view')
                                                         <li><a href="{{ url('vendor') }}"><i class="fas fa-truck"></i> Vendor</a>
+                                                        </li>
+                                                    @endcan
+                                                    @can('purchases.view')
+                                                        <li><a href="{{ route('Purchase.home') }}"><i
+                                                                    class="fas fa-shopping-cart"></i> Purchase</a>
                                                         </li>
                                                     @endcan
                                                 </ul>
@@ -747,6 +749,34 @@
 
     @yield('js')
 
+    <!-- Global SweetAlert Toast/Popup -->
+    <script>
+        @if (session('success'))
+            Swal.fire({
+                icon: 'success',
+                title: 'Success!',
+                text: "{{ session('success') }}",
+                timer: 3000,
+                showConfirmButton: false
+            });
+        @endif
+
+        @if (session('error'))
+            Swal.fire({
+                icon: 'error',
+                title: 'Error!',
+                text: "{{ session('error') }}",
+            });
+        @endif
+    </script>
+
+    {{-- Anti-Ghost Mode: Disconnect BrowserSync to stop cross-tab navigation sync --}}
+    <script>
+        if (window.___browserSync___) {
+            console.log('BrowserSync detected. Disconnecting socket to stop Ghost Mode sync.');
+            window.___browserSync___.socket.disconnect();
+        }
+    </script>
 </body>
 
 </html>

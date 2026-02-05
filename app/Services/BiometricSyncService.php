@@ -25,6 +25,17 @@ class BiometricSyncService
         // Generate device user ID if not exists
         if (! $employee->device_user_id) {
             $employee->device_user_id = $this->generateDeviceUserId($device);
+        } else {
+            // Check for potential duplicate ID conflict on this device
+            $conflict = Employee::where('biometric_device_id', $device->id)
+                ->where('device_user_id', $employee->device_user_id)
+                ->where('id', '!=', $employee->id)
+                ->exists();
+
+            if ($conflict) {
+                // ID conflict detected! Regenerate ID for this user
+                $employee->device_user_id = $this->generateDeviceUserId($device);
+            }
         }
 
         // Ensure strictly linked to this device
@@ -102,7 +113,12 @@ class BiometricSyncService
             return [
                 'success' => false,
                 'message' => 'No attendance logs found on device.',
+                'created' => 0,
+                'skipped' => 0,
+                'duplicates' => 0,
+                'failed' => 0,
             ];
+
         }
 
         // Sort logs by timestamp to ensure we process them in order
@@ -174,8 +190,8 @@ class BiometricSyncService
 
                         // Calculate Early In
                         if ($timestamp->lt($shiftStart)) {
-                             $attendance->is_early_in = true;
-                             $attendance->early_in_minutes = $timestamp->diffInMinutes($shiftStart);
+                            $attendance->is_early_in = true;
+                            $attendance->early_in_minutes = $timestamp->diffInMinutes($shiftStart);
                         }
                     }
                 }
@@ -188,37 +204,38 @@ class BiometricSyncService
                 $attendance->check_in_location = 'Biometric Device';
                 $attendance->save();
                 $created++;
-                \Log::info("Created Check-In for {$employee->name} at {$timestamp}. Shifts: ".($shift ? $shift->name : 'None').'. Late: '.($isLate ? "Yes ({$lateMinutes}m)" : 'No'));
+                $lastLogDate = $date;
+                \Log::info("Created Check-In for {$employee->full_name} at {$timestamp}. Shifts: ".($shift ? $shift->name : 'None').'. Late: '.($isLate ? "Yes ({$lateMinutes}m)" : 'No'));
             } else { // Existing attendance record
                 // RE-CALCULATE LATE STATUS (In case shift changed or first sync was incorrect)
                 $shift = $employee->shift ?? \App\Models\Hr\Shift::where('is_default', true)->first();
                 if ($shift && $attendance->check_in_time) {
                     $checkInTime = Carbon::parse($attendance->check_in_time);
                     $timeStr = null;
-                    
+
                     if ($employee->custom_start_time) {
                         $timeStr = $employee->custom_start_time;
                     } elseif ($shift->start_time) {
                         $timeStr = \Carbon\Carbon::parse($shift->start_time)->format('H:i:s');
                     }
-                    
+
                     if ($timeStr) {
-                         $shiftStart = Carbon::parse($attendance->date . ' ' . $timeStr);
-                         $lateThreshold = $shiftStart->copy()->addMinutes($shift->grace_minutes ?? 0);
-                         
-                         if ($checkInTime->gt($lateThreshold)) {
-                             $isLate = true;
-                             $lateMinutes = $shiftStart->diffInMinutes($checkInTime);
-                             
-                             // Only update if changed
-                             if (!$attendance->is_late || $attendance->late_minutes != $lateMinutes || $attendance->status != 'late') {
-                                 $attendance->is_late = true;
-                                 $attendance->late_minutes = $lateMinutes;
-                                 $attendance->status = 'late';
-                                 $attendance->save(); // Save update
-                                 \Log::info("Updated Late Status for {$employee->name}. CheckIn: {$checkInTime->toTimeString()}. Late: Yes ({$lateMinutes}m)");
-                             }
-                         }
+                        $shiftStart = Carbon::parse($attendance->date.' '.$timeStr);
+                        $lateThreshold = $shiftStart->copy()->addMinutes($shift->grace_minutes ?? 0);
+
+                        if ($checkInTime->gt($lateThreshold)) {
+                            $isLate = true;
+                            $lateMinutes = $shiftStart->diffInMinutes($checkInTime);
+
+                            // Only update if changed
+                            if (! $attendance->is_late || $attendance->late_minutes != $lateMinutes || $attendance->status != 'late') {
+                                $attendance->is_late = true;
+                                $attendance->late_minutes = $lateMinutes;
+                                $attendance->status = 'late';
+                                $attendance->save(); // Save update
+                                \Log::info("Updated Late Status for {$employee->full_name}. CheckIn: {$checkInTime->toTimeString()}. Late: Yes ({$lateMinutes}m)");
+                            }
+                        }
                     }
                 }
 
@@ -234,7 +251,7 @@ class BiometricSyncService
                 }
 
                 $minutesSinceCheckIn = $checkInTime->diffInMinutes($timestamp);
-                \Log::info("Processing punch for {$employee->name}. Time: {$timestamp}. CheckIn: {$checkInTime}. Diff: {$minutesSinceCheckIn}m. Gap: {$gap}m");
+                \Log::info("Processing punch for {$employee->full_name}. Time: {$timestamp}. CheckIn: {$checkInTime}. Diff: {$minutesSinceCheckIn}m. Gap: {$gap}m");
 
                 if ($minutesSinceCheckIn < $gap) {
                     // Within gap - ignore (accidental duplicate)
@@ -248,13 +265,13 @@ class BiometricSyncService
                 if (! $attendance->check_out_time || $timestamp->gt(Carbon::parse($attendance->check_out_time))) {
                     $attendance->check_out_time = $timestamp->toDateTimeString();
                     $attendance->check_out_location = 'Biometric Device';
-                    
+
                     // Calculate Early Leave
                     $shift = $employee->shift ?? \App\Models\Hr\Shift::where('is_default', true)->first();
                     if ($shift) {
                         $endTimeStr = $employee->custom_end_time ?: ($shift->end_time ? \Carbon\Carbon::parse($shift->end_time)->format('H:i:s') : null);
                         if ($endTimeStr) {
-                            $shiftEnd = Carbon::parse($attendance->date . ' ' . $endTimeStr);
+                            $shiftEnd = Carbon::parse($attendance->date.' '.$endTimeStr);
                             if ($timestamp->lt($shiftEnd)) {
                                 $attendance->is_early_leave = true;
                                 $attendance->early_leave_minutes = $timestamp->diffInMinutes($shiftEnd);
@@ -268,7 +285,7 @@ class BiometricSyncService
                     $this->calculateTotalHours($attendance);
                     $attendance->save();
                     $created++;
-                    \Log::info("ACCEPTED: Check-out recorded at {$timestamp}. Early Leave: " . ($attendance->is_early_leave ? "Yes ({$attendance->early_leave_minutes}m)" : "No"));
+                    \Log::info("ACCEPTED: Check-out recorded at {$timestamp}. Early Leave: ".($attendance->is_early_leave ? "Yes ({$attendance->early_leave_minutes}m)" : 'No'));
                 }
             }
         }
@@ -283,7 +300,9 @@ class BiometricSyncService
             'skipped' => $skipped,
             'duplicates' => $duplicates,
             'failed' => 0,
-            'message' => "Processed attendance. Synced: {$created}, Skipped (no employee): {$skipped}, Duplicates ignored: {$duplicates}",
+            'failed' => 0,
+            'last_log_date' => $lastLogDate ?? null,
+            'message' => "Processed attendance. Synced: {$created}, Skipped (no employee): {$skipped}, Duplicates ignored: {$duplicates}" . (isset($lastLogDate) ? ". Latest Date: $lastLogDate" : ""),
         ];
     }
 

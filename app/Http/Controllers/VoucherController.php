@@ -117,8 +117,11 @@ class VoucherController extends Controller
 
     public function all_recepit_vochers()
     {
-        // V2: Fetch from VoucherMaster where type is receipt
-        $receipts = \App\Models\VoucherMaster::where('voucher_type', \App\Models\VoucherMaster::TYPE_RECEIPT)
+        // V2: Fetch Receipt AND Journal Vouchers (to show Sales Invoices + Receipts)
+        $receipts = \App\Models\VoucherMaster::whereIn('voucher_type', [
+            \App\Models\VoucherMaster::TYPE_RECEIPT,
+            \App\Models\VoucherMaster::TYPE_JOURNAL,
+        ])
             ->with('party') // Eager load the polymorphic party
             ->orderBy('id', 'DESC')
             ->get();
@@ -154,6 +157,11 @@ class VoucherController extends Controller
             $voucher->rvid = $voucher->voucher_no;
             $voucher->receipt_date = $voucher->date->format('Y-m-d');
             $voucher->entry_date = $voucher->created_at->format('Y-m-d');
+
+            // Fix: Map total_amount to amount for View compatibility
+            if (! isset($voucher->amount)) {
+                $voucher->amount = $voucher->total_amount;
+            }
         }
 
         return view('admin_panel.vochers.all_recepit_vochers', compact('receipts'));
@@ -370,9 +378,6 @@ class VoucherController extends Controller
 
     public function store_rec_vochers(Request $request)
     {
-        // echo "<pre>";
-        // print_r($request->remarks);
-        // dd();
         DB::beginTransaction();
         try {
             $rvid = $request->rvid ?: \App\Models\ReceiptsVoucher::generateRVID(auth()->id());
@@ -421,124 +426,75 @@ class VoucherController extends Controller
                 'processed' => true,
             ];
 
-            ReceiptsVoucher::create($voucherData);
+            $rec = ReceiptsVoucher::create($voucherData);
+            // ✅ V2 VOUCHER INTEGRATION (Primary Logic Now)
+            try {
+                \Log::info('V2 Integration Start. Type: '.$request->vendor_type.', ID: '.$request->vendor_id);
 
-            // ✅ Ledger update logic
-            $amount = (float) $request->total_amount;
+                $vType = strtolower($request->vendor_type);
+                $partyType = null;
+                $creditAccountId = null;
+                $balanceService = app(\App\Services\BalanceService::class);
 
-            if ($request->vendor_type === 'vendor') {
-                $ledger = VendorLedger::where('vendor_id', $request->vendor_id)->latest()->first();
-
-                if ($ledger) {
-                    $ledger->previous_balance = $ledger->closing_balance;
-                    $ledger->closing_balance = $ledger->closing_balance - $amount;
-                    $ledger->save();
+                if ($vType == 'customer' || $vType == 'walkin') {
+                    $partyType = \App\Models\Customer::class;
+                    $creditAccountId = $balanceService->getAccountsReceivableId();
+                } elseif ($vType == 'vendor') {
+                    $partyType = \App\Models\Vendor::class;
+                    $creditAccountId = $balanceService->getAccountsPayableId();
                 } else {
-                    VendorLedger::create([
-                        'vendor_id' => $request->vendor_id,
-                        'admin_or_user_id' => auth()->id(),
-                        'date' => now(),
-                        'description' => "Receipt Voucher #$rvid",
-                        'opening_balance' => 0,
-                        'debit' => 0,
-                        'credit' => $amount,
-                        'previous_balance' => 0,
-                        'closing_balance' => -$amount,
-                    ]);
-                }
-            } elseif ($request->vendor_type == 'customer') {
-                // ✅ Create Journal Entry for Customer Receipt (CREDIT reduces balance)
-                try {
-                    $customer = Customer::find($request->vendor_id);
-                    if ($customer) {
-                        $journalService = app(\App\Services\JournalEntryService::class);
-                        $balanceService = app(\App\Services\BalanceService::class);
-                        $receiptVoucher = ReceiptsVoucher::where('rvid', $rvid)->first();
-                        $date = $request->receipt_date ?? now()->format('Y-m-d');
-
-                        // Get account IDs dynamically
-                        $arAccountId = $balanceService->getAccountsReceivableId();
-                        $cashAccountId = $request->row_account_id[0] ?? $balanceService->getCashAccountId();
-
-                        // Dr Cash/Bank (receive money)
-                        $journalService->recordEntry(
-                            $receiptVoucher ?? new \App\Models\ReceiptsVoucher(['id' => 0]),
-                            $cashAccountId,
-                            $amount,
-                            0,
-                            "Receipt #{$rvid} from {$customer->customer_name}",
-                            $date
-                        );
-
-                        // Cr Accounts Receivable (reduce customer debt) - with Party link
-                        $journalService->recordEntry(
-                            $receiptVoucher ?? new \App\Models\ReceiptsVoucher(['id' => 0]),
-                            $arAccountId,
-                            0,
-                            $amount,
-                            "Receipt #{$rvid} from {$customer->customer_name}",
-                            $date,
-                            $customer
-                        );
-
-                        \Log::info("Journal Entry created for Receipt #{$rvid}, Amount: {$amount}, Customer: {$customer->id}");
-                    }
-                } catch (\Exception $e) {
-                    \Log::error('Journal Entry Error in Receipt: '.$e->getMessage());
+                    $partyType = \App\Models\Account::class;
+                    $creditAccountId = $request->vendor_id;
                 }
 
-                // Legacy ledger update (keeping for backward compatibility)
-                $ledger = CustomerLedger::where('customer_id', $request->vendor_id)->latest()->first();
-                if ($ledger) {
-                    $ledger->previous_balance = $ledger->closing_balance;
-                    $ledger->closing_balance = $ledger->closing_balance - $amount;
-                    $ledger->save();
-                } else {
-                    CustomerLedger::create([
-                        'customer_id' => $request->vendor_id,
-                        'admin_or_user_id' => auth()->id(),
-                        'previous_balance' => 0,
-                        'opening_balance' => 0,
-                        'closing_balance' => -$amount,
-                    ]);
-                }
-            } else {
-                // Bank/Head case → pehle vendor/account side minus
-                $account = Account::find($request->vendor_id);
-                if ($account) {
-                    $account->opening_balance = $account->opening_balance - $amount;
-                    $account->save();
-                }
-            }
-
-            // ✅ Har case me row_account_id ka + hona zaroori hai
-            // ✅ Row account posting (Debit / Credit aware)
-            if ($request->row_account_id && $request->amount) {
-                foreach ($request->row_account_id as $index => $accId) {
-
-                    $rowAmount = isset($request->amount[$index])
-                        ? (float) $request->amount[$index]
-                        : 0;
-
-                    if ($rowAmount <= 0) {
-                        continue;
+                if ($creditAccountId) {
+                    $v2Lines = [];
+                    // DEBIT SIDE (Cash/Bank) - From Row Inputs
+                    if ($request->row_account_id && $request->amount) {
+                        foreach ($request->row_account_id as $idx => $accId) {
+                            $amt = (float) ($request->amount[$idx] ?? 0);
+                            if ($amt > 0) {
+                                $v2Lines[] = [
+                                    'account_id' => $accId,
+                                    'debit' => $amt,
+                                    'credit' => 0,
+                                    'narration' => $request->narration_text[$idx] ?? 'Receipt',
+                                ];
+                            }
+                        }
                     }
 
-                    $rowAccount = Account::find($accId);
-                    if (! $rowAccount) {
-                        continue;
+                    // CREDIT SIDE (Customer/AR) - Total Amount
+                    $totalAmt = (float) $request->total_amount;
+                    if ($totalAmt > 0) {
+                        $v2Lines[] = [
+                            'account_id' => $creditAccountId,
+                            'debit' => 0,
+                            'credit' => $totalAmt,
+                            'narration' => 'Receipt from '.$request->vendor_type,
+                        ];
                     }
 
-                    if ($rowAccount->type === 'Debit') {
-                        // Debit account → increase
-                        $rowAccount->opening_balance += $rowAmount;
+                    if (! empty($v2Lines)) {
+                        app(\App\Services\VoucherService::class)->createVoucher([
+                            'voucher_type' => 'receipt',
+                            'date' => $request->receipt_date,
+                            'status' => 'posted',
+                            'party_type' => $partyType,
+                            'party_id' => $request->vendor_id,
+                            'remarks' => $request->remarks." (Ref: $rvid)",
+                        ], $v2Lines, auth()->id());
+
+                        \Log::info('V2 Voucher Created Successfully.');
                     } else {
-                        // Credit account → decrease
-                        $rowAccount->opening_balance -= $rowAmount;
+                        \Log::warning('V2 Lines Empty. Total Amt: '.$totalAmt);
                     }
-
-                    $rowAccount->save();
+                } else {
+                    \Log::warning("Credit Account ID missing for type: $vType");
                 }
+            } catch (\Exception $e) {
+                \Log::error('V2 Sync Error: '.$e->getMessage());
+                // Silently fail or return error message if preferred, but usually we log.
             }
 
             DB::commit();
@@ -734,9 +690,9 @@ class VoucherController extends Controller
             $voucher->pvid = $voucher->voucher_no;
             $voucher->receipt_date = $voucher->date->format('Y-m-d');
             $voucher->entry_date = $voucher->created_at->format('Y-m-d');
-            
+
             // Fix for view expecting 'amount' field
-            if (!isset($voucher->amount)) {
+            if (! isset($voucher->amount)) {
                 $voucher->amount = $voucher->total_amount;
             }
         }
@@ -907,27 +863,47 @@ class VoucherController extends Controller
         $type = $request->type;
         $data = [];
 
-        if ($type == 'vendor') {
-            $vendors = \Illuminate\Support\Facades\DB::table('vendors')->select('id', 'name as text')->get();
-            foreach ($vendors as $vendor) {
-                $ledger = \App\Models\VendorLedger::where('vendor_id', $vendor->id)->orderBy('id', 'desc')->first();
-                $vendor->closing_balance = $ledger ? $ledger->closing_balance : 0;
-                $data[] = $vendor;
+        try {
+            $balanceService = app(\App\Services\BalanceService::class);
+
+            if ($type == 'vendor') {
+                $vendors = \Illuminate\Support\Facades\DB::table('vendors')->select('id', 'name as text', 'phone as mobile', 'address', 'opening_balance')->get();
+                foreach ($vendors as $vendor) {
+                    // Use BalanceService to get real-time balance from Journal Entries
+                    $vendor->closing_balance = $balanceService->getVendorBalance($vendor->id);
+                    $data[] = $vendor;
+                }
+            } elseif ($type == 'customer') {
+                $customers = \App\Models\Customer::where('customer_type', '!=', 'Walking Customer')
+                    ->get(['id', 'customer_name', 'mobile', 'address', 'status', 'opening_balance']);
+
+                foreach ($customers as $customer) {
+                    // Use BalanceService to get real-time balance from Journal Entries
+                    $customer->closing_balance = $balanceService->getCustomerBalance($customer->id);
+
+                    // Format for Frontend
+                    $customer->text = $customer->customer_name;
+                    $customer->remarks = $customer->status;
+                    $data[] = $customer;
+                }
+            } elseif ($type == 'walkin') {
+                $customers = \App\Models\Customer::where('customer_type', 'Walking Customer')
+                    ->get(['id', 'customer_name', 'mobile', 'address', 'status', 'opening_balance']);
+
+                foreach ($customers as $customer) {
+                    // Use BalanceService to get real-time balance from Journal Entries
+                    $customer->closing_balance = $balanceService->getCustomerBalance($customer->id);
+
+                    // Format for Frontend
+                    $customer->text = $customer->customer_name;
+                    $customer->remarks = $customer->status;
+                    $data[] = $customer;
+                }
             }
-        } elseif ($type == 'customer') {
-            $customers = \Illuminate\Support\Facades\DB::table('customers')->select('id', 'customer_name as text', 'mobile', 'address', 'remarks')->get();
-            foreach ($customers as $customer) {
-                $ledger = \App\Models\CustomerLedger::where('customer_id', $customer->id)->orderBy('id', 'desc')->first();
-                $customer->closing_balance = $ledger ? $ledger->closing_balance : 0;
-                $data[] = $customer;
-            }
-        } elseif ($type == 'walkin') {
-            $customers = \Illuminate\Support\Facades\DB::table('customers')->where('customer_type', 'Walking Customer')->select('id', 'customer_name as text', 'mobile', 'address', 'remarks')->get();
-            foreach ($customers as $customer) {
-                $ledger = \App\Models\CustomerLedger::where('customer_id', $customer->id)->orderBy('id', 'desc')->first();
-                $customer->closing_balance = $ledger ? $ledger->closing_balance : 0;
-                $data[] = $customer;
-            }
+        } catch (\Exception $e) {
+            \Log::error('Party List Error: '.$e->getMessage());
+
+            return response()->json([]); // Return empty on error to avoid breaking JS
         }
 
         return response()->json($data);

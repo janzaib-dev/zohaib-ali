@@ -41,9 +41,7 @@
             width: 90px;
         }
 
-        .col-loose {
-            width: 90px;
-        }
+        /* Removed Loose Column */
 
         .col-pieces {
             width: 90px;
@@ -220,12 +218,11 @@
                                 <thead>
                                     <tr>
                                         <th class="col-product">Product</th>
-                                        <th class="col-qty">Total Pcs</th>
-                                        <th class="col-stock">Pack Size</th> <!-- Pieces Per Box -->
-                                        <th class="col-loose">Loose</th>
-                                        <th class="col-pieces">Boxes</th>
+                                        <th class="col-qty">Total Boxes</th> <!-- Was Total Pcs -->
+                                        <th class="col-stock">Pack Size</th>
+                                        <!-- Loose Column Removed -->
+                                        <th class="col-pieces">Pieces</th> <!-- Was Boxes -->
                                         <th class="col-price">Cost Price</th>
-                                        <!-- Per Box or Piece? Usually Per Box in Purchase -->
                                         <th class="col-disc">Disc %</th>
                                         <th class="col-disc-amt">Disc Amt</th>
                                         <th class="col-price-p">Cost/Pc</th>
@@ -238,7 +235,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr>
-                                        <td colspan="9" class="text-end fw-bold">Total:</td>
+                                        <td colspan="8" class="text-end fw-bold">Total:</td>
                                         <td class="text-end fw-bold"><span id="totalAmount">0.00</span></td>
                                         <td></td>
                                     </tr>
@@ -345,8 +342,11 @@
                 }
             });
 
-            // Dynamic Calculations
-            $('#purchaseTableBody').on('input', '.qty-pcs, .price, .item-disc-percent, .item-disc-amt', function() {
+            // Inputs -> Calc
+            $('#purchaseTableBody').on('input', '.box-qty, .price, .item-disc-percent, .item-disc-amt', function() {
+                if ($(this).hasClass('box-qty')) {
+                    normalizeQtyInput($(this), $(this).closest('tr'));
+                }
                 recalcRow($(this).closest('tr'));
                 recalcAll();
             });
@@ -356,134 +356,47 @@
                 recalcAll();
             });
 
-            // Product Search Handler
-            $(document).on('keyup', '.productSearch', function(e) {
-                const $input = $(this);
-                const q = $input.val().trim();
-                const $wrapper = $input.closest('td');
-                let $results = $wrapper.find('.search-results');
+            function normalizeQtyInput($input, $row) {
+                const val = $input.val();
+                const ppb = parseFloat($row.find('.pack-size').val()) || 1;
+                // Since this is Purchase, we assume box input logic applies whenever PPB > 1
+                // logic similar to shared_logic.blade.php
 
-                if ($results.length === 0) {
-                    $results = $('<ul class="search-results"></ul>').appendTo($wrapper);
-                }
+                if (ppb > 1 && val.includes('.')) {
+                    const parts = val.split('.');
+                    const boxes = parseInt(parts[0]) || 0;
+                    const looseStr = parts[1];
 
-                if (q.length < 1) {
-                    $results.hide();
-                    return;
-                }
+                    if (looseStr && looseStr !== '') {
+                        const loose = parseInt(looseStr);
+                        // If loose pieces >= pack size, convert to boxes
+                        if (loose >= ppb) {
+                            const extraBoxes = Math.floor(loose / ppb);
+                            const newLoose = loose % ppb;
+                            const newBoxes = boxes + extraBoxes;
 
-                // AJAX Search
-                $.ajax({
-                    url: "{{ route('search-products') }}", // Ensure this route exists and returns JSON
-                    type: "GET",
-                    data: {
-                        q: q
-                    },
-                    success: function(data) {
-                        $results.empty();
-                        if (data.length > 0) {
-                            data.forEach(p => {
-                                const price = p.trade_price ||
-                                    0; // Purchase price usually trade price? User can edit
-                                const name = p.item_name;
-                                const code = p.item_code || '';
-                                const ppb = p.pieces_per_box || 1;
-
-                                $results.append(`
-                                    <li class="search-result-item" 
-                                        data-id="${p.id}" 
-                                        data-name="${name}" 
-                                        data-price="${price}"
-                                        data-ppb="${ppb}">
-                                        ${name} (${code})
-                                    </li>
-                                `);
-                            });
-                            $results.show();
-                        } else {
-                            $results.hide();
+                            let newVal = newBoxes.toString();
+                            if (newLoose > 0) {
+                                newVal += '.' + newLoose;
+                            }
+                            // Update input value
+                            $input.val(newVal);
                         }
                     }
-                });
-            });
-
-            // Select Product
-            $(document).on('click', '.search-result-item', function() {
-                const $li = $(this);
-                const $row = $li.closest('tr');
-                console.log($li);
-
-                $row.find('.product_id').val($li.data('id'));
-                $row.find('.productSearch').val($li.data('name'));
-                $row.find('.price').val($li.data('price')); // Cost Price
-                $row.find('.pack-size').val($li.data('ppb')); // Pieces per box
-
-                $li.closest('.search-results').hide();
-
-                // Focus qty
-                $row.find('.qty-pcs').focus();
-            });
-
-            // Hide search on click outside
-            $(document).on('click', function(e) {
-                if (!$(e.target).closest('.productSearch').length) {
-                    $('.search-results').hide();
                 }
-            });
-
-            // --- Payment Section Logic ---
-            // Add Payment Row
-            $('#btnAddPayment').click(function() {
-                const row = `
-                    <div class="d-flex gap-2 align-items-center mb-2 payment-row">
-                         <select class="form-select rv-account" name="payment_account_id[]" style="max-width: 300px">
-                                    <option value="" selected disabled>Select Account</option>
-                                    @foreach ($accounts as $acc)
-                                        <option value="{{ $acc->id }}">{{ $acc->title }}</option>
-                                    @endforeach
-                                </select>
-                        <input type="number" class="form-control text-end payment-amount" name="payment_amount[]" placeholder="Amount" style="max-width:150px">
-                        <button type="button" class="btn btn-sm btn-danger remove-payment">x</button>
-                    </div>
-                `;
-                $('#paymentWrapper').append(row);
-            });
-
-            // Remove Payment Row
-            $(document).on('click', '.remove-payment', function() {
-                $(this).closest('.payment-row').remove();
-                recalcPaymentTotal();
-            });
-
-            // Recalculate Payment Total
-            $('#paymentWrapper').on('input', '.payment-amount', function() {
-                recalcPaymentTotal();
-            });
-
-            function recalcPaymentTotal() {
-                let totalPaid = 0;
-                $('.payment-amount').each(function() {
-                    let val = parseFloat($(this).val()) || 0;
-                    totalPaid += val;
-                });
-                $('#totalPaid').text(totalPaid.toFixed(2));
             }
 
-        });
-
-        function addBlankRow() {
-            const html = `
+            function addBlankRow() {
+                const rowCount = $('#purchaseTableBody tr').length;
+                const html = `
                 <tr>
-                    <td>
-                        <div style="position:relative;">
-                            <input type="text" class="form-control productSearch" placeholder="Search Product...">
-                            <input type="hidden" name="product_id[]" class="product_id">
-                        </div>
+                    <td style="min-width: 250px;">
+                        <select class="form-select product-select2" name="product_id[]"></select>
                     </td>
-                    <td><input type="number" name="qty[]" class="form-control qty-pcs" value="1"></td>
+                    <td><input type="text" class="form-control box-qty" value="0" placeholder="Boxes"></td>
                     <td><input type="number" class="form-control input-readonly pack-size" value="1" readonly></td>
-                    <td><input type="number" class="form-control input-readonly loose" value="0" readonly></td>
-                    <td><input type="number" class="form-control input-readonly boxes" value="0" readonly></td>
+                    <!-- Loose Column Removed -->
+                    <td><input type="number" name="qty[]" class="form-control input-readonly qty-pcs" value="0" readonly></td>
                     <td><input type="number" name="price[]" class="form-control price" value="0"></td>
                     <td><input type="number" name="item_discount[]" class="form-control item-disc-percent" value="0"></td>
                     <td><input type="number" class="form-control item-disc-amt" value="0" readonly></td>
@@ -492,69 +405,154 @@
                     <td class="text-center"><button type="button" class="btn btn-sm btn-danger remove-row">x</button></td>
                 </tr>
             `;
-            $('#purchaseTableBody').append(html);
-        }
+                const $row = $(html);
+                $('#purchaseTableBody').append($row);
+                initProductSelect2($row.find('.product-select2'));
+            }
 
-        function recalcRow($row) {
-            const qty = parseFloat($row.find('.qty-pcs').val()) || 0;
-            const price = parseFloat($row.find('.price').val()) ||
-                0; // Assume this is Price PER PIECE for now, or Per Box? 
-            // In Sales it was: User enters Pieces, Price is Per Piece.
-            // Let's assume Purchase also uses Per Piece or we need Per Box logic.
-            // If user enters 'Cost Price', is it per box? 
-            // Usually in this system, 'price' seems to be unit price (per piece) based on sales logic.
-            // But let's check pack size.
+            function initProductSelect2($el) {
+                $el.select2({
+                    placeholder: 'Search Product (Name / SKU / Barcode)',
+                    allowClear: true,
+                    width: '100%',
+                    ajax: {
+                        url: '{{ route('products.ajax.search') }}',
+                        dataType: 'json',
+                        delay: 250,
+                        data: function(params) {
+                            return {
+                                term: params.term,
+                                page: params.page || 1
+                            };
+                        },
+                        processResults: function(data, params) {
+                            params.page = params.page || 1;
+                            return {
+                                results: data.results,
+                                pagination: {
+                                    more: data.pagination.more
+                                }
+                            };
+                        },
+                        cache: true
+                    },
+                    minimumInputLength: 0,
+                    templateResult: formatProduct,
+                    templateSelection: formatSelection
+                });
 
-            const ppb = parseFloat($row.find('.pack-size').val()) || 1;
+                $el.on('select2:select', function(e) {
+                    const data = e.params.data;
+                    const $row = $(this).closest('tr');
 
-            // Calculate Boxes/Loose
-            const boxes = Math.floor(qty / ppb);
-            const loose = qty % ppb;
+                    $row.find('.price').val(data.trade_price || 0);
+                    $row.find('.pack-size').val(data.ppb || 1);
+                    $row.data('sizemode', data.size_mode || 'std');
 
-            $row.find('.boxes').val(boxes);
-            $row.find('.loose').val(loose);
+                    // Trigger recalc
+                    $row.find('.box-qty').focus();
+                    recalcRow($row);
+                    recalcAll();
+                });
+            }
 
-            // Discount
-            const discPct = parseFloat($row.find('.item-disc-percent').val()) || 0;
+            function formatProduct(repo) {
+                if (repo.loading) return repo.text;
+                let stock = repo.stock !== undefined ? repo.stock : 0;
+                let sku = repo.sku || 'N/A';
+                let badgeClass = 'bg-info'; // Neutral for Purchase
 
-            // Total Amount calculation
-            // If price is per Piece:
-            let total = qty * price;
+                return $(`
+            <div class="clearfix">
+                <div class="float-start">
+                    <div class="fw-bold">${repo.name || repo.text}</div>
+                    <small class="text-muted">SKU: ${sku}</small>
+                </div>
+                <div class="float-end">
+                    <span class="badge ${badgeClass} rounded-pill">Stock: ${stock}</span>
+                </div>
+            </div>
+            `);
+            }
 
-            // Discount Amount
-            const discAmt = total * (discPct / 100);
-            $row.find('.item-disc-amt').val(discAmt.toFixed(2));
+            function formatSelection(repo) {
+                return repo.name || repo.text;
+            }
 
-            total = total - discAmt;
+            function recalcRow($row) {
+                // Read BOX input
+                const boxesStr = $row.find('.box-qty').val() || "0";
+                const ppb = parseFloat($row.find('.pack-size').val()) || 1;
 
-            $row.find('.row-total').val(total.toFixed(2));
-            $row.find('.cost-pc').val(price.toFixed(2)); // Just showing unit price
-        }
+                let totalPieces = 0;
+                let boxes = 0;
+                let loose = 0;
 
-        function recalcAll() {
-            let totalQty = 0;
-            let subtotal = 0;
+                // Box.Loose Logic (Similar to shared_logic)
+                if (ppb > 1 && boxesStr.includes('.')) {
+                    const parts = boxesStr.split('.');
+                    boxes = parseInt(parts[0]) || 0;
+                    loose = parts[1] ? parseInt(parts[1]) : 0;
 
-            $('#purchaseTableBody tr').each(function() {
-                const qty = parseFloat($(this).find('.qty-pcs').val()) || 0;
-                const total = parseFloat($(this).find('.row-total').val()) || 0;
+                    totalPieces = (boxes * ppb) + loose;
+                } else {
+                    // Whole boxes
+                    boxes = parseFloat(boxesStr) || 0;
+                    totalPieces = boxes * ppb;
+                }
 
-                totalQty += qty;
-                subtotal += total;
-            });
+                // Update the hidden/readonly Piece Input (which is sent as qty[])
+                $row.find('.qty-pcs').val(totalPieces);
 
-            $('#tQty').text(totalQty);
-            $('#tSub').text(subtotal.toFixed(2));
-            $('#subtotalInput').val(subtotal.toFixed(2));
+                const price = parseFloat($row.find('.price').val()) || 0;
 
-            const billDisc = parseFloat($('#billDiscount').val()) || 0;
-            const extraCost = parseFloat($('#extraCost').val()) || 0;
+                // Discount
+                const discPct = parseFloat($row.find('.item-disc-percent').val()) || 0;
 
-            const net = subtotal - billDisc + extraCost;
+                // Total Amount calculation
+                let total = totalPieces * price;
 
-            $('#tPayable').text(net.toFixed(2));
-            $('#netAmountInput').val(net.toFixed(2));
-            $('#totalAmount').text(subtotal.toFixed(2));
-        }
+                // Discount Amount
+                const discAmt = total * (discPct / 100);
+                $row.find('.item-disc-amt').val(discAmt.toFixed(2));
+
+                total = total - discAmt;
+
+                $row.data('total-pieces', totalPieces);
+
+                $row.find('.row-total').val(total.toFixed(2));
+                $row.find('.cost-pc').val(price.toFixed(2));
+            }
+
+            function recalcAll() {
+                let totalQty = 0;
+                let subtotal = 0;
+
+                $('#purchaseTableBody tr').each(function() {
+                    let qty = $(this).data('total-pieces');
+                    // Fallback if data attribute not set
+                    if (qty === undefined) {
+                        qty = parseFloat($(this).find('.qty-pcs').val()) || 0;
+                    }
+                    const total = parseFloat($(this).find('.row-total').val()) || 0;
+
+                    totalQty += qty;
+                    subtotal += total;
+                });
+
+                $('#tQty').text(totalQty.toFixed(2));
+                $('#tSub').text(subtotal.toFixed(2));
+                $('#subtotalInput').val(subtotal.toFixed(2));
+
+                const billDisc = parseFloat($('#billDiscount').val()) || 0;
+                const extraCost = parseFloat($('#extraCost').val()) || 0;
+
+                const net = subtotal - billDisc + extraCost;
+
+                $('#tPayable').text(net.toFixed(2));
+                $('#netAmountInput').val(net.toFixed(2));
+                $('#totalAmount').text(subtotal.toFixed(2));
+            }
+        });
     </script>
 @endsection

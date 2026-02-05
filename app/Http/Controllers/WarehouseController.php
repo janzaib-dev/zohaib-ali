@@ -28,17 +28,29 @@ class WarehouseController extends Controller
             
             if ($ws) {
                 // Self-healing for display: if pieces missing but boxes exist, calculate
-                $stockVal = $ws->total_pieces;
-                if ($stockVal <= 0 && $ws->quantity > 0) {
-                    $ppb = ($ws->product && $ws->product->pieces_per_box > 0) ? $ws->product->pieces_per_box : 1;
-                    $stockVal = $ws->quantity * $ppb;
+                $pieces = $ws->total_pieces;
+                $ppb = ($ws->product && $ws->product->pieces_per_box > 0) ? $ws->product->pieces_per_box : 1;
+
+                if ($pieces <= 0 && $ws->quantity > 0) {
+                    $pieces = $ws->quantity * $ppb;
                 }
+                
+                $stockVal = $pieces;
+
+                // We return TOTAL PIECES always. 
+                // The frontend is responsible for converting to "Boxes.Loose" format 
+                // based on the product's size_mode and pieces_per_box available in the DOM.
+                // if ($ws->product && ($ws->product->size_mode === 'by_cartons' || $ws->product->size_mode === 'by_size')) {
+                //      $stockVal = round($pieces / $ppb, 2);
+                // }
             }
 
             return [
                 'warehouse_id' => $warehouse->id,
                 'warehouse_name' => $warehouse->warehouse_name,
                 'stock' => $stockVal,
+                'ppb' => $ws && $ws->product ? $ws->product->pieces_per_box : 1,
+                'size_mode' => $ws && $ws->product ? $ws->product->size_mode : 'std',
             ];
         });
 

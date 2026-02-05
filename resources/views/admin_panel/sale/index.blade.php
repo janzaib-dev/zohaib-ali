@@ -95,7 +95,7 @@
                                                 class="btn btn-sm btn-info text-white">Invoice</a>
                                             <a href="{{ route('sales.dc', $sale->id) }}" target="_blank"
                                                 class="btn btn-sm btn-secondary text-white">DC</a>
-                                            <a href="{{ route('sales.recepit', $sale->id) }}" target="_blank"
+                                            <a href="{{ route('sales.receipt', $sale->id) }}" target="_blank"
                                                 class="btn btn-sm btn-success text-white">Receipt</a>
 
                                             @if ($sale->sale_status !== 'returned')
