@@ -9,7 +9,7 @@ use App\Models\Product;
 use App\Models\ProductBooking;
 use App\Models\Sale;
 use App\Models\SaleItem;
-use App\Models\SalesReturn;
+use App\Models\SaleReturn;
 use App\Models\Stock;
 use App\Models\Warehouse;
 use App\Models\WarehouseStock;
@@ -61,7 +61,20 @@ class SaleController extends Controller
                 'warehouse_stocks.quantity as wh_box_qty'
             )
             ->limit(50)
-            ->get();
+            ->get()
+            ->map(function ($product) {
+                // Robust Calculation for Search Dropdown
+                $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
+                $boxQty = (float) $product->wh_box_qty;
+                $calcPieces = $boxQty * $ppb;
+
+                // If calculated pieces from boxes differs from stored pieces, trust boxes
+                if (abs($calcPieces - $product->wh_stock) > 0.1) {
+                    $product->wh_stock = $calcPieces;
+                }
+
+                return $product;
+            });
 
         return response()->json($products);
     }
@@ -132,7 +145,7 @@ class SaleController extends Controller
         $isWithinDeadline = now()->lte($returnDeadline);
 
         // Get already returned quantities for this sale
-        $alreadyReturned = \App\Models\SalesReturn::where('sale_id', $sale->id)
+        $alreadyReturned = \App\Models\SaleReturn::where('sale_id', $sale->id)
             ->whereIn('return_status', ['approved', 'completed'])
             ->get();
 
@@ -214,7 +227,7 @@ class SaleController extends Controller
         $quantities = $request->qty ?? [];
 
         // Get already returned quantities
-        $alreadyReturned = \App\Models\SalesReturn::where('sale_id', $sale->id)
+        $alreadyReturned = \App\Models\SaleReturn::where('sale_id', $sale->id)
             ->whereIn('return_status', ['approved', 'completed', 'pending']) // Include pending to prevent duplicate submissions
             ->get();
 
@@ -321,7 +334,7 @@ class SaleController extends Controller
             }
 
             // Create Sale Return Record
-            $saleReturn = new SalesReturn;
+            $saleReturn = new SaleReturn;
             $saleReturn->sale_id = $request->sale_id;
             $saleReturn->customer = $request->customer;
             $saleReturn->reference = $request->reference;
@@ -403,18 +416,18 @@ class SaleController extends Controller
 
     public function salereturnview()
     {
-        $salesReturns = SalesReturn::with(['sale.customer_relation', 'customer_relation'])->orderBy('created_at', 'desc')->get();
+        $SaleReturns = SaleReturn::with(['sale.customer_relation', 'customer_relation'])->orderBy('created_at', 'desc')->get();
 
         // Calculate stats
         $stats = [
-            'total' => $salesReturns->count(),
-            'pending' => $salesReturns->where('return_status', 'pending')->count(),
-            'approved' => $salesReturns->where('return_status', 'approved')->count(),
-            'rejected' => $salesReturns->where('return_status', 'rejected')->count(),
-            'completed' => $salesReturns->where('return_status', 'completed')->count(),
+            'total' => $SaleReturns->count(),
+            'pending' => $SaleReturns->where('return_status', 'pending')->count(),
+            'approved' => $SaleReturns->where('return_status', 'approved')->count(),
+            'rejected' => $SaleReturns->where('return_status', 'rejected')->count(),
+            'completed' => $SaleReturns->where('return_status', 'completed')->count(),
         ];
 
-        return view('admin_panel.sale.return.index', compact('salesReturns', 'stats'));
+        return view('admin_panel.sale.return.index', compact('SaleReturns', 'stats'));
     }
 
     /**
@@ -423,7 +436,7 @@ class SaleController extends Controller
     public function approveReturn($id)
     {
         try {
-            $return = SalesReturn::findOrFail($id);
+            $return = SaleReturn::findOrFail($id);
 
             // Check if already processed
             if ($return->return_status !== 'pending') {
@@ -657,7 +670,7 @@ class SaleController extends Controller
         ]);
 
         try {
-            $return = SalesReturn::findOrFail($id);
+            $return = SaleReturn::findOrFail($id);
 
             // Check if already processed
             if ($return->return_status !== 'pending') {
@@ -685,7 +698,7 @@ class SaleController extends Controller
      */
     public function saleReturnDetail($id)
     {
-        $saleReturn = SalesReturn::with('customer_relation')->findOrFail($id);
+        $saleReturn = SaleReturn::with('customer_relation')->findOrFail($id);
         $sale = Sale::with(['customer_relation', 'items.product'])->findOrFail($saleReturn->sale_id);
 
         // Parse return items
@@ -716,7 +729,7 @@ class SaleController extends Controller
         $payments = \App\Models\CustomerPayment::where('note', 'like', "%Sale Return #{$saleReturn->id}%")->get();
 
         // Get journal entries
-        $journalEntries = \App\Models\JournalEntry::where('source_type', 'App\Models\SalesReturn')
+        $journalEntries = \App\Models\JournalEntry::where('source_type', 'App\Models\SaleReturn')
             ->where('source_id', $saleReturn->id)
             ->with('account')
             ->get();
@@ -854,7 +867,7 @@ class SaleController extends Controller
             'sale' => $sale,
             'saleItems' => $items,
             'previousBalance' => $previousBalance,
-            'currentBalance' => $currentBalance
+            'currentBalance' => $currentBalance,
         ]);
     }
 
@@ -1092,7 +1105,7 @@ class SaleController extends Controller
                     // --- PROFESSIONAL LEDGER POSTING (ENTRY 1: THE INVOICE) ---
                     // Create a Journal Voucher for the Sale Invoice (Debit AR, Credit Sales)
                     $custForVoucher = $sale->customer_relation ?? \App\Models\Customer::find($sale->customer_id);
-                    
+
                     if ($custForVoucher) {
                         $balanceService->createSaleVoucher(
                             $custForVoucher,

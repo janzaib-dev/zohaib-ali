@@ -125,11 +125,11 @@
 
     <link rel="stylesheet" href="{{ asset('assets/css/owl.carousel.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/css/owl.theme.default.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/font-awesome.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/themify-icons.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/ionicons.min.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/et-line.css') }}">
-    <link rel="stylesheet" href="{{ asset('assets/css/feather.css') }}">
+    {{-- <link rel="stylesheet" href="{{ asset('assets/css/font-awesome.min.css') }}"> --}}
+    {{-- <link rel="stylesheet" href="{{ asset('assets/css/themify-icons.css') }}"> --}}
+    {{-- <link rel="stylesheet" href="{{ asset('assets/css/ionicons.min.css') }}"> --}}
+    {{-- <link rel="stylesheet" href="{{ asset('assets/css/et-line.css') }}"> --}}
+    {{-- <link rel="stylesheet" href="{{ asset('assets/css/feather.css') }}"> --}}
     <link rel="stylesheet" href="{{ asset('assets/css/flag-icon.min.css') }}">
     <script src="{{ asset('assets/js/modernizr-2.8.3.min.js') }}"></script>
     <link rel="stylesheet" href="{{ asset('assets/css/metisMenu.css') }}">
@@ -338,7 +338,7 @@
                                 <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown"
                                     id="profileDropdown">
                                     <span class="profile_name">{{ Auth::user()->name }} <i
-                                            class="feather ft-chevron-down"></i></span>
+                                            class="fas fa-chevron-down"></i></span>
                                 </a>
                                 <div class="dropdown-menu dropdown-menu-right navbar-dropdown pt-2"
                                     aria-labelledby="profileDropdown">
@@ -346,7 +346,7 @@
                                     <form method="POST" action="{{ route('logout') }}">
                                         @csrf
                                         <button type="submit" class="dropdown-item">
-                                            <i class="ti-power-off text-dark mr-3"></i> Logout
+                                            <i class="fas fa-power-off text-dark mr-3"></i> Logout
                                         </button>
                                     </form>
                                     {{-- </a> --}}
@@ -360,7 +360,7 @@
                                Mobile Menu
                    *===========================-->
                         <button class="navbar-toggler align-self-center" type="button" data-toggle="minimize">
-                            <span class="feather ft-menu text-white"></span>
+                            <span class="fas fa-bars text-white"></span>
                         </button>
                         <!--=========================*
                            End Mobile Menu
@@ -376,8 +376,7 @@
                     *===========================-->
                         <li class="nav-item">
                             <a href="{{ url('/home') }}" class="nav-link"><i
-                                    class="menu_icon feather ft-home"></i><span
-                                    class="menu-title">Dashboard</span></a>
+                                    class="menu_icon fas fa-home"></i><span class="menu-title">Dashboard</span></a>
 
                         </li>
                         <!--=========================*
@@ -508,7 +507,7 @@
                             @canany(['chart.of.accounts.view', 'expense.voucher.view', 'receipts.voucher.view',
                                 'journal.voucher.view', 'payment.voucher.view', 'income.voucher.view'])
                                 <a href="#" class="nav-link">
-                                    <i class="menu_icon feather ft-clipboard"></i>
+                                    <i class="menu_icon fas fa-clipboard-list"></i>
                                     <span class="menu-title">Vouchers</span>
                                     <i class="menu-arrow"></i>
                                 </a>
@@ -546,7 +545,7 @@
                             @canany(['item.stock.report.view', 'purchase.report.view', 'sale.report.view',
                                 'customer.ledger.view', 'inventory.onhand.view'])
                                 <a href="#" class="nav-link">
-                                    <i class="menu_icon feather ft-clipboard"></i>
+                                    <i class="menu_icon fas fa-clipboard-list"></i>
                                     <span class="menu-title">Reports</span>
                                     <i class="menu-arrow"></i>
                                 </a>
@@ -584,7 +583,7 @@
                                 'hr.attendance.view', 'hr.payroll.view', 'hr.leaves.view', 'hr.salary.structure.view',
                                 'hr.shifts.view', 'hr.holidays.view', 'hr.loans.view', 'hr.biometric.devices.view'])
                                 <a href="#" class="nav-link">
-                                    <i class="menu_icon feather ft-users"></i>
+                                    <i class="menu_icon fas fa-users-cog"></i>
                                     <span class="menu-title">HR Management</span>
                                     <i class="menu-arrow"></i>
                                 </a>
@@ -642,7 +641,7 @@
                         <li class="nav-item">
                             @canany(['users.view', 'roles.view', 'permissions.view', 'branches.view'])
                                 <a href="#" class="nav-link">
-                                    <i class="menu_icon feather ft-clipboard"></i>
+                                    <i class="menu_icon fas fa-clipboard-list"></i>
                                     <span class="menu-title">User Management</span>
                                     <i class="menu-arrow"></i>
                                 </a>
@@ -673,7 +672,7 @@
                         @if (auth()->check() && (auth()->user()->email === 'admin@admin.com' || auth()->user()->hasRole('Super Admin')))
                             <li class="nav-item">
                                 <a href="{{ route('settings.index') }}" class="nav-link">
-                                    <i class="menu_icon feather ft-settings"></i>
+                                    <i class="menu_icon fas fa-cog"></i>
                                     <span class="menu-title">Settings</span>
                                 </a>
                             </li>

@@ -206,13 +206,16 @@ Route::middleware('auth')->group(function () {
     route::post('/Purchase/store', [PurchaseController::class, 'store'])->middleware('permission:purchases.create|purchases.edit')->name('store.Purchase');
     Route::get('/purchase/{id}/edit', [PurchaseController::class, 'edit'])->middleware('permission:purchases.edit')->name('purchase.edit');
     Route::put('/purchase/{id}', [PurchaseController::class, 'update'])->middleware('permission:purchases.edit')->name('purchase.update');
+    Route::get('/purchase/{id}/confirm', [PurchaseController::class, 'confirm'])->middleware('permission:purchases.create|purchases.edit')->name('purchase.confirm');
     Route::delete('/purchase/{id}', [PurchaseController::class, 'destroy'])->middleware('permission:purchases.delete')->name('purchase.destroy');
     Route::get('/search-products', [ProductController::class, 'searchProducts'])->name('search-products');
     Route::get('/products/ajax-search', [ProductController::class, 'ajaxSearch'])->name('products.ajax.search');
     Route::get('/get-price', [ProductController::class, 'getPrice'])->name('get-price');
     Route::get('/purchase/{id}/invoice', [PurchaseController::class, 'Invoice'])->middleware('permission:purchases.view')->name('purchase.invoice');
+    Route::get('/purchase/{id}/receipt', [PurchaseController::class, 'receipt'])->middleware('permission:purchases.view')->name('purchase.receipt');
 
     Route::get('purchase/return', [PurchaseController::class, 'purchaseReturnIndex'])->name('purchase.return.index');
+    Route::get('purchase/return/{id}/view', [PurchaseController::class, 'viewReturn'])->name('purchase.return.view');
     Route::get('purchase/return/{id}', [PurchaseController::class, 'showReturnForm'])->name('purchase.return.show');
     Route::post('purchase/return/store', [PurchaseController::class, 'storeReturn'])->name('purchase.return.store');
 
@@ -252,12 +255,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/search-product-name', [SaleController::class, 'searchpname'])->name('search-product-name');
     Route::post('/sales/store', [SaleController::class, 'store'])->middleware('permission:sales.create')->name('sales.store');
     Route::post('/sales/post-final', [SaleController::class, 'postFinal'])->middleware('permission:sales.create')->name('sales.post_final');
-    Route::get('/sales/{id}/return', [SaleController::class, 'saleretun'])->middleware('permission:sales.create')->name('sales.return.create');
-    Route::post('/sales/sales-return/store', [SaleController::class, 'storeSaleReturn'])->middleware('permission:sales.create')->name('sales.return.store');
-    Route::get('/sale/sale-returns', [App\Http\Controllers\SaleController::class, 'salereturnview'])->middleware('permission:sales.view')->name('sale.returns.index');
-    Route::get('/sales/sale-return/{id}/detail', [App\Http\Controllers\SaleController::class, 'saleReturnDetail'])->middleware('permission:sales.view')->name('sale.return.detail');
-    Route::post('/sales/sale-return/{id}/approve', [App\Http\Controllers\SaleController::class, 'approveReturn'])->middleware('permission:sales.edit')->name('sale.return.approve');
-    Route::post('/sales/sale-return/{id}/reject', [App\Http\Controllers\SaleController::class, 'rejectReturn'])->middleware('permission:sales.edit')->name('sale.return.reject');
+
+    // Sale Return Routes - NEW SYSTEM
+    Route::get('sale/return', [App\Http\Controllers\SaleReturnController::class, 'saleReturnIndex'])->middleware('permission:sales.view')->name('sale.return.index');
+    Route::get('sale/return/{id}/view', [App\Http\Controllers\SaleReturnController::class, 'viewReturn'])->middleware('permission:sales.view')->name('sale.return.view');
+    Route::get('sale/return/{id}', [App\Http\Controllers\SaleReturnController::class, 'showReturnForm'])->middleware('permission:sales.create')->name('sale.return.show');
+    Route::post('sale/return/store', [App\Http\Controllers\SaleReturnController::class, 'processSaleReturn'])->middleware('permission:sales.create')->name('sale.return.store');
+
     Route::get('/sales/{id}/invoice', [SaleController::class, 'saleinvoice'])->middleware('permission:sales.view')->name('sales.invoice');
     Route::get('/sales/{id}/edit', [SaleController::class, 'saleedit'])->middleware('permission:sales.edit')->name('sales.edit');
     Route::put('/sales/{id}', [SaleController::class, 'updatesale'])->middleware('permission:sales.edit')->name('sales.update');

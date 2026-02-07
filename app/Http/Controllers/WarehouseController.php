@@ -27,28 +27,27 @@ class WarehouseController extends Controller
             $stockVal = 0;
             
             if ($ws) {
-                // Self-healing for display: if pieces missing but boxes exist, calculate
-                $pieces = $ws->total_pieces;
                 $ppb = ($ws->product && $ws->product->pieces_per_box > 0) ? $ws->product->pieces_per_box : 1;
-
-                if ($pieces <= 0 && $ws->quantity > 0) {
-                    $pieces = $ws->quantity * $ppb;
-                }
                 
-                $stockVal = $pieces;
-
-                // We return TOTAL PIECES always. 
-                // The frontend is responsible for converting to "Boxes.Loose" format 
-                // based on the product's size_mode and pieces_per_box available in the DOM.
-                // if ($ws->product && ($ws->product->size_mode === 'by_cartons' || $ws->product->size_mode === 'by_size')) {
-                //      $stockVal = round($pieces / $ppb, 2);
-                // }
+                // Robust Calculation: 
+                // Trust 'quantity' (Boxes) as the primary source if it exists, as users usually trade in boxes.
+                // Recalculate pieces from quantity to ensure consistency.
+                $calcPieces = $ws->quantity * $ppb;
+                
+                // Use calculated pieces if it differs significantly from stored total_pieces (e.g. data sync issue)
+                // or if total_pieces is 0 but quantity > 0.
+                if (abs($calcPieces - $ws->total_pieces) > 0.1) {
+                     $stockVal = $calcPieces;
+                } else {
+                     $stockVal = $ws->total_pieces;
+                }
             }
 
             return [
                 'warehouse_id' => $warehouse->id,
                 'warehouse_name' => $warehouse->warehouse_name,
-                'stock' => $stockVal,
+                'stock' => $stockVal, // Total pieces
+                'boxes' => $ws ? $ws->quantity : 0, // Actual box quantity from DB
                 'ppb' => $ws && $ws->product ? $ws->product->pieces_per_box : 1,
                 'size_mode' => $ws && $ws->product ? $ws->product->size_mode : 'std',
             ];
