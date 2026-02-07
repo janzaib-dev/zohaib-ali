@@ -25,4 +25,5 @@ class Purchase extends Model
     public function warehouse(){ return $this->belongsTo(Warehouse::class); }
     public function vendor()   { return $this->belongsTo(Vendor::class, 'vendor_id'); }
     public function items()    { return $this->hasMany(PurchaseItem::class); }
+    public function returns()  { return $this->hasMany(PurchaseReturn::class); }
 }

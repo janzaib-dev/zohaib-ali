@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('sales_returns', function (Blueprint $table) {
-            $table->json('refund_details')->nullable()->after('return_note');
+        Schema::table('purchase_returns', function (Blueprint $table) {
+            $table->foreignId('purchase_id')->nullable()->after('id')->constrained('purchases')->onDelete('set null');
         });
     }
 
@@ -21,8 +21,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('sales_returns', function (Blueprint $table) {
-            //
+        Schema::table('purchase_returns', function (Blueprint $table) {
+            $table->dropForeign(['purchase_id']);
+            $table->dropColumn('purchase_id');
         });
     }
 };

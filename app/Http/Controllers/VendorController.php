@@ -58,7 +58,18 @@ class VendorController extends Controller
     {
         if (Auth::check()) {
             $userId = Auth::id();
+            // Get all ledgers
             $VendorLedgers = VendorLedger::where('admin_or_user_id', $userId)->with('vendor')->get();
+            
+            // Recalculate balances from Journal Entries
+            $balanceService = app(\App\Services\BalanceService::class);
+            
+            foreach ($VendorLedgers as $ledger) {
+                // Calculate actual closing balance from journal entries
+                // Note: BalanceService::getVendorBalance returns positive for Credit (Payable)
+                $ledger->formatted_closing_balance = $balanceService->getVendorBalance($ledger->vendor_id);
+            }
+            
             return view('admin_panel.vendors.vendors_ledger', compact('VendorLedgers'));
         } else {
             return redirect()->back();

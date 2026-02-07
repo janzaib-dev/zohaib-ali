@@ -8,8 +8,8 @@
                     <div class="col-lg-12">
 
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h3>Purchase Returns</h3>
-                            <a class="btn btn-primary" href="{{ route('Purchase.home') }}">Back to Purchases</a>
+                            <h3>Sale Returns</h3>
+                            <a class="btn btn-primary" href="{{ route('sale.index') }}">Back to Purchases</a>
                         </div>
 
                         <div class="border mt-1 shadow rounded bg-white">
@@ -19,7 +19,7 @@
                                         <tr>
                                             <th>ID</th>
                                             <th>Invoice #</th>
-                                            <th>Vendor</th>
+                                            <th>customer</th>
                                             <th>Warehouse</th>
                                             <th>Return Date</th>
                                             <th>Return Amount</th>
@@ -50,7 +50,7 @@
                                                             {{ $return->purchase->invoice_no }}</small>
                                                     @endif
                                                 </td>
-                                                <td>{{ $return->vendor->name ?? 'N/A' }}</td>
+                                                <td>{{ $return->customer->name ?? 'N/A' }}</td>
                                                 <td>{{ $return->warehouse->warehouse_name ?? 'N/A' }}</td>
                                                 <td>{{ \Carbon\Carbon::parse($return->return_date)->format('Y-m-d') }}</td>
 
@@ -107,7 +107,7 @@
                                                 </td>
 
                                                 <td>
-                                                    <a href="{{ route('purchase.return.view', $return->id) }}"
+                                                    <a href="{{ route('sale.return.view', $return->id) }}"
                                                         class="btn btn-sm btn-primary">View</a>
                                                 </td>
                                             </tr>
@@ -145,3 +145,4 @@
         </div>
     </div>
 @endsection
+

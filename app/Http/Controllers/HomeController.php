@@ -32,7 +32,7 @@ class HomeController extends Controller
             $totalPurchases = Auth::user()->can('purchases.view') ? DB::table('purchases')->sum('net_amount') : 0;
             $totalPurchaseReturns = Auth::user()->can('purchase.returns.view') ? DB::table('purchase_returns')->sum('net_amount') : 0;
             $totalSales = Auth::user()->can('sales.view') ? DB::table('sales')->sum('total_net') : 0;
-            $totalSalesReturns = Auth::user()->can('sales.returns.view') ? DB::table('sales_returns')->sum('total_net') : 0;
+            $totalSalesReturns = Auth::user()->can('sales.returns.view') ? DB::table('sale_returns')->sum('net_amount') : 0;
 
             // Financial Summary (Accounting Based)
             $financialSummary = [];

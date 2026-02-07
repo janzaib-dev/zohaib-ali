@@ -48,6 +48,6 @@ class Sale extends Model
 
     public function returns()
     {
-        return $this->hasMany(SalesReturn::class, 'sale_id');
+        return $this->hasMany(SaleReturn::class, 'sale_id');
     }
 }

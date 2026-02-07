@@ -90,7 +90,8 @@
         let stock = repo.stock !== undefined ? repo.stock : 0;
         let sku = repo.sku || 'N/A';
         let badgeClass = stock > 0 ? 'bg-success' : 'bg-danger';
-
+            console.log(repo);
+            
         return $(`
         <div class="clearfix">
             <div class="float-start">
@@ -151,7 +152,7 @@
 
     <!-- Qty Pieces (Input) -->
     <td class="col-qty">
-      <input type="text" class="form-control sales-qty text-end" name="qty[]" id="sales-qty" placeholder="Pcs">
+      <input type="text" class="form-control sales-qty text-end" name="qty[]" id="sales-qty" placeholder="Boxes + Pcs">
     </td>
 
     <!-- PACK QTY (Hidden) -->
@@ -262,14 +263,19 @@
                     validWarehouses.forEach(function(w) {
                         const isSel = (preSelectId && preSelectId == w.warehouse_id) ? 'selected' : '';
 
-                        // Calculate Display Stock based on server info
-                        let disp = w.stock; // Pieces
+                        // Display Stock Logic
+                        let disp;
                         const ppb = parseFloat(w.ppb) || 1;
-                        console.log(w.ppb);
-                        if ((w.size_mode === 'by_cartons' || w.size_mode === 'by_size') && ppb > 0) {
-                            const b = Math.floor(w.stock / ppb);
-                            const l = w.stock % ppb;
-                            disp = l > 0 ? `${b}.${l}` : b;
+
+                        if ((w.size_mode === 'by_cartons' || w.size_mode === 'by_size') && ppb > 1) {
+                            // For box-based products, show boxes.loose format
+                            // Use the boxes field directly from backend
+                            const boxes = Math.floor(w.boxes || 0);
+                            const loose = w.stock % ppb; // Calculate loose from total pieces
+                            disp = loose > 0 ? `${boxes}.${loose}` : boxes;
+                        } else {
+                            // For piece-based products, show pieces
+                            disp = w.stock;
                         }
 
                         options +=

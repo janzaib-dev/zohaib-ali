@@ -235,20 +235,20 @@
     <div class="container-fluid py-4">
         <div class="erp-card">
             <div class="erp-header">
-                <h5><i class="fas fa-undo-alt me-2"></i> Purchase Return</h5>
+                <h5><i class="fas fa-undo-alt me-2"></i> Sale Return</h5>
                 <div class="d-flex align-items-center gap-3">
                     <span class="badge bg-light text-dark border"><i class="fas fa-file-invoice me-1"></i> Original Invoice #
-                        {{ $purchase->invoice_no }}</span>
-                    <a href="{{ route('Purchase.home') }}" class="btn btn-sm btn-outline-secondary">Back to List</a>
+                        {{ $sale->invoice_no }}</span>
+                    <a href="{{ route('sale.index') }}" class="btn btn-sm btn-outline-secondary">Back to List</a>
                 </div>
             </div>
 
             <div class="card-body p-4">
-                <form action="{{ route('purchase.return.store') }}" method="POST">
+                <form action="{{ route('sale.return.store') }}" method="POST">
                     @csrf
-                    <input type="hidden" name="purchase_id" value="{{ $purchase->id }}">
+                    <input type="hidden" name="sale_id" value="{{ $sale->id }}">
                     {{-- Assuming Single Branch/Warehouse for now or derived from Purchase --}}
-                    <input type="hidden" name="warehouse_id" value="{{ $purchase->warehouse_id ?? 1 }}">
+                    <input type="hidden" name="warehouse_id" value="{{ $sale->warehouse_id ?? 1 }}">
 
                     <!-- Alert Section -->
                     @if (session('success'))
@@ -264,30 +264,30 @@
                         </div>
                     @endif
 
-                    <!-- Top Section: Vendor & Reference -->
+                    <!-- Top Section: customer & Reference -->
                     <div class="row g-3 mb-4">
                         <div class="col-md-4">
                             <label class="form-label"><i class="fas fa-lock text-muted me-1"
-                                    style="font-size: 0.7rem;"></i>Vendor</label>
-                            {{-- Read-Only Vendor Name --}}
+                                    style="font-size: 0.7rem;"></i>customer</label>
+                            {{-- Read-Only customer Name --}}
                             <input type="text" class="form-control form-control-sm"
-                                value="{{ optional($purchase->vendor)->name ?? 'Unknown Vendor' }}" readonly
+                                value="{{ optional($sale->customer)->name ?? 'Unknown customer' }}" readonly
                                 style="background-color: #e9ecef; border-color: #dee2e6;">
                             {{-- Hidden ID for Form Submission --}}
-                            <input type="hidden" name="vendor_id" value="{{ $purchase->vendor_id }}">
+                            <input type="hidden" name="customer_id" value="{{ $sale->customer_id }}">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label"><i class="fas fa-lock text-muted me-1"
                                     style="font-size: 0.7rem;"></i>Reference / PO #</label>
                             <input type="text" name="reference" class="form-control form-control-sm"
-                                value="{{ $purchase->invoice_no ?? '' }}" readonly>
+                                value="{{ $sale->invoice_no ?? '' }}" readonly>
                         </div>
                         <div class="col-md-5 text-end align-self-end">
                             <div class="p-2 bg-light rounded d-inline-block border">
                                 <small class="text-muted d-block text-start" style="font-size: 0.7rem;">ORIGINAL PURCHASE
                                     DATE</small>
                                 <strong class="text-dark"><i class="far fa-calendar-alt me-1"></i>
-                                    {{ $purchase->created_at->format('d M, Y h:i A') }}</strong>
+                                    {{ $sale->created_at->format('d M, Y h:i A') }}</strong>
                             </div>
                         </div>
                     </div>
@@ -333,7 +333,7 @@
                                 </tr>
                             </thead>
                             <tbody id="returnItems">
-                                @foreach ($purchaseItems as $index => $item)
+                                @foreach ($sale->items as $index => $item)
                                     <tr>
                                         <input type="hidden" name="product_id[]" value="{{ $item['product_id'] }}">
                                         {{-- Hidden Discount to preserve refund math if needed --}}
@@ -407,13 +407,11 @@
 
                                         {{-- Total Return Pieces (Read Only, Calculated) --}}
                                         <td>
-                                        <td>
                                             <input type="number" name="qty[]"
                                                 class="form-control text-center fw-bold text-primary quantity"
                                                 value="0" readonly min="0" max="{{ $remaining }}"
                                                 data-max="{{ $remaining }}" data-original="{{ $original }}"
                                                 data-returned="{{ $returned }}">
-                                        </td>
                                         </td>
 
                                         <td><input type="text" name="total[]"
@@ -513,7 +511,7 @@
 
                                     <div class="alert alert-light border small text-muted">
                                         <i class="fas fa-info-circle me-1"></i> If you received cash/bank refund, enter
-                                        details. Otherwise, amount will be credited to Vendor Ledger.
+                                        details. Otherwise, amount will be credited to customer Ledger.
                                     </div>
 
                                     <div class="payment-voucher-rows">
@@ -543,7 +541,7 @@
 
                                 <div class="mt-4 d-grid gap-2">
                                     <button type="submit" class="btn btn-erp-primary btn-lg shadow-sm">
-                                        <i class="fas fa-check-circle me-2"></i> Process Purchase Return
+                                        <i class="fas fa-check-circle me-2"></i> Process Sale Return
                                     </button>
 
                                 </div>

@@ -79,8 +79,8 @@ class ProductController extends Controller
         $term = $request->get('term') ?? $request->get('q') ?? '';
 
         $query = Product::query()
-            ->select('id', 'item_name', 'item_code', 'barcode_path', 'size_mode', 'height', 'width', 'pieces_per_box')
-            ->withSum('warehouseStocks', 'total_pieces') /* Efficient Stock Sum */
+            ->select('id', 'item_name', 'item_code', 'barcode_path', 'size_mode', 'height', 'width', 'pieces_per_box', 'purchase_price_per_m2', 'purchase_price_per_piece', 'pieces_per_m2')
+            ->withSum('warehouseStocks', 'total_pieces') /* Sum PIECES, not boxes */
             ->where(function ($q) use ($term) {
                 $q->where('item_name', 'like', "%{$term}%")
                     ->orWhere('item_code', 'like', "%{$term}%")
@@ -90,12 +90,14 @@ class ProductController extends Controller
         $products = $query->paginate(10); // Lazy loading (10 per request)
 
         $results = $products->map(function ($p) {
+            // Get total pieces from warehouse stocks
             $stockPieces = (float) ($p->warehouse_stocks_sum_total_pieces ?? 0);
+            $ppb = $p->pieces_per_box > 0 ? $p->pieces_per_box : 1;
 
-            // Calculate Stock Display (Boxes vs Pieces)
+            // Calculate Stock Display (Boxes.Loose vs Pieces)
             $stockDisplay = $stockPieces;
-            if (($p->size_mode === 'by_cartons' || $p->size_mode === 'by_size') && $p->pieces_per_box > 0) {
-                $ppb = $p->pieces_per_box;
+            if (($p->size_mode === 'by_cartons' || $p->size_mode === 'by_size') && $ppb > 1) {
+                // For box-based products, show as "Boxes.Loose"
                 $boxes = floor($stockPieces / $ppb);
                 $loose = $stockPieces % $ppb;
                 $stockDisplay = $loose > 0 ? "$boxes.$loose" : $boxes;
@@ -107,12 +109,18 @@ class ProductController extends Controller
                 // Custom attributes for template
                 'sku' => $p->item_code ?? '',
                 'stock' => $stockDisplay,
+                'stock_pieces' => $stockPieces, // Raw pieces for validation
                 'name' => $p->item_name,
                 'size_mode' => $p->size_mode,
-                'ppb' => $p->pieces_per_box > 0 ? $p->pieces_per_box : 1,
+                'pieces_per_box' => $ppb,
+                'ppb' => $ppb, // Legacy
                 'trade_price' => $p->purchase_price_per_piece ?? 0,
+                'purchase_price_per_m2' => $p->purchase_price_per_m2 ?? 0,
+                'purchase_price_per_piece' => $p->purchase_price_per_piece ?? 0,
                 'height' => $p->height ?? 0,
+                'length' => $p->height ?? 0, // Alias for purchase snapshot
                 'width' => $p->width ?? 0,
+                'pieces_per_m2' => $p->pieces_per_m2 ?? 0,
             ];
         });
 
@@ -197,17 +205,17 @@ class ProductController extends Controller
             'sub_category_relation',
             'brand',
             'unit',
-            'warehouseStocks'
+            'warehouseStocks',
         ])->find($id);
 
-        if (!$product) {
+        if (! $product) {
             return response()->json(['error' => 'Product not found'], 404);
         }
 
         // Calculate derived fields
         $totalPieces = $product->warehouseStocks->sum('total_pieces');
         $ppb = $product->pieces_per_box > 0 ? $product->pieces_per_box : 1;
-        
+
         $boxes = 0;
         $loose = 0;
 
@@ -215,10 +223,10 @@ class ProductController extends Controller
             $boxes = floor($totalPieces / $ppb);
             $loose = $totalPieces % $ppb;
         } else {
-             // For by_pieces, boxes is essentially the piece count if we treat it largely
-             // But strict interpretation:
-             $boxes = $totalPieces; 
-             $loose = 0;
+            // For by_pieces, boxes is essentially the piece count if we treat it largely
+            // But strict interpretation:
+            $boxes = $totalPieces;
+            $loose = 0;
         }
 
         // Append these purely for the view (not saved in DB)
@@ -387,7 +395,7 @@ class ProductController extends Controller
             $imagePath = null;
         }
 
-        DB::transaction(function () use ($request, $userId, $nextCode, $imagePath, $mode, $height, $width, $piecesPerBox, $boxesQuantity, $loosePieces, $pieceQuantity,
+        DB::transaction(function () use ($request, $userId, $nextCode, $imagePath, $mode, $height, $width, $piecesPerBox, $boxesQuantity,
             $totalM2, $pricePerM2, $purchasePricePerM2, $totalStockQty, $piecesPerM2,
             $salePricePerPiece, $salePricePerBox, $purchasePricePerPiece, $purchasePricePerBox) {
 
@@ -607,8 +615,8 @@ class ProductController extends Controller
             $imagePath = $imageName;
         }
 
-        DB::transaction(function () use ($request, $id, $userId, $imagePath, $mode, $height, $width, $piecesPerBox, $boxesQuantity, $loosePieces, $pieceQuantity,
-            $totalM2, $pricePerM2, $purchasePricePerM2, $salePricePerBox, $purchasePricePerPiece, $totalPrice, $totalPurchasePrice, $totalStockQty, $piecesPerM2) {
+        DB::transaction(function () use ($request, $id, $userId, $imagePath, $mode, $height, $width, $piecesPerBox,
+            $totalM2, $pricePerM2, $purchasePricePerM2, $salePricePerBox, $purchasePricePerPiece, $piecesPerM2) {
 
             Product::where('id', $id)->update([
                 'creater_id' => $userId,

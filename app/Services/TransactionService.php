@@ -281,4 +281,111 @@ class TransactionService
             // We log but don't rethrow to avoid blocking main flow if config is missing
         }
     }
+    
+    /**
+     * Create a Purchase Return Voucher (Debit Note).
+     * Debit: Accounts Payable (Vendor) | Credit: Purchase Return / Inventory
+     */
+    public function createPurchaseReturnVoucher(\App\Models\PurchaseReturn $return)
+    {
+        \Log::info("TransactionService: Create Voucher for Purchase Return #{$return->return_invoice}");
+
+        try {
+            $balanceService = app(\App\Services\BalanceService::class);
+            // Use Purchase Expense Account (Contra) or a specific Return Account
+            $expenseAccountId = $balanceService->getPurchaseExpenseId(); 
+            $apAccountId = $balanceService->getAccountsPayableId();
+
+            $lines = [];
+
+            // 1. Debit Accounts Payable (Vendor Liability Reduces)
+            $lines[] = [
+                'account_id' => $apAccountId,
+                'debit' => $return->net_amount,
+                'credit' => 0,
+                'narration' => "Debit Note for Return #{$return->return_invoice}",
+            ];
+
+            // 2. Credit Purchase Expense (Inventory Value Reduces)
+            $lines[] = [
+                'account_id' => $expenseAccountId,
+                'debit' => 0,
+                'credit' => $return->net_amount,
+                'narration' => "Purchase Return #{$return->return_invoice}",
+            ];
+
+            // 3. Voucher Header
+            // Use Journal Type or a specific 'Debit Note' type if available. 
+            // Using TYPE_JOURNAL for general ledger adjustment.
+            $voucherData = [
+                'voucher_type' => \App\Models\VoucherMaster::TYPE_JOURNAL, 
+                'date' => $return->return_date ? \Carbon\Carbon::parse($return->return_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                'status' => \App\Models\VoucherMaster::STATUS_POSTED,
+                'party_type' => \App\Models\Vendor::class,
+                'party_id' => $return->vendor_id,
+                'remarks' => $return->remarks ?? "Purchase Return #{$return->return_invoice}",
+            ];
+
+            // 4. Create Voucher
+            $this->voucherService->createVoucher($voucherData, $lines, auth()->id());
+
+            \Log::info("Purchase Return Voucher Created for Invoice #{$return->return_invoice}");
+
+        } catch (\Exception $e) {
+            \Log::error('TransactionService Purchase Return Voucher Error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Create Journal Voucher for Sale Return (Credit Note)
+     * Dr. Sales Revenue (Reduces Income)
+     * Cr. Accounts Receivable (Reduces Customer Debt)
+     */
+    public function createSaleReturnVoucher(\App\Models\SaleReturn $return)
+    {
+        \Log::info("TransactionService: Create Voucher for Sale Return #{$return->return_invoice}");
+
+        try {
+            $balanceService = app(\App\Services\BalanceService::class);
+            // Sales Revenue Account
+            $salesRevenueId = $balanceService->getSalesRevenueId(); 
+            $arAccountId = $balanceService->getAccountsReceivableId();
+
+            $lines = [];
+
+            // 1. Debit Sales Revenue (Income Reduces)
+            $lines[] = [
+                'account_id' => $salesRevenueId,
+                'debit' => $return->net_amount,
+                'credit' => 0,
+                'narration' => "Credit Note for Return #{$return->return_invoice}",
+            ];
+
+            // 2. Credit Accounts Receivable (Customer Debt Reduces)
+            $lines[] = [
+                'account_id' => $arAccountId,
+                'debit' => 0,
+                'credit' => $return->net_amount,
+                'narration' => "Sale Return #{$return->return_invoice}",
+            ];
+
+            // 3. Voucher Header
+            $voucherData = [
+                'voucher_type' => \App\Models\VoucherMaster::TYPE_JOURNAL, 
+                'date' => $return->return_date ? \Carbon\Carbon::parse($return->return_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                'status' => \App\Models\VoucherMaster::STATUS_POSTED,
+                'party_type' => \App\Models\Customer::class,
+                'party_id' => $return->customer_id,
+                'remarks' => $return->remarks ?? "Sale Return #{$return->return_invoice}",
+            ];
+
+            // 4. Create Voucher
+            $this->voucherService->createVoucher($voucherData, $lines, auth()->id());
+
+            \Log::info("Sale Return Voucher Created for Invoice #{$return->return_invoice}");
+
+        } catch (\Exception $e) {
+            \Log::error('TransactionService Sale Return Voucher Error: ' . $e->getMessage());
+        }
+    }
 }

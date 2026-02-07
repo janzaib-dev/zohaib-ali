@@ -11,7 +11,7 @@
                     @endcan
                     <span class="fw-bold text-dark"><a href="{{ url('bookings') }}" class="btn btn-primary">All
                             Booking</a></span>
-                    <span class="fw-bold text-dark ms-1"><a href="{{ route('sale.returns.index') }}"
+                    <span class="fw-bold text-dark ms-1"><a href="{{ route('sale.return.index') }}"
                             class="btn btn-secondary text-white">All Returns</a></span>
                 </div>
             </div>
@@ -99,7 +99,7 @@
                                                 class="btn btn-sm btn-success text-white">Receipt</a>
 
                                             @if ($sale->sale_status !== 'returned')
-                                                <a href="{{ route('sales.return.create', $sale->id) }}"
+                                                <a href="{{ route('sale.return.show', $sale->id) }}"
                                                     class="btn btn-sm btn-danger text-white">Return</a>
                                             @else
                                                 <button class="btn btn-sm btn-secondary text-white"

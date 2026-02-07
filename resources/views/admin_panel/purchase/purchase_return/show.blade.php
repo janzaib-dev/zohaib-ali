@@ -4,13 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Purchase Invoice - {{ $purchase->invoice_no }}</title>
+    <title>Purchase Return Invoice - {{ $return->return_invoice }}</title>
     <!-- Use Bootstrap for grid and utilities -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #2c3e50;
-            --accent-color: #3498db;
+            --primary-color: #c0392b;
+            /* Red for Return */
+            --accent-color: #e74c3c;
             --border-color: #bdc3c7;
             --text-color: #2c3e50;
         }
@@ -20,7 +21,6 @@
             color: var(--text-color);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             font-size: 12px;
-            /* Reduced base font size */
         }
 
         .invoice-container {
@@ -28,7 +28,6 @@
             margin: 10px auto;
             background: #fff;
             padding: 20px;
-            /* Reduced padding */
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             min-height: 297mm;
             position: relative;
@@ -41,7 +40,6 @@
 
         .company-name {
             font-size: 22px;
-            /* Reduced */
             font-weight: bold;
             color: var(--primary-color);
             margin-bottom: 2px;
@@ -50,7 +48,6 @@
         .invoice-title {
             text-align: center;
             font-size: 18px;
-            /* Reduced */
             font-weight: bold;
             text-transform: uppercase;
             color: var(--accent-color);
@@ -61,7 +58,6 @@
         .info-box {
             border: 1px solid var(--border-color);
             padding: 8px;
-            /* Reduced padding */
             height: 100%;
             border-radius: 4px;
             background-color: #fff;
@@ -96,14 +92,12 @@
             text-transform: uppercase;
             font-size: 11px;
             padding: 6px 4px;
-            /* Reduced padding */
             border: 1px solid var(--primary-color);
         }
 
         .invoice-table td {
             border: 1px solid var(--border-color);
             padding: 4px 6px;
-            /* Reduced padding */
             vertical-align: middle;
             font-size: 12px;
         }
@@ -120,26 +114,6 @@
             text-align: center;
         }
 
-        .footer-section {
-            margin-top: 20px;
-            border-top: 2px solid var(--primary-color);
-            padding-top: 10px;
-        }
-
-        .terms-box {
-            font-size: 11px;
-            color: #666;
-        }
-
-        .terms-box ul {
-            padding-left: 20px;
-            margin-bottom: 0;
-        }
-
-        .terms-box li {
-            margin-bottom: 2px;
-        }
-
         .totals-table {
             width: 100%;
             border-collapse: collapse;
@@ -148,7 +122,6 @@
 
         .totals-table td {
             padding: 4px 8px;
-            /* Reduced padding */
             border-bottom: 1px solid #eee;
         }
 
@@ -195,10 +168,6 @@
                 display: none;
             }
 
-            .no-print {
-                display: none;
-            }
-
             @page {
                 margin: 5mm;
             }
@@ -219,64 +188,50 @@
             </svg>
             Print
         </button>
-        <a href="{{ route('Purchase.home') }}" class="btn btn-secondary btn-sm shadow ms-2">Back</a>
+        <a href="{{ route('purchase.return.index') }}" class="btn btn-secondary btn-sm shadow ms-2">Back</a>
     </div>
 
     <div class="invoice-container">
         <!-- Company Header -->
         <div class="company-info">
             <div class="company-name">ZOAIB ALI COMPANY</div>
-            <div style="font-size: 12px;">SADAR BAZAR, HYDERABAD SINDH</div>
+            <div style="font-size: 12px;">Purchase Return Note</div>
         </div>
 
-        <div class="invoice-title">Purchase Invoice</div>
+        <div class="invoice-title">Purchase Return Invoice</div>
 
         <!-- Info Grid -->
         <div class="row g-2 mb-2">
             <!-- Left Box: Vendor Info -->
-            <div class="col-4">
+            <div class="col-6">
                 <div class="info-box">
                     <div class="info-box-header">Vendor Details</div>
-                    <div
-                        style="font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        {{ $purchase->vendor->name ?? 'N/A' }}
-                    </div>
-                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;">
-                        {{ $purchase->vendor->address ?? '' }}</div>
-                    <div class="text-muted small" style="font-size: 11px;">
-                        Mob: {{ $purchase->vendor->phone ?? '' }}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Middle Box: Details -->
-            <div class="col-4">
-                <div class="info-box">
-                    <div class="info-box-header">Details</div>
-                    <div><span class="info-label">Type:</span> {{ $purchase->status_purchase ?? 'Confirmed' }}</div>
-                    <div><span class="info-label">Warehouse:</span> {{ $purchase->warehouse->warehouse_name ?? 'Main' }}
-                    </div>
+                    <div style="font-size: 13px; font-weight: bold;">{{ $return->vendor->name ?? 'N/A' }}</div>
+                    <div style="font-size: 11px;">{{ $return->vendor->address ?? '' }}</div>
+                    <div class="text-muted small">Phone: {{ $return->vendor->phone ?? '' }}</div>
                 </div>
             </div>
 
             <!-- Right Box: Invoice Specifics -->
-            <div class="col-4">
+            <div class="col-6">
                 <div class="info-box">
-                    <div class="info-box-header">Reference</div>
-                    <div><span class="info-label">Inv #:</span> <strong>{{ $purchase->invoice_no }}</strong></div>
+                    <div class="info-box-header">Return Reference</div>
+                    <div><span class="info-label">Return #:</span> <strong>{{ $return->return_invoice }}</strong></div>
                     <div><span class="info-label">Date:</span>
-                        {{ \Carbon\Carbon::parse($purchase->purchase_date)->format('d-m-Y') }}</div>
+                        {{ \Carbon\Carbon::parse($return->return_date)->format('d-m-Y') }}</div>
+                    <div><span class="info-label">Warehouse:</span> {{ $return->warehouse->warehouse_name ?? 'Main' }}
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Remarks -->
-        @if ($purchase->note)
+        @if ($return->remarks)
             <div class="row mb-2">
                 <div class="col-12">
                     <div class="info-box"
                         style="min-height: auto; padding: 4px 8px; background-color: #f1f5f9; font-style: italic;">
-                        <strong>Note:</strong> {{ $purchase->note }}
+                        <strong>Note:</strong> {{ $return->remarks }}
                     </div>
                 </div>
             </div>
@@ -294,82 +249,48 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach ($purchase->items as $item)
+                @foreach ($return->items as $item)
                     @php
-                        // Dimensions
-                        $height = $item->length ?? 0; // mapped to length column
-                        $width = $item->width ?? 0;
+                        // Check Product Defaults (since not stored on item)
+                        $product = $item->product;
+                        $piecesPerBox = $product->pieces_per_box ?? 1;
+                        $sizeMode = $product->size_mode ?? 'by_pieces';
 
-                        // Calculation Logic (same as Sale but using item snapshot)
-                        $piecesPerBox = (int) ($item->pieces_per_box ?? 1);
-                        $m2PerPiece = $item->pieces_per_m2 ?? 0; // In purchase_items, this is m2_per_piece based on my previous analysis
-                        $m2PerBox = $m2PerPiece * $piecesPerBox;
-
-                        // Calculate boxes and loose
                         $totalPieces = (int) $item->qty;
-                        $boxes = $piecesPerBox > 0 ? floor($totalPieces / $piecesPerBox) : $totalPieces;
-                        $loosePieces = $piecesPerBox > 0 ? $totalPieces % $piecesPerBox : 0;
-
-                        // Total M2
-                        $totalM2Line = $m2PerPiece * $totalPieces;
-                        $sizeMode = $item->size_mode ?? 'by_pieces';
+                        $boxes = $piecesPerBox > 1 ? floor($totalPieces / $piecesPerBox) : 0;
+                        $loosePieces = $piecesPerBox > 1 ? $totalPieces % $piecesPerBox : $totalPieces;
                     @endphp
                     <tr>
                         <td class="text-start">
-                            <div style="font-weight: bold; font-size: 12px; margin-bottom: 2px;">
-                                {{ $item->product->item_name ?? 'Item' }}
-                                @if (!empty($item->product->item_code))
-                                    <span class="text-muted fw-normal ms-1"
-                                        style="font-size: 11px;">({{ $item->product->item_code }})</span>
-                                @endif
-                            </div>
-
-                            <div style="font-size: 11px; color: #555; line-height: 1.2;">
-                                @if ($sizeMode == 'by_size')
-                                    <span class='d-inline-block ms-1'>
-                                        @if ($height > 0 || $width > 0)
-                                            Dims: {{ $width }}x{{ $height }}
-                                        @endif
-                                    </span>
-                                @endif
-                            </div>
+                            <div style="font-weight: bold; font-size: 12px;">{{ $product->item_name ?? 'Item' }}</div>
+                            <small class="text-muted">{{ $product->item_code ?? '' }}</small>
                         </td>
 
-                        <td class="text-center" style="vertical-align: middle;">
-                            <div style="font-weight: bold; color: #2c3e50;">
-
-                                @if ($sizeMode == 'by_pieces')
-                                    {{ $totalPieces }} Pcs
-                                @else
-                                    @if ($boxes > 0 && $loosePieces > 0)
-                                        {{ $boxes }} Box + {{ $loosePieces }} Pc
-                                    @elseif ($boxes > 0)
-                                        {{ $boxes }} Box
-                                    @else
-                                        {{ $loosePieces }} Pcs
-                                    @endif
-                                @endif
-                            </div>
-                            <small class="text-muted" style="font-size: 10px;">({{ $totalPieces }} pcs)</small>
-                        </td>
-
-                        <td class="text-center" style="vertical-align: middle;">
+                        <td class="text-center">
                             @if ($sizeMode == 'by_pieces')
-                                <span class="fw-bold">Pcs</span>
-                            @elseif ($sizeMode == 'by_cartons')
-                                <span class="fw-bold">Box</span>
-                            @elseif ($sizeMode == 'by_size')
-                                <span class="fw-bold">{{ number_format($totalM2Line, 4) }}</span> m²
+                                {{ $totalPieces }} Pcs
+                            @elseif ($piecesPerBox > 1)
+                                @if ($boxes > 0 && $loosePieces > 0)
+                                    {{ $boxes }} Box + {{ $loosePieces }} Pc
+                                @elseif ($boxes > 0)
+                                    {{ $boxes }} Box
+                                @else
+                                    {{ $loosePieces }} Pcs
+                                @endif
                             @else
-                                {{ $item->unit }}
+                                {{ $totalPieces }} Pcs
                             @endif
                         </td>
 
-                        <td class="text-end" style="vertical-align: middle;">
+                        <td class="text-center">
+                            {{ $item->unit ?? 'pc' }}
+                        </td>
+
+                        <td class="text-end">
                             {{ number_format($item->price, 2) }}
                         </td>
 
-                        <td class="text-end fw-bold" style="vertical-align: middle;">
+                        <td class="text-end fw-bold">
                             {{ number_format($item->line_total, 2) }}
                         </td>
                     </tr>
@@ -381,49 +302,46 @@
         <div class="row mt-2">
             <div class="col-7">
                 <div class="mt-4 pt-2">
-                    <div class="signature-area">
-                        Authorized Signature
-                    </div>
+                    <div class="signature-area">Authorized Signature</div>
                 </div>
             </div>
 
             <div class="col-5">
                 <div class="info-box" style="border: none; padding: 0;">
                     <table class="totals-table">
-                        <tr style="border-bottom: 2px solid #eee;">
+                        <tr>
                             <td class="text-muted">Subtotal</td>
-                            <td class="text-end">{{ number_format($purchase->subtotal, 2) }}</td>
+                            <td class="text-end">{{ number_format($return->bill_amount, 2) }}</td>
                         </tr>
-                        @if ($purchase->extra_cost > 0)
+                        @if ($return->item_discount > 0)
                             <tr>
-                                <td>Extra Cost</td>
-                                <td class="text-end">{{ number_format($purchase->extra_cost, 2) }}</td>
+                                <td>Item Discount</td>
+                                <td class="text-end">-{{ number_format($return->item_discount, 2) }}</td>
                             </tr>
                         @endif
-                        @if ($purchase->discount > 0)
+                        @if ($return->extra_discount > 0)
                             <tr>
-                                <td>Discount</td>
-                                <td class="text-end text-danger">-{{ number_format($purchase->discount, 2) }}</td>
+                                <td>Extra Discount</td>
+                                <td class="text-end">-{{ number_format($return->extra_discount, 2) }}</td>
                             </tr>
                         @endif
-                        <tr class="total-row" style="background-color: #e9ecef;">
-                            <td>Total Net</td>
-                            <td class="text-end">{{ number_format($purchase->net_amount, 2) }}</td>
+                        <tr class="total-row" style="background-color: #fbecec;">
+                            <td>Total Refund Info</td>
+                            <td class="text-end">{{ number_format($return->net_amount, 2) }}</td>
                         </tr>
                         <tr>
-                            <td>Paid</td>
-                            <td class="text-end text-success">{{ number_format($purchase->paid_amount, 2) }}</td>
+                            <td>Paid / Adjusted</td>
+                            <td class="text-end text-success">{{ number_format($return->paid, 2) }}</td>
                         </tr>
                         <tr>
                             <td class="fw-bold">Balance</td>
-                            <td class="text-end fw-bold">
-                                {{ number_format($purchase->net_amount - $purchase->paid_amount, 2) }}</td>
+                            <td class="text-end fw-bold">{{ number_format($return->net_amount - $return->paid, 2) }}
+                            </td>
                         </tr>
                     </table>
                 </div>
             </div>
         </div>
-
     </div>
 </body>
 
