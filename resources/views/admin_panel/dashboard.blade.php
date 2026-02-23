@@ -508,18 +508,23 @@
 
                 <!-- Financial Health (Accounting Based) -->
                 @if (isset($financialSummary) && !empty($financialSummary))
-                    <h5 class="mb-3 text-muted"
+                    <h5 class="mb-3 text-muted d-flex align-items-center gap-2"
                         style="font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">
                         Financial Health (This Month)
+                        <button type="button"
+                            class="btn btn-sm btn-outline-info d-flex align-items-center gap-1 rounded-pill px-3 shadow-none"
+                            data-toggle="modal" data-target="#financialHealthModal" title="What do these mean?">
+                            <i class="fas fa-info-circle"></i> Info
+                        </button>
                     </h5>
-                    <div class="stats-grid mb-4">
+                    <div class="stats-grid mb-4" style="grid-template-columns: repeat(5, 1fr);">
                         <!-- Sales Revenue -->
                         <div class="stat-card success">
                             <div class="stat-header">
                                 <div class="stat-icon"><i class="fa fa-hand-holding-usd"></i></div>
                                 <div class="stat-trend up">Accounting</div>
                             </div>
-                            <div class="stat-value">Rs {{ number_format($financialSummary['sales'] ?? 0, 0) }}</div>
+                            <div class="stat-value">Rs {{ number_format(abs($financialSummary['sales'] ?? 0), 0) }}</div>
                             <div class="stat-label">Sales Revenue</div>
                         </div>
 
@@ -529,27 +534,51 @@
                                 <div class="stat-icon"><i class="fa fa-money-bill-wave"></i></div>
                                 <div class="stat-trend down">Accounting</div>
                             </div>
-                            <div class="stat-value">Rs {{ number_format($financialSummary['purchases'] ?? 0, 0) }}</div>
+                            <div class="stat-value">Rs {{ number_format(abs($financialSummary['purchases'] ?? 0), 0) }}
+                            </div>
                             <div class="stat-label">Purchase Expenses</div>
                         </div>
 
-                        <!-- Receivables (Money coming in) -->
+                        <!-- Net Profit / Loss -->
+                        @php
+                            $absSales = abs($financialSummary['sales'] ?? 0);
+                            $absPurchases = abs($financialSummary['purchases'] ?? 0);
+                            $profit = $absSales - $absPurchases;
+                            $isLoss = $profit < 0;
+                        @endphp
+                        <div class="stat-card {{ $isLoss ? 'danger' : 'success' }}"
+                            style="background: {{ $isLoss ? '#fff5f5' : '#f0fdf4' }}; border: 1px solid {{ $isLoss ? '#fecaca' : '#bbf7d0' }};">
+                            <div class="stat-header">
+                                <div class="stat-icon"
+                                    style="background: {{ $isLoss ? '#fef2f2' : '#dcfce7' }}; color: {{ $isLoss ? '#ef4444' : '#22c55e' }};">
+                                    <i class="fa {{ $isLoss ? 'fa-arrow-down' : 'fa-chart-line' }}"></i>
+                                </div>
+                                <div class="stat-trend {{ $isLoss ? 'down' : 'up' }}">Bottom Line</div>
+                            </div>
+                            <div class="stat-value" style="color: {{ $isLoss ? '#ef4444' : '#22c55e' }};">Rs
+                                {{ number_format(abs($profit), 0) }}</div>
+                            <div class="stat-label fw-bold text-dark">{{ $isLoss ? 'Net Loss' : 'Net Profit' }}</div>
+                        </div>
+
+                        <!-- Receivables -->
                         <div class="stat-card info">
                             <div class="stat-header">
                                 <div class="stat-icon"><i class="fa fa-user-clock"></i></div>
                                 <div class="stat-trend">Assets</div>
                             </div>
-                            <div class="stat-value">Rs {{ number_format($financialSummary['receivables'] ?? 0, 0) }}</div>
+                            <div class="stat-value">Rs {{ number_format(abs($financialSummary['receivables'] ?? 0), 0) }}
+                            </div>
                             <div class="stat-label">Total Receivables (Due)</div>
                         </div>
 
-                        <!-- Payables (Money going out) -->
+                        <!-- Payables -->
                         <div class="stat-card warning">
                             <div class="stat-header">
                                 <div class="stat-icon"><i class="fa fa-file-invoice"></i></div>
                                 <div class="stat-trend">Liabilities</div>
                             </div>
-                            <div class="stat-value">Rs {{ number_format($financialSummary['payables'] ?? 0, 0) }}</div>
+                            <div class="stat-value">Rs {{ number_format(abs($financialSummary['payables'] ?? 0), 0) }}
+                            </div>
                             <div class="stat-label">Total Payables (Owe)</div>
                         </div>
                     </div>
@@ -901,4 +930,68 @@
             });
         });
     </script>
+
+    {{-- Financial Health Info Modal --}}
+    <div class="modal fade" id="financialHealthModal" tabindex="-1" aria-hidden="true" style="z-index: 1050;">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold text-info ms-2"><i class="fas fa-info-circle me-2"></i> Dashboard
+                        Financial Health</h5>
+                    <button type="button" class="close text-dark" data-dismiss="modal" aria-label="Close"
+                        style="background:none;border:none;font-size:1.5rem;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body p-4 pt-3 text-dark">
+                    <p class="small text-muted mb-3">These top 5 cards represent your true accounting picture for the
+                        current month. They are automatically calculated from your Journal Entries to give you an accurate
+                        snapshot of the business.</p>
+
+                    <div class="table-responsive small mb-0">
+                        <table class="table table-bordered table-sm mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Indicator</th>
+                                    <th>What it means</th>
+                                    <th>How it is calculated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Sales Revenue</strong></td>
+                                    <td>Total value of goods successfully sold.</td>
+                                    <td class="text-success text-nowrap">Gross Sales - Sales Returns</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Purchase Expense</strong></td>
+                                    <td>Total cost of acquiring inventory.</td>
+                                    <td class="text-danger text-nowrap">Gross Purchases - Purchase Returns</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Net Profit / Loss</strong></td>
+                                    <td>The actual money you made (or lost) this month.</td>
+                                    <td class="text-primary fw-bold text-nowrap">Sales Revenue - Purchase Expense</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Total Receivables</strong></td>
+                                    <td>Unpaid debts owed <strong>to you</strong> by customers.</td>
+                                    <td class="text-muted text-nowrap">Sum of all Customer Ledgers (Dr)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Total Payables</strong></td>
+                                    <td>Unpaid debts you owe <strong>to suppliers</strong>.</td>
+                                    <td class="text-muted text-nowrap">Sum of all Vendor Ledgers (Cr)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 px-4 pb-4">
+                    <button type="button" class="btn btn-primary fw-medium px-4 rounded-pill shadow-sm"
+                        data-dismiss="modal">I Understand</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection

@@ -7,7 +7,14 @@
 
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
-                        <h4 class="fw-bold mb-0 text-dark">Chart Of Accounts</h4>
+                        <h4 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                            Chart Of Accounts
+                            <button
+                                class="btn btn-sm btn-outline-info d-flex align-items-center gap-1 ms-2 rounded-pill px-3 shadow-none"
+                                data-toggle="modal" data-target="#coaInfoModal" title="How does this work?">
+                                <i class="fas fa-info-circle"></i> How it works?
+                            </button>
+                        </h4>
                         <p class="text-muted mb-0 small">Manage your financial accounts and categories</p>
                     </div>
                     @can('chart.of.accounts.create')
@@ -106,11 +113,25 @@
                                                 @endif
                                             </td>
                                             <td>
-                                                <div
-                                                    class="{{ $acc->current_balance < 0 ? 'text-danger' : 'text-success' }} fw-bold">
-                                                    {{ number_format(abs($acc->current_balance), 2) }}
+                                                @php
+                                                    $bal = $acc->calculated_balance;
+                                                    $isNegative = $bal < 0;
+                                                    // Determine the sign:
+                                                    // If normal type is Debit, and balance > 0, it's Dr. If < 0, it's Cr.
+                                                    // If normal type is Credit, and balance > 0, it's Cr. If < 0, it's Dr.
+                                                    $displaySuffix =
+                                                        $acc->type === 'Debit'
+                                                            ? ($isNegative
+                                                                ? 'Cr'
+                                                                : 'Dr')
+                                                            : ($isNegative
+                                                                ? 'Dr'
+                                                                : 'Cr');
+                                                @endphp
+                                                <div class="{{ $isNegative ? 'text-danger' : 'text-success' }} fw-bold">
+                                                    {{ number_format(abs($bal), 2) }}
                                                     <small
-                                                        class="text-secondary fw-normal ms-1">{{ $acc->current_balance >= 0 ? 'Dr' : 'Cr' }}</small>
+                                                        class="text-secondary fw-normal ms-1">{{ $displaySuffix }}</small>
                                                 </div>
                                             </td>
                                             <td>
@@ -448,6 +469,58 @@
                     </div>
 
                 </form>
+            </div>
+        </div>
+    </div>
+
+    {{-- COA Info Modal --}}
+    <div class="modal fade" id="coaInfoModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold text-info ms-2"><i class="fas fa-info-circle me-2"></i> How Chart Of
+                        Accounts Works</h5>
+                    <button type="button" class="close text-dark" data-dismiss="modal" aria-label="Close"
+                        style="background:none;border:none;font-size:1.5rem;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body p-4 pt-3 text-dark">
+                    <p class="small text-muted mb-3">The Chart of Accounts (COA) is the foundation of your entire financial
+                        system. It tracks where your money goes and where it comes from.</p>
+
+                    <h6 class="fw-bold tracking-wide text-uppercase mb-2 text-primary" style="font-size: 0.85rem;">The 5
+                        Critical Accounts</h6>
+                    <div class="alert alert-light border shadow-sm rounded-3 mb-4">
+                        <ul class="mb-0 ps-3 small text-dark" style="line-height: 1.6;">
+                            <li><strong>1. Sales Revenue (Credit/Income):</strong> Automatically increases when you make a
+                                Sale. Decreases when a customer returns an item (Sale Return).</li>
+                            <li><strong>2. Purchase Expense (Debit/Expense):</strong> Automatically increases when you buy
+                                stock. Decreases when you return stock to vendors (Purchase Return).</li>
+                            <li><strong>3. Accounts Receivable (Debit/Asset):</strong> The money customers owe you.
+                                Increases on unpaid sales. Decreases when you receive payment or process a Sale Return.</li>
+                            <li><strong>4. Accounts Payable (Credit/Liability):</strong> The money you owe to vendors.
+                                Increases on unpaid purchases. Decreases when you make a payment.</li>
+                            <li><strong>5. Cash in Hand / Bank (Debit/Asset):</strong> Your actual money. Increases when you
+                                receive a customer payment. Decreases when you pay vendors.</li>
+                        </ul>
+                    </div>
+
+                    <h6 class="fw-bold tracking-wide text-uppercase mb-2 text-primary" style="font-size: 0.85rem;">How
+                        Balances Are Calculated (Double Entry)</h6>
+                    <p class="small mb-2 fw-medium">Every transaction automatically uses double-entry bookkeeping (Debits &
+                        Credits). You do not need to do this manually; the system handles it.</p>
+                    <ul class="small ps-3 text-secondary mb-0">
+                        <li><strong>Debit Accounts (Assets/Expenses):</strong> Their balance GOES UP when Debited, and GOES
+                            DOWN when Credited.</li>
+                        <li><strong>Credit Accounts (Income/Liabilities/Equity):</strong> Their balance GOES UP when
+                            Credited, and GOES DOWN when Debited.</li>
+                    </ul>
+                </div>
+                <div class="modal-footer border-top-0 px-4 pb-4">
+                    <button type="button" class="btn btn-primary fw-medium px-4 rounded-pill shadow-sm"
+                        data-dismiss="modal">I Understand</button>
+                </div>
             </div>
         </div>
     </div>

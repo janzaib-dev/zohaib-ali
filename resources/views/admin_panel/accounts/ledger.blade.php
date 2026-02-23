@@ -39,10 +39,18 @@
                     <!-- Ledger Header -->
                     <div class="ledger-header d-flex justify-content-between align-items-center">
                         <div>
-                            <h4 class="mb-1 text-primary"><i class="bi bi-book"></i> General Ledger</h4>
+                            <h4 class="mb-1 text-primary d-flex align-items-center gap-2">
+                                <i class="bi bi-book me-2"></i> General Ledger
+                                <button type="button"
+                                    class="btn btn-sm btn-outline-info d-flex align-items-center gap-1 ms-2 rounded-pill px-3 shadow-none"
+                                    data-toggle="modal" data-target="#journalInfoModal" title="How Journal Entries Work?">
+                                    <i class="bi bi-info-circle"></i> Info
+                                </button>
+                            </h4>
                             <h5 class="text-dark">{{ $account->title }} <span
                                     class="text-muted fs-6">({{ $account->account_code }})</span></h5>
-                            <p class="mb-0 text-muted">Head: {{ $account->head->name ?? 'N/A' }} | Type: {{ $account->type }}
+                            <p class="mb-0 text-muted">Head: {{ $account->head->name ?? 'N/A' }} | Type:
+                                {{ $account->type }}
                             </p>
                         </div>
                         <div class="text-end">

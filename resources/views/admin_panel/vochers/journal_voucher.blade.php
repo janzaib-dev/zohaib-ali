@@ -7,8 +7,14 @@
 
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h4 class="fw-bold mb-0 text-dark"><i class="bi bi-journal-bookmark-fill text-primary me-2"></i>Journal
-                        Voucher</h4>
+                    <h4 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                        <i class="bi bi-journal-bookmark-fill text-primary me-2"></i> Journal Voucher
+                        <button type="button"
+                            class="btn btn-sm btn-outline-info d-flex align-items-center gap-1 ms-2 rounded-pill px-3 shadow-none"
+                            data-toggle="modal" data-target="#journalVoucherInfoModal" title="How to use Journal Vouchers?">
+                            <i class="bi bi-info-circle"></i> Info
+                        </button>
+                    </h4>
                     <p class="text-muted mb-0 small">Create a balanced double-entry ledger entry (Debit = Credit)</p>
                 </div>
                 <a href="{{ route('all_recepit_vochers') }}" class="btn btn-outline-secondary">
@@ -101,7 +107,8 @@
                                                     <optgroup label="{{ $headName }}">
                                                         @foreach ($accs as $acc)
                                                             <option value="{{ $acc->id }}">{{ $acc->title }}
-                                                                ({{ $acc->account_code ?: $acc->id }})</option>
+                                                                ({{ $acc->account_code ?: $acc->id }})
+                                                            </option>
                                                         @endforeach
                                                     </optgroup>
                                                 @endforeach
@@ -131,7 +138,8 @@
                                                     <optgroup label="{{ $headName }}">
                                                         @foreach ($accs as $acc)
                                                             <option value="{{ $acc->id }}">{{ $acc->title }}
-                                                                ({{ $acc->account_code ?: $acc->id }})</option>
+                                                                ({{ $acc->account_code ?: $acc->id }})
+                                                            </option>
                                                         @endforeach
                                                     </optgroup>
                                                 @endforeach
@@ -168,6 +176,81 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    {{-- Journal Voucher Info Modal --}}
+    <div class="modal fade" id="journalVoucherInfoModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title fw-bold text-info ms-2"><i class="bi bi-info-circle me-2"></i> How to use
+                        Manual Journal Vouchers</h5>
+                    <button type="button" class="close text-dark" data-dismiss="modal" aria-label="Close"
+                        style="background:none;border:none;font-size:1.5rem;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body p-4 pt-3 text-dark">
+                    <p class="small text-muted mb-3">A Journal Voucher allows you to manually create custom financial
+                        transactions (Journal Entries) that the automated system doesn't handle natively. This is typically
+                        used by accountants for manual adjustments.</p>
+
+                    <h6 class="fw-bold tracking-wide text-uppercase mb-2 text-primary" style="font-size: 0.85rem;">The
+                        Golden Rule: Balance</h6>
+                    <div class="alert alert-light border shadow-sm rounded-3 mb-4">
+                        <ul class="mb-0 ps-3 small text-dark" style="line-height: 1.6;">
+                            <li><strong>Total Debits MUST equal Total Credits.</strong> A Journal Voucher cannot be saved if
+                                the bottom indicators show you are unbalanced. Every action requires an equal and opposite
+                                reaction.</li>
+                        </ul>
+                    </div>
+
+                    <h6 class="fw-bold tracking-wide text-uppercase mb-2 text-primary" style="font-size: 0.85rem;">Common
+                        Use Cases for Manual Vouchers</h6>
+                    <div class="table-responsive small mb-0">
+                        <table class="table table-bordered table-sm mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Scenario</th>
+                                    <th class="text-success">Debit (Dr)</th>
+                                    <th class="text-danger">Credit (Cr)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>1. Initial Capital Investment</strong><br><span class="text-muted">Owner
+                                            puts cash into the business</span></td>
+                                    <td>Cash in Hand</td>
+                                    <td>Owner's Equity / Capital</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>2. Depreciation of Assets</strong><br><span class="text-muted">Reducing
+                                            value of equipment over time</span></td>
+                                    <td>Depreciation Expense</td>
+                                    <td>Accumulated Depreciation</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>3. Bank Reconciliations</strong><br><span class="text-muted">Bank charged a
+                                            fee automatically</span></td>
+                                    <td>Bank Fees Expense</td>
+                                    <td>Bank Account</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>4. Write-Offs / Bad Debt</strong><br><span class="text-muted">Customer goes
+                                            bankrupt, unpaid debt</span></td>
+                                    <td>Bad Debt Expense</td>
+                                    <td>Accounts Receivable</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 px-4 pb-4">
+                    <button type="button" class="btn btn-primary fw-medium px-4 rounded-pill shadow-sm"
+                        data-dismiss="modal">I Understand</button>
+                </div>
+            </div>
         </div>
     </div>
 @endsection

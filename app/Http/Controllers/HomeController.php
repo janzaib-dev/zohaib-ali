@@ -53,9 +53,9 @@ class HomeController extends Controller
                 // DAILY (last 7 days)
                 $dailyLabels = collect(range(6, 0))->map(fn($i) => \Carbon\Carbon::today()->subDays($i)->format('Y-m-d'));
                 $dailyData = $dailyLabels->map(function ($date) {
-                    return DB::table('sales')
-                        ->whereDate('created_at', $date)
-                        ->sum('total_net');
+                    $salesSum = DB::table('sales')->whereDate('created_at', $date)->sum('total_net');
+                    $returnSum = DB::table('sale_returns')->whereDate('created_at', $date)->sum('net_amount');
+                    return $salesSum - $returnSum;
                 });
 
                 // WEEKLY (This + Last 2 weeks)
@@ -63,19 +63,24 @@ class HomeController extends Controller
                 $weeklyData = collect([0, 1, 2])->map(function ($i) {
                     $start = \Carbon\Carbon::now()->startOfWeek()->subWeeks($i);
                     $end = $start->copy()->endOfWeek();
-                    return DB::table('sales')
-                        ->whereBetween('created_at', [$start, $end])
-                        ->sum('total_net');
+                    $salesSum = DB::table('sales')->whereBetween('created_at', [$start, $end])->sum('total_net');
+                    $returnSum = DB::table('sale_returns')->whereBetween('created_at', [$start, $end])->sum('net_amount');
+                    return $salesSum - $returnSum;
                 })->reverse()->values();
 
                 // MONTHLY (Jan → Current month)
                 $months = range(1, \Carbon\Carbon::now()->month);
                 $monthLabels = collect($months)->map(fn($m) => \Carbon\Carbon::create()->month($m)->format('F'));
                 $monthlyData = collect($months)->map(function ($month) {
-                    return DB::table('sales')
+                    $salesSum = DB::table('sales')
                         ->whereMonth('created_at', $month)
                         ->whereYear('created_at', \Carbon\Carbon::now()->year)
                         ->sum('total_net');
+                    $returnSum = DB::table('sale_returns')
+                        ->whereMonth('created_at', $month)
+                        ->whereYear('created_at', \Carbon\Carbon::now()->year)
+                        ->sum('net_amount');
+                    return $salesSum - $returnSum;
                 });
 
                 $salesChartStats = [
@@ -102,9 +107,9 @@ class HomeController extends Controller
                 $purchaseDailySeries = [[
                     'name' => 'Purchases',
                     'data' => $purchaseDailyLabels->map(function ($date) {
-                        return DB::table('purchases')
-                            ->whereDate('created_at', $date)
-                            ->sum('net_amount');
+                        $purchSum = DB::table('purchases')->whereDate('created_at', $date)->sum('net_amount');
+                        $retSum = DB::table('purchase_returns')->whereDate('created_at', $date)->sum('net_amount');
+                        return $purchSum - $retSum;
                     })
                 ]];
 
@@ -115,9 +120,9 @@ class HomeController extends Controller
                     'data' => collect([0, 1, 2])->map(function ($i) {
                         $start = Carbon::now()->startOfWeek()->subWeeks($i);
                         $end = $start->copy()->endOfWeek();
-                        return DB::table('purchases')
-                            ->whereBetween('created_at', [$start, $end])
-                            ->sum('net_amount');
+                        $purchSum = DB::table('purchases')->whereBetween('created_at', [$start, $end])->sum('net_amount');
+                        $retSum = DB::table('purchase_returns')->whereBetween('created_at', [$start, $end])->sum('net_amount');
+                        return $purchSum - $retSum;
                     })->reverse()->values()
                 ]];
 
@@ -127,10 +132,15 @@ class HomeController extends Controller
                 $purchaseMonthlySeries = [[
                     'name' => 'Purchases',
                     'data' => collect($months)->map(function ($month) {
-                        return DB::table('purchases')
+                        $purchSum = DB::table('purchases')
                             ->whereMonth('created_at', $month)
                             ->whereYear('created_at', Carbon::now()->year)
                             ->sum('net_amount');
+                        $retSum = DB::table('purchase_returns')
+                            ->whereMonth('created_at', $month)
+                            ->whereYear('created_at', Carbon::now()->year)
+                            ->sum('net_amount');
+                        return $purchSum - $retSum;
                     })
                 ]];
 

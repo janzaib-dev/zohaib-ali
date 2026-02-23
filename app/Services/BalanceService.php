@@ -161,31 +161,31 @@ class BalanceService
      */
     public function getFinancialSummary(string $startDate, string $endDate): array
     {
-        // 1. Sales Revenue (Credit entries in Sales Account)
-        // Assuming Sales Account ID is 4 (Standard) or fetch by code
-        $salesHeadId = 4; // Income
+        // 1. Sales Revenue (Credit minus Debit)
+        $salesHeadId = \App\Models\AccountHead::where('name', 'Income')->value('id') ?? 3;
         $sales = JournalEntry::whereHas('account', function ($q) use ($salesHeadId) {
             $q->where('head_id', $salesHeadId);
         })
             ->whereBetween('entry_date', [$startDate, $endDate])
-            ->sum('credit');
+            ->selectRaw('SUM(credit) - SUM(debit) as net_sales')
+            ->value('net_sales') ?? 0;
 
-        // 2. Purchase Expense (Debit entries in Expense Account)
-        $expenseHeadId = 3; // Expense
+        // 2. Purchase Expense (Debit minus Credit)
+        $expenseHeadId = \App\Models\AccountHead::where('name', 'Expenses')->value('id') ?? 4;
         $purchases = JournalEntry::whereHas('account', function ($q) use ($expenseHeadId) {
             $q->where('head_id', $expenseHeadId);
         })
             ->whereBetween('entry_date', [$startDate, $endDate])
-            ->sum('debit');
+            ->selectRaw('SUM(debit) - SUM(credit) as net_purchases')
+            ->value('net_purchases') ?? 0;
 
         // 3. Total Receivables (Money people owe us)
-        $receivables = \App\Models\CustomerLedger::sum('closing_balance'); // Use legacy for now or calculate from journals
+        $arAccount = \App\Models\Account::where('title', 'Accounts Receivable')->first();
+        $receivables = $arAccount ? $arAccount->calculated_balance : 0;
 
         // 4. Total Payables (Money we owe vendors)
-        // Calculate from Journal Entries since we just implemented it
-        $payables = JournalEntry::where('party_type', \App\Models\Vendor::class)
-            ->selectRaw('SUM(credit) - SUM(debit) as balance')
-            ->value('balance') ?? 0;
+        $apAccount = \App\Models\Account::where('title', 'Accounts Payable')->first();
+        $payables = $apAccount ? $apAccount->calculated_balance : 0;
 
         return [
             'sales' => $sales,
@@ -439,10 +439,10 @@ class BalanceService
     {
         // Define the 4 heads we need (NO Equity)
         $headMap = [
-            'asset'     => 'Current Assets',
+            'asset' => 'Current Assets',
             'liability' => 'Current Liabilities',
-            'income'    => 'Income',
-            'expense'   => 'Expenses',
+            'income' => 'Income',
+            'expense' => 'Expenses',
         ];
 
         $headIds = [];
@@ -458,39 +458,39 @@ class BalanceService
         // Define the 5 critical accounts
         $criticalAccounts = [
             [
-                'title'        => 'Cash in Hand',
+                'title' => 'Cash in Hand',
                 'account_code' => 'CASH',
-                'type'         => 'Debit',
-                'head_id'      => $headIds['asset'],
-                'search'       => ['title', 'like', '%Cash%'],
+                'type' => 'Debit',
+                'head_id' => $headIds['asset'],
+                'search' => ['title', 'like', '%Cash%'],
             ],
             [
-                'title'        => 'Accounts Receivable',
+                'title' => 'Accounts Receivable',
                 'account_code' => 'AR',
-                'type'         => 'Debit',
-                'head_id'      => $headIds['asset'],
-                'search'       => ['title', 'like', '%Receivable%'],
+                'type' => 'Debit',
+                'head_id' => $headIds['asset'],
+                'search' => ['title', 'like', '%Receivable%'],
             ],
             [
-                'title'        => 'Accounts Payable',
+                'title' => 'Accounts Payable',
                 'account_code' => 'AP',
-                'type'         => 'Credit',
-                'head_id'      => $headIds['liability'],
-                'search'       => ['title', 'like', '%Payable%'],
+                'type' => 'Credit',
+                'head_id' => $headIds['liability'],
+                'search' => ['title', 'like', '%Payable%'],
             ],
             [
-                'title'        => 'Sales Revenue',
+                'title' => 'Sales Revenue',
                 'account_code' => 'SALES',
-                'type'         => 'Credit',
-                'head_id'      => $headIds['income'],
-                'search'       => ['account_code', 'SALES'],
+                'type' => 'Credit',
+                'head_id' => $headIds['income'],
+                'search' => ['account_code', 'SALES'],
             ],
             [
-                'title'        => 'Purchase Expense',
+                'title' => 'Purchase Expense',
                 'account_code' => 'PURCHASE',
-                'type'         => 'Debit',
-                'head_id'      => $headIds['expense'],
-                'search'       => ['account_code', 'PURCHASE'],
+                'type' => 'Debit',
+                'head_id' => $headIds['expense'],
+                'search' => ['account_code', 'PURCHASE'],
             ],
         ];
 
@@ -498,12 +498,12 @@ class BalanceService
             $existing = Account::where($def['search'][0], $def['search'][1], $def['search'][2] ?? $def['search'][1])->first();
             if (! $existing) {
                 $acc = Account::create([
-                    'title'           => $def['title'],
-                    'account_code'    => $def['account_code'],
-                    'type'            => $def['type'],
-                    'head_id'         => $def['head_id'],
+                    'title' => $def['title'],
+                    'account_code' => $def['account_code'],
+                    'type' => $def['type'],
+                    'head_id' => $def['head_id'],
                     'opening_balance' => 0,
-                    'status'          => 1,
+                    'status' => 1,
                 ]);
                 $acc->account_code = $def['account_code'];
                 $acc->save();
@@ -618,12 +618,12 @@ class BalanceService
             ->pluck('id')
             ->toArray();
 
-        if (!empty($cashBankHeadIds)) {
+        if (! empty($cashBankHeadIds)) {
             $accounts = Account::whereIn('head_id', $cashBankHeadIds)
                 ->where('status', 1)
                 ->orderBy('title')
                 ->get();
-                
+
             if ($accounts->isNotEmpty()) {
                 // Filter further if needed, but returning all accounts under these heads is what it did before
                 return $accounts;
@@ -632,9 +632,9 @@ class BalanceService
 
         // Fallback: accounts with Cash or Bank in title
         return Account::where('status', 1)
-            ->where(function($q) {
+            ->where(function ($q) {
                 $q->where('title', 'like', '%Cash%')
-                  ->orWhere('title', 'like', '%Bank%');
+                    ->orWhere('title', 'like', '%Bank%');
             })
             ->orderBy('title')
             ->get();
