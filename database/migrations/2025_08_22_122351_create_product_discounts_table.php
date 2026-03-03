@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-          Schema::create('product_discounts', function (Blueprint $table) {
+        Schema::create('product_discounts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('product_id')->constrained('products')->onDelete('cascade');
             $table->decimal('actual_price', 10, 2)->nullable();
@@ -19,7 +19,7 @@ return new class extends Migration
             $table->decimal('discount_amount', 10, 2)->nullable();
             $table->decimal('final_price', 10, 2); // price after discount
             $table->decimal('total_discount', 15, 2)->default(0);
-            $table->date('date')->default(DB::raw('CURRENT_DATE'));
+            $table->date('date')->nullable();
             $table->boolean('status')->default(1); // 1=Active, 0=Inactive
             $table->timestamps();
         });
