@@ -25,17 +25,30 @@ class VendorController extends Controller
             // Update existing vendor (prevent balance update)
             Vendor::findOrFail($request->id)->update($request->except('opening_balance'));
         } else {
+            // Ensure Accounts Payable COA is created
+            $apAccountId = app(\App\Services\BalanceService::class)->getAccountsPayableId();
+
             // Create a new vendor and ledger entry
             $vendor = Vendor::create($request->all());
 
             // Create ledger entry
+            $opening = $request->opening_balance ?? 0;
             VendorLedger::create([
                 'vendor_id' => $vendor->id,
                 'admin_or_user_id' => Auth::id(),
-                'opening_balance' => $request->opening_balance ?? 0,
-                'closing_balance' => $request->opening_balance ?? 0,
-                'previous_balance' => $request->previous_balance ?? 0,
+                'opening_balance' => $opening,
+                'closing_balance' => $opening,
+                'previous_balance' => $opening,
             ]);
+
+            // Add opening balance to Chart of Accounts (Accounts Payable)
+            if ($opening > 0) {
+                $apAccount = \App\Models\Account::find($apAccountId);
+                if ($apAccount) {
+                    $apAccount->opening_balance += $opening;
+                    $apAccount->save();
+                }
+            }
         }
 
         return back()->with('success', 'Saved Successfully');

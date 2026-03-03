@@ -99,8 +99,9 @@ class CustomerController extends Controller
     {
         $latestId = 'CUST-'.str_pad(Customer::max('id') + 1, 4, '0', STR_PAD_LEFT);
         $salesOfficers = SalesOfficer::orderBy('name')->get();
+        $zones = \App\Models\Zone::orderByDesc('id')->get();
 
-        return view('admin_panel.customers.create', compact('latestId', 'salesOfficers'));
+        return view('admin_panel.customers.create', compact('latestId', 'salesOfficers', 'zones'));
     }
 
     public function store(Request $request)
@@ -125,20 +126,31 @@ class CustomerController extends Controller
             'sales_officer_id' => 'nullable|exists:sales_officers,id',
         ]);
 
+        $opening = $data['opening_balance'] ?? 0;
+        $data['previous_balance'] = $opening; // set previous balance = opening balance
+
+        // Ensure Accounts Receivable COA is created
+        $arAccountId = app(\App\Services\BalanceService::class)->getAccountsReceivableId();
+
         // Customer create
         $customer = Customer::create($data);
 
         // Ledger me entry agar opening balance dia gaya ho
-        $opening = $data['opening_balance'] ?? 0;
-
         if ($opening > 0) {
             CustomerLedger::create([
                 'customer_id' => $customer->id,
                 'admin_or_user_id' => Auth::id(),
-                'previous_balance' => 0,
+                'previous_balance' => $opening, // reflect opening balance
                 'opening_balance' => $opening,           // ✅ yahan set karna zaroori hai
                 'closing_balance' => $opening,
             ]);
+
+            // Add opening balance to Chart of Accounts (Accounts Receivable)
+            $arAccount = \App\Models\Account::find($arAccountId);
+            if ($arAccount) {
+                $arAccount->opening_balance += $opening;
+                $arAccount->save();
+            }
         }
 
         return redirect()->route('customers.index')->with('success', 'Customer created successfully.');
@@ -147,14 +159,18 @@ class CustomerController extends Controller
     public function edit($id)
     {
         $customer = Customer::findOrFail($id);
+        $zones = \App\Models\Zone::orderByDesc('id')->get();
 
-        return view('admin_panel.customers.edit', compact('customer'));
+        return view('admin_panel.customers.edit', compact('customer', 'zones'));
     }
 
     public function update(Request $request, $id)
     {
         $customer = Customer::findOrFail($id);
-        $data = $request->except('_token');
+        
+        // Exclude opening_balance and previous_balance from being updated 
+        // because it messes up existing ledger records
+        $data = $request->except(['_token', 'opening_balance', 'previous_balance']);
 
         $customer->update($data);
 
@@ -174,54 +190,55 @@ class CustomerController extends Controller
     // Customer Ledger View
     public function customer_ledger(Request $request)
     {
-        if (Auth::check()) {
-            
-            $customers = Customer::all();
-            $ledgerData = [];
-            
-            if ($request->filled('customer_id')) {
-                // Use Balance Service for accurate Statement
-                $balanceService = app(\App\Services\BalanceService::class);
-                
-                $startDate = $request->from_date ?? '2000-01-01';
-                $endDate = $request->to_date ?? date('Y-m-d');
-                
-                $data = $balanceService->getCustomerLedger($request->customer_id, $startDate, $endDate);
-                
-                // transform for view
-                $ledgerData = collect($data['transactions'])->map(function($t) use ($data) {
-                    return (object) [
-                        'created_at' => \Carbon\Carbon::parse($t['date']),
-                        'customer' => $data['customer'],
-                        'description' => $t['description'],
-                        'debit' => $t['debit'],
-                        'credit' => $t['credit'],
-                        'closing_balance' => $t['balance'],
-                        // We act as if previous balance is calculated, but views usually use these explicitly now
-                        'previous_balance' => $t['balance'] - ($t['debit'] - $t['credit']) 
-                    ];
-                });
-                
-                // Add Opening Balance as first row if needed?
-                // The BalanceService includes opening balance in the calculation but returns transactions.
-                // We might want to pass opening balance to view.
-                
-            } else {
-                // If no customer selected, show empty or recent journal entries?
-                // For now, let's keep it empty to encourage selection or just basic legacy entries if needed
-                // But legacy entries are wrong. Let's return empty to force selection.
-                $ledgerData = collect([]);
-            }
-
-            return view('admin_panel.customers.customer_ledger', [
-                'CustomerLedgers' => $ledgerData,
-                'customers' => $customers
-            ]);
-            
-        } else {
+        if (! Auth::check()) {
             return redirect()->back();
         }
+
+        $customers  = Customer::orderBy('customer_name')->get();
+        $ledgerData = collect([]);
+
+        if ($request->filled('customer_id')) {
+            $customerId = $request->customer_id;
+            $startDate  = $request->from_date ?? '2000-01-01';
+            $endDate    = $request->to_date   ?? date('Y-m-d');
+
+            // Read directly from customer_ledgers table (covers sales, returns, payments, adjustments)
+            $rows = CustomerLedger::with('customer')
+                ->where('customer_id', $customerId)
+                ->whereDate('created_at', '>=', $startDate)
+                ->whereDate('created_at', '<=', $endDate)
+                ->orderBy('id', 'asc')
+                ->get();
+
+            $ledgerData = $rows->map(function ($row) {
+                $prev  = (float) ($row->previous_balance ?? 0);
+                $close = (float) ($row->closing_balance  ?? 0);
+                $diff  = $close - $prev;
+
+                // Derive debit / credit from balance movement
+                // Positive diff = balance went up = Debit (customer owes more)
+                // Negative diff = balance went down = Credit (customer paid / return)
+                $debit  = $diff > 0 ? $diff  : 0;
+                $credit = $diff < 0 ? abs($diff) : 0;
+
+                return (object) [
+                    'created_at'       => $row->created_at,
+                    'customer'         => $row->customer,
+                    'description'      => $row->description,
+                    'debit'            => $debit,
+                    'credit'           => $credit,
+                    'closing_balance'  => $close,
+                    'previous_balance' => $prev,
+                ];
+            });
+        }
+
+        return view('admin_panel.customers.customer_ledger', [
+            'CustomerLedgers' => $ledgerData,
+            'customers'       => $customers,
+        ]);
     }
+
     // customer payment start
 
     // View all customer payments

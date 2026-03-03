@@ -489,19 +489,22 @@
                     <p class="small text-muted mb-3">The Chart of Accounts (COA) is the foundation of your entire financial
                         system. It tracks where your money goes and where it comes from.</p>
 
-                    <h6 class="fw-bold tracking-wide text-uppercase mb-2 text-primary" style="font-size: 0.85rem;">The 5
+                    <h6 class="fw-bold tracking-wide text-uppercase mb-2 text-primary" style="font-size: 0.85rem;">The 6
                         Critical Accounts</h6>
                     <div class="alert alert-light border shadow-sm rounded-3 mb-4">
                         <ul class="mb-0 ps-3 small text-dark" style="line-height: 1.6;">
                             <li><strong>1. Sales Revenue (Credit/Income):</strong> Automatically increases when you make a
                                 Sale. Decreases when a customer returns an item (Sale Return).</li>
-                            <li><strong>2. Purchase Expense (Debit/Expense):</strong> Automatically increases when you buy
-                                stock. Decreases when you return stock to vendors (Purchase Return).</li>
-                            <li><strong>3. Accounts Receivable (Debit/Asset):</strong> The money customers owe you.
+                            <li><strong>2. Purchase (Debit/Expense):</strong> Automatically increases with the <em>pure
+                                    purchase price</em> when you buy stock. Decreases on Purchase Return.</li>
+                            <li><strong>3. Purchase Expensive (Debit/Expense):</strong> Automatically created from the
+                                <em>Extra Cost</em> field on a purchase. Also appears in Expense Vouchers. Can be created
+                                manually.</li>
+                            <li><strong>4. Accounts Receivable (Debit/Asset):</strong> The money customers owe you.
                                 Increases on unpaid sales. Decreases when you receive payment or process a Sale Return.</li>
-                            <li><strong>4. Accounts Payable (Credit/Liability):</strong> The money you owe to vendors.
+                            <li><strong>5. Accounts Payable (Credit/Liability):</strong> The money you owe to vendors.
                                 Increases on unpaid purchases. Decreases when you make a payment.</li>
-                            <li><strong>5. Cash in Hand / Bank (Debit/Asset):</strong> Your actual money. Increases when you
+                            <li><strong>6. Cash in Hand / Bank (Debit/Asset):</strong> Your actual money. Increases when you
                                 receive a customer payment. Decreases when you pay vendors.</li>
                         </ul>
                     </div>

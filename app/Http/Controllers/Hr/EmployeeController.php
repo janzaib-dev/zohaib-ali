@@ -36,7 +36,7 @@ class EmployeeController extends Controller
             'department_id' => 'required|exists:hr_departments,id',
             'designation_id' => 'required|exists:hr_designations,id',
             'joining_date' => 'required|date',
-            'basic_salary' => 'required|numeric',
+            'weekly_off' => 'nullable|string',
             'password' => 'nullable|min:6',
             'punch_gap_minutes' => 'nullable|integer|min:1|max:120',
             'document_degree' => 'nullable|file|mimes:pdf,jpg,png,jpeg|max:2048',
@@ -50,7 +50,7 @@ class EmployeeController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $data = $request->except(['document_degree', 'document_certificate', 'document_hsc_marksheet', 'document_ssc_marksheet', 'document_cv', 'password', 'casual_leave_days']);
+        $data = $request->except(['document_degree', 'document_certificate', 'document_hsc_marksheet', 'document_ssc_marksheet', 'document_cv', 'password']);
         $data['is_docs_submitted'] = $request->has('is_docs_submitted') ? 1 : 0;
 
         // Handle Custom Shift Logic
@@ -111,43 +111,6 @@ class EmployeeController extends Controller
             }
         }
 
-        // Handle Casual Leave Days Sync
-        if ($request->has('casual_leave_days')) {
-            $submittedDates = $request->casual_leave_days ? explode(',', $request->casual_leave_days) : [];
-            $submittedDates = array_map('trim', $submittedDates);
-
-            // Get existing single-day Casual leaves
-            $existingLeaves = $employee->leaves()
-                ->where('leave_type', 'Casual')
-                ->whereRaw('start_date = end_date') // Only manage single-day leaves to avoid messing up ranges
-                ->get();
-
-            $existingDates = $existingLeaves->pluck('start_date')->map(function ($d) {
-                return \Carbon\Carbon::parse($d)->format('Y-m-d');
-            })->toArray();
-
-            // 1. Create new leaves
-            foreach ($submittedDates as $date) {
-                if (! empty($date) && ! in_array($date, $existingDates)) {
-                    // Check if leave already exists (e.g. part of a range) - optional check
-                    $employee->leaves()->create([
-                        'leave_type' => 'Casual',
-                        'start_date' => $date,
-                        'end_date' => $date,
-                        'reason' => 'Casual Leave assigned via Employee Form',
-                        'status' => 'approved',
-                    ]);
-                }
-            }
-
-            // 2. Delete removed leaves
-            foreach ($existingLeaves as $leave) {
-                $leaveDate = \Carbon\Carbon::parse($leave->start_date)->format('Y-m-d');
-                if (! in_array($leaveDate, $submittedDates)) {
-                    $leave->delete();
-                }
-            }
-        }
 
         // Auto-sync to biometric device when creating new employee
         // Auto-sync to biometric device when creating new employee
@@ -168,7 +131,11 @@ class EmployeeController extends Controller
         }
         */
 
-        return response()->json(['success' => 'Employee saved successfully']);
+        // Clear relevant caches
+        \Cache::forget('employee.face_encodings');
+        \Cache::forget('hr.employees.active.lite');
+
+        return response()->json(['success' => 'Employee saved successfully', 'reload' => true]);
     }
 
     public function destroy(Employee $employee)
@@ -184,34 +151,42 @@ class EmployeeController extends Controller
         $employee->leaves()->where('leave_type', 'Casual')->delete();
         $employee->delete();
 
-        return response()->json(['success' => 'Employee deleted successfully']);
+        return response()->json(['success' => 'Employee deleted successfully', 'reload' => true]);
     }
 
     /**
      * Get face encodings for all employees (for Kiosk)
+     * Cached for 1 hour to improve performance
      */
     public function getEncodings()
     {
-        $employees = Employee::whereNotNull('face_encoding')
-            ->where('status', 'active')
-            ->select('id', 'first_name', 'last_name', 'face_encoding', 'face_photo', 'designation_id', 'department_id')
-            ->with(['department', 'designation'])
-            ->get();
+        $data = \Cache::remember('employee.face_encodings', 3600, function () {
+            $employees = Employee::whereNotNull('face_encoding')
+                ->where('status', 'active')
+                ->select('id', 'first_name', 'last_name', 'face_encoding', 'face_photo', 'designation_id', 'department_id')
+                ->with(['department:id,name', 'designation:id,name'])
+                ->get();
 
-        $data = $employees->map(function ($emp) {
-            return [
-                'id' => $emp->id,
-                'name' => $emp->full_name,
-                'department' => $emp->department->name ?? 'N/A',
-                'designation' => $emp->designation->name ?? 'N/A',
-                'photo' => $emp->face_photo ? asset($emp->face_photo) : null,
-                'descriptor' => $emp->face_encoding,
-            ];
+            return $employees->map(function ($emp) {
+                return [
+                    'id' => $emp->id,
+                    'name' => $emp->full_name,
+                    'department' => $emp->department->name ?? 'N/A',
+                    'designation' => $emp->designation->name ?? 'N/A',
+                    'photo' => $emp->face_photo ? asset($emp->face_photo) : null,
+                    'descriptor' => $emp->face_encoding,
+                ];
+            });
         });
 
-        return response()->json($data);
+        return response()->json($data)
+            ->header('Cache-Control', 'public, max-age=3600')
+            ->header('Expires', now()->addHour()->toRfc7231String());
     }
 
+    /**
+     * Store face encoding for an employee
+     */
     /**
      * Store face encoding for an employee
      */
@@ -220,14 +195,67 @@ class EmployeeController extends Controller
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:hr_employees,id',
             'descriptor' => 'required|array',
+            'descriptor.*' => 'numeric', // Validate each element is numeric
             'image' => 'nullable|string', // Base64 image
+            'force_override' => 'nullable|boolean', // Allow admin to override duplicate warning
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Validate descriptor format
+        $faceService = app(\App\Services\FaceRecognitionService::class);
+        if (! $faceService->isValidDescriptor($request->descriptor)) {
+            return response()->json([
+                'error' => 'Invalid face descriptor format. Expected 128-dimensional array.',
+            ], 422);
+        }
+
         $employee = Employee::findOrFail($request->employee_id);
+
+        // Check face uniqueness (exclude current employee if updating)
+        $uniquenessCheck = $faceService->checkFaceUniqueness(
+            $request->descriptor,
+            $employee->id
+        );
+
+        // If face is not unique and user hasn't forced override
+        if (! $uniquenessCheck['is_unique']) {
+            if ($request->force_override) {
+                if (! auth()->user()->can('hr.employees.delete')) {
+                    return response()->json(['error' => 'You do not have permission to override duplicate face warnings.'], 403);
+                }
+                // If authorized, proceed to registration
+                \Illuminate\Support\Facades\Log::warning("Face override authorized by user ".auth()->id()." for employee ID {$employee->id}");
+            } else {
+                $similarEmployee = $uniquenessCheck['similar_employee'];
+
+                // Check if user has permission to override
+                $canOverride = auth()->user()->can('hr.employees.delete'); // Using delete permission as "admin" level
+
+                return response()->json([
+                    'error' => 'duplicate_face',
+                    'message' => sprintf(
+                        'This face is already registered to %s (ID: %d). Similarity: %s%%',
+                        $similarEmployee->full_name,
+                        $similarEmployee->id,
+                        $uniquenessCheck['similarity_percentage']
+                    ),
+                    'similar_employee' => [
+                        'id' => $similarEmployee->id,
+                        'name' => $similarEmployee->full_name,
+                        'department' => $similarEmployee->department->name ?? 'N/A',
+                        'designation' => $similarEmployee->designation->name ?? 'N/A',
+                    ],
+                    'similarity_percentage' => $uniquenessCheck['similarity_percentage'],
+                    'distance' => $uniquenessCheck['distance'],
+                    'can_override' => $canOverride,
+                ], 409); // 409 Conflict
+            }
+        }
+
+        // Proceed with registration
         $employee->face_encoding = $request->descriptor;
 
         // Save face photo if provided
@@ -249,6 +277,21 @@ class EmployeeController extends Controller
 
         $employee->save();
 
-        return response()->json(['success' => 'Face registered successfully for '.$employee->full_name]);
+        // Log the registration
+        \Illuminate\Support\Facades\Log::info('Face registered for employee', [
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->full_name,
+            'registered_by' => auth()->id(),
+            'was_override' => $request->force_override ?? false,
+        ]);
+
+        // Clear face encodings cache to ensure fresh data on next request
+        \Cache::forget('employee.face_encodings');
+
+        return response()->json([
+            'success' => 'Face registered successfully for '.$employee->full_name,
+            'was_override' => $request->force_override ?? false,
+        ]);
     }
+
 }

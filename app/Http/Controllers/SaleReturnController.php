@@ -99,6 +99,16 @@ class SaleReturnController extends Controller
             'payment_amount' => 'nullable|array',
         ]);
 
+        // Prevent identical duplicate submissions within a short timeframe (e.g. user double-clicks or browser form resubmission)
+        if (!empty($validated['sale_id'])) {
+            $duplicate = SaleReturn::where('sale_id', $validated['sale_id'])
+                ->where('created_at', '>=', Carbon::now()->subSeconds(15))
+                ->exists();
+            if ($duplicate) {
+                return redirect()->route('sale.return.index')->with('success', 'Sale return processed successfully. (Duplicate request ignored)');
+            }
+        }
+
         DB::beginTransaction();
 
         try {
@@ -206,45 +216,75 @@ class SaleReturnController extends Controller
 
             $netAmount = ($subtotal - $totalItemDiscount) - ($request->extra_discount ?? 0);
 
-            // Handle Refund Payment (Payment Voucher)
-            $totalPaid = 0;
-            if (! empty($request->payment_account_id)) {
-                $voucherService = app(\App\Services\VoucherService::class);
-                $arId = app(\App\Services\BalanceService::class)->getAccountsReceivableId();
+            // Handle Refund Payment – create a Payment Voucher ONLY when amount > 0
+            $totalPaid    = 0;
+            $pvAccountIds = [];
+            $pvAmounts    = [];
 
+            if (! empty($request->payment_account_id)) {
                 foreach ($request->payment_account_id as $idx => $accId) {
                     $amt = (float) ($request->payment_amount[$idx] ?? 0);
                     if ($accId && $amt > 0) {
-                        $totalPaid += $amt;
-
-                        // Create Payment Voucher via VoucherService (auto-generates voucher_no + posts to journal)
-                        $voucherService->createVoucher(
-                            [
-                                'voucher_type' => \App\Models\VoucherMaster::TYPE_PAYMENT,
-                                'date' => $validated['return_date'],
-                                'status' => 'posted',
-                                'party_type' => \App\Models\Customer::class,
-                                'party_id' => $validated['customer_id'],
-                                'remarks' => "Refund for Return #{$nextInvoice}",
-                            ],
-                            [
-                                // Cr Cash / Bank account (money goes out)
-                                [
-                                    'account_id' => $accId,
-                                    'debit' => 0,
-                                    'credit' => $amt,
-                                    'narration' => "Cash Refund for Return #{$nextInvoice}",
-                                ],
-                                // Dr Accounts Receivable (reduces what customer owes)
-                                [
-                                    'account_id' => $arId,
-                                    'debit' => $amt,
-                                    'credit' => 0,
-                                    'narration' => "Refund to Customer - Return #{$nextInvoice}",
-                                ],
-                            ]
-                        );
+                        $totalPaid    += $amt;
+                        $pvAccountIds[] = $accId;
+                        $pvAmounts[]    = $amt;
                     }
+                }
+            }
+
+            if ($totalPaid > 0) {
+                // Create legacy Payment Voucher record (payment_vouchers table) because we are paying out cash for the refund.
+                $pvid = \App\Models\PaymentVoucher::generateInvoiceNo();
+                \App\Models\PaymentVoucher::create([
+                    'pvid'             => $pvid,
+                    'party_id'         => $validated['customer_id'],
+                    'type'             => 'customer',
+                    'total_amount'     => $totalPaid,
+                    'receipt_date'     => $validated['return_date'],
+                    'entry_date'       => $validated['return_date'],
+                    'row_account_id'   => json_encode($pvAccountIds),
+                    'row_account_head' => json_encode(array_fill(0, count($pvAccountIds), null)),
+                    'amount'           => json_encode($pvAmounts),
+                    'remarks'          => "Refund for Sale Return #{$nextInvoice}",
+                ]);
+
+                // Create V2 VoucherMaster to show in Payment Voucher Index
+                $balanceService = app(\App\Services\BalanceService::class);
+                $customerControlAccountId = $balanceService->getAccountsReceivableId();
+                $v2Lines = [];
+
+                // 1. Debit Customer (Accounts Receivable increases because we refunded cash)
+                $v2Lines[] = [
+                    'account_id' => $customerControlAccountId,
+                    'debit'      => $totalPaid,
+                    'credit'     => 0,
+                    'narration'  => "Refund for Sale Return #{$nextInvoice}",
+                ];
+
+                // 2. Credit Cash/Bank accounts (Cash went out)
+                foreach ($pvAccountIds as $idx => $accId) {
+                    $amt = $pvAmounts[$idx];
+                    if ($amt > 0) {
+                        $v2Lines[] = [
+                            'account_id' => $accId,
+                            'debit'      => 0,
+                            'credit'     => $amt,
+                            'narration'  => "Refund paid from Account for Sale Return #{$nextInvoice}",
+                        ];
+                    }
+                }
+
+                try {
+                    app(\App\Services\VoucherService::class)->createVoucher([
+                        'voucher_type' => \App\Models\VoucherMaster::TYPE_PAYMENT,
+                        'date'         => $validated['return_date'],
+                        'status'       => \App\Models\VoucherMaster::STATUS_POSTED,
+                        'party_type'   => \App\Models\Customer::class,
+                        'party_id'     => $validated['customer_id'],
+                        'remarks'      => "Refund for Sale Return #{$nextInvoice} (Ref: {$pvid})",
+                    ], $v2Lines, auth()->id());
+                } catch (\Exception $e) {
+                    \Log::error('Error creating V2 Voucher for Sale Return: ' . $e->getMessage());
                 }
             }
 
@@ -259,18 +299,57 @@ class SaleReturnController extends Controller
 
             // Update Sale Status (if full return)
             if ($sale) {
-                $sale->update(['sale_status' => 'returned']);
+                // $return is already saved and has net_amount, so we can sum all returns for this sale
+                $totalReturned = \App\Models\SaleReturn::where('sale_id', $sale->id)->sum('net_amount');
+                if ($totalReturned >= $sale->total_net && $sale->total_net > 0) {
+                    $sale->update(['sale_status' => 'returned']);
+                }
             }
 
-            // Create Journal Voucher (Credit Note)
-            $transactionService = app(\App\Services\TransactionService::class);
-            if (method_exists($transactionService, 'createSaleReturnVoucher')) {
-                $transactionService->createSaleReturnVoucher($return);
+            // NOTE: No Journal/Receipt Voucher created on sale return.
+            // A Payment Voucher is only created above if the user entered a payment amount.
+
+            // ─── Update Customer Ledger ────────────────────────────────────────
+            // Step 1: Sale Return entry — balance reduces by netAmount (customer owes us less)
+            $ledger = \App\Models\CustomerLedger::where('customer_id', $validated['customer_id'])
+                ->latest('id')->first();
+
+            $prev_bal = $ledger
+                ? (float) $ledger->closing_balance
+                : (float) (\App\Models\Customer::find($validated['customer_id'])->previous_balance ?? 0);
+
+            $after_return_bal = $prev_bal - $netAmount;
+
+            \App\Models\CustomerLedger::create([
+                'customer_id'      => $validated['customer_id'],
+                'admin_or_user_id' => auth()->id() ?? 1,
+                'description'      => "Sale Return #{$nextInvoice}",
+                'previous_balance' => $prev_bal,
+                'closing_balance'  => $after_return_bal,
+                'opening_balance'  => 0,
+            ]);
+
+            // Step 2: Payment entry — if cash refunded, we paid them back so balance increases (less debt to them)
+            $final_bal = $after_return_bal;
+            if ($totalPaid > 0) {
+                $final_bal = $after_return_bal + $totalPaid;
+
+                \App\Models\CustomerLedger::create([
+                    'customer_id'      => $validated['customer_id'],
+                    'admin_or_user_id' => auth()->id() ?? 1,
+                    'description'      => "Payment Voucher - Refund for Return #{$nextInvoice}",
+                    'previous_balance' => $after_return_bal,
+                    'closing_balance'  => $final_bal,
+                    'opening_balance'  => 0,
+                ]);
             }
 
-            // Update Customer Ledger (if exists)
-            // Sale Return increases customer balance (they owe less or we owe them)
-            $balanceChange = $netAmount - $totalPaid;
+            // Update Customer master balance
+            $cust = \App\Models\Customer::find($validated['customer_id']);
+            if ($cust) {
+                $cust->previous_balance = $final_bal;
+                $cust->save();
+            }
 
             DB::commit();
 
@@ -288,20 +367,27 @@ class SaleReturnController extends Controller
      */
     public function saleReturnIndex()
     {
-        $returns = SaleReturn::with(['customer', 'sale'])->latest()->get();
+        $returns = SaleReturn::with(['customer', 'sale', 'warehouse'])->latest()->get();
 
         // Calculate updated financial details
         $returns->each(function ($return) {
             if ($return->sale) {
                 $sale = $return->sale;
 
-                $return->original_net_amount = $sale->total_net;
+                $return->original_net_amount = (float) $sale->total_net;
+                $return->original_paid_amount = (float) $sale->cash;
 
-                $totalReturned = SaleReturn::where('sale_id', $sale->id)
-                    ->sum('net_amount');
+                $totalReturned = SaleReturn::where('sale_id', $sale->id)->sum('net_amount');
 
-                $return->new_net_amount = max(0, $sale->total_net - $totalReturned);
-                $return->total_returned = $totalReturned;
+                $return->new_net_amount  = max(0, (float) $sale->total_net - $totalReturned);
+                $return->new_due_amount  = max(0, (float) $sale->total_net - (float) $sale->cash - $return->net_amount);
+                $return->total_returned  = (float) $totalReturned;
+            } else {
+                $return->original_net_amount = null;
+                $return->original_paid_amount = null;
+                $return->new_net_amount  = null;
+                $return->new_due_amount  = null;
+                $return->total_returned  = null;
             }
         });
 

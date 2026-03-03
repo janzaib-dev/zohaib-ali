@@ -37,8 +37,8 @@ class AttendanceController extends Controller
             },
             'leaves' => function ($q) use ($selectedDate) {
                 $q->where('status', 'approved')
-                  ->whereDate('start_date', '<=', $selectedDate)
-                  ->whereDate('end_date', '>=', $selectedDate);
+                    ->whereDate('start_date', '<=', $selectedDate)
+                    ->whereDate('end_date', '>=', $selectedDate);
             },
         ])->where('status', 'active');
 
@@ -74,13 +74,13 @@ class AttendanceController extends Controller
         // Calculate summary
         $allAttendances = Attendance::whereDate('date', $selectedDate)->get();
         $totalActiveEmployees = Employee::where('status', 'active')->count();
-        
+
         // 1. Present & Late (from key source: actual attendance records)
         $presentCount = $allAttendances->where('status', 'present')->where('is_late', false)->count();
-        $lateCount = $allAttendances->filter(function($a) {
+        $lateCount = $allAttendances->filter(function ($a) {
             return $a->status == 'late' || ($a->status == 'present' && $a->is_late);
         })->count();
-        
+
         // Get IDs of people who are physically here (present or late) so we don't count them as on leave
         $presentOrLateIds = $allAttendances->whereIn('status', ['present', 'late'])->pluck('employee_id')->values()->toArray();
 
@@ -89,7 +89,7 @@ class AttendanceController extends Controller
         $leaveCount = Leave::where('status', 'approved')
             ->whereDate('start_date', '<=', $selectedDate)
             ->whereDate('end_date', '>=', $selectedDate)
-            ->whereHas('employee', function($q) {
+            ->whereHas('employee', function ($q) {
                 $q->where('status', 'active');
             })
             ->whereNotIn('employee_id', $presentOrLateIds)
@@ -152,7 +152,7 @@ class AttendanceController extends Controller
             foreach ($request->attendance as $empId => $data) {
                 // ONLY process if the row was explicitly touched by HR (is_dirty == 1)
                 $isDirty = isset($data['is_dirty']) && $data['is_dirty'] == '1';
-                
+
                 if ($isDirty) {
                     $employee = $employees[$empId] ?? null;
                     if (! $employee) {
@@ -219,8 +219,8 @@ class AttendanceController extends Controller
                             $lateMinutes = $checkInDt->diffInMinutes($shiftStartDt);
                             $newStatus = 'late';
                         } elseif ($checkInDt->lt($shiftStartDt)) {
-                             $isEarlyIn = true;
-                             $earlyInMinutes = $checkInDt->diffInMinutes($shiftStartDt);
+                            $isEarlyIn = true;
+                            $earlyInMinutes = $checkInDt->diffInMinutes($shiftStartDt);
                         }
 
                         // Only update status if the user didn't explicitly set it to something else (like 'leave' via input)
@@ -256,13 +256,14 @@ class AttendanceController extends Controller
                         if (Leave::hasApprovedLeave($empId, $dateParsed)) {
                             // Cannot mark absent - employee has approved leave
                             $leave = Leave::getApprovedLeave($empId, $dateParsed);
+
                             return response()->json([
-                                'error' => "Cannot mark {$employee->full_name} as absent. Employee has approved {$leave->leave_type} leave from " . 
-                                          Carbon::parse($leave->start_date)->format('M d') . " to " . 
-                                          Carbon::parse($leave->end_date)->format('M d, Y') . "."
+                                'error' => "Cannot mark {$employee->full_name} as absent. Employee has approved {$leave->leave_type} leave from ".
+                                          Carbon::parse($leave->start_date)->format('M d').' to '.
+                                          Carbon::parse($leave->end_date)->format('M d, Y').'.',
                             ], 422);
                         }
-                        
+
                         $updateData['clock_in'] = null;
                         $updateData['clock_out'] = null;
                         $updateData['check_in_time'] = null;
@@ -277,9 +278,9 @@ class AttendanceController extends Controller
                     }
 
                     // Check if employee has approved leave (auto-set to leave status)
-                    if (Leave::hasApprovedLeave($empId, $dateParsed) && (!isset($data['status']) || $data['status'] != 'leave')) {
+                    if (Leave::hasApprovedLeave($empId, $dateParsed) && (! isset($data['status']) || $data['status'] != 'leave')) {
                         // If employee has leave but HR hasn't explicitly set it, auto-set to leave
-                        if (!isset($data['clock_in']) && !isset($data['clock_out'])) {
+                        if (! isset($data['clock_in']) && ! isset($data['clock_out'])) {
                             $updateData['status'] = 'leave';
                         }
                     }
@@ -299,7 +300,7 @@ class AttendanceController extends Controller
                     );
 
                     // Auto-generate daily payroll if checkout time was added
-                    if (!empty($clockOut) && $attendanceRecord) {
+                    if (! empty($clockOut) && $attendanceRecord) {
                         $this->autoGenerateDailyPayroll($employee, $attendanceRecord);
                     }
                 }
@@ -327,7 +328,7 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Mark attendance via kiosk (with photo)
+     * Mark attendance via kiosk (with photo and face verification)
      */
     public function markAttendance(Request $request)
     {
@@ -338,7 +339,8 @@ class AttendanceController extends Controller
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'type' => 'required|in:check_in,check_out',
             'photo' => 'nullable|string',
-            'employee_id' => 'nullable|exists:hr_employees,id',
+            'face_descriptor' => 'required|array', // Face descriptor for verification
+            'face_descriptor.*' => 'numeric',
         ]);
 
         if ($validator->fails()) {
@@ -347,25 +349,52 @@ class AttendanceController extends Controller
 
         $type = $request->input('type'); // 'check_in' or 'check_out'
         $photo = $request->input('photo');
+        $faceDescriptor = $request->input('face_descriptor');
 
-        // For now, we'll use a simple employee selection approach
-        // In phase 2, we'll integrate face recognition to identify the employee
-
-        // Get employee from session or use a demo employee
-        $employeeId = $request->input('employee_id');
-
-        if (! $employeeId) {
-            // For demo purposes, get the first active employee
-            // In production, this would be determined by face recognition
-            $employee = Employee::where('status', 'active')->first();
-            if (! $employee) {
-                return response()->json(['error' => 'No employees found in system']);
-            }
-            $employeeId = $employee->id;
+        // Validate descriptor format
+        $faceService = app(\App\Services\FaceRecognitionService::class);
+        if (! $faceService->isValidDescriptor($faceDescriptor)) {
+            return response()->json([
+                'error' => 'Invalid face descriptor format.',
+            ], 422);
         }
 
+        // Find matching employee by comparing face descriptor
+        $similarFaces = $faceService->findSimilarFaces($faceDescriptor, 0.5); // Slightly looser threshold for attendance
+
+        if (empty($similarFaces)) {
+            return response()->json([
+                'error' => 'Face not recognized. Please register your face first.',
+                'code' => 'face_not_recognized',
+            ], 404);
+        }
+
+        // Get the best match (first in array, already sorted by distance)
+        $bestMatch = $similarFaces[0];
+        $employee = $bestMatch['employee'];
+        $similarityPercentage = $bestMatch['similarity_percentage'];
+
+        // Additional verification: ensure similarity is high enough
+        if ($bestMatch['distance'] > 0.5) {
+            return response()->json([
+                'error' => 'Face verification failed. Similarity too low.',
+                'code' => 'verification_failed',
+                'similarity' => $similarityPercentage,
+            ], 403);
+        }
+
+        // Log verification for audit
+        \Illuminate\Support\Facades\Log::info('Face verification for attendance', [
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->full_name,
+            'similarity_percentage' => $similarityPercentage,
+            'distance' => $bestMatch['distance'],
+            'type' => $type,
+        ]);
+
         try {
-            $employee = Employee::with(['department', 'shift'])->findOrFail($employeeId);
+            // Employee is already loaded with relationships from face matching
+            $employee->load(['department', 'shift']);
             $today = Carbon::today();
             $now = Carbon::now();
 
@@ -378,11 +407,40 @@ class AttendanceController extends Controller
                 ]);
             }
 
-            // Get or create today's attendance
-            $attendance = Attendance::firstOrNew([
-                'employee_id' => $employee->id,
-                'date' => $today->format('Y-m-d'),
-            ]);
+            // 1. Check for any OPEN session (Check-in without Check-out) - supports overnight
+            $lastOpenAttendance = Attendance::where('employee_id', $employee->id)
+                ->whereNotNull('check_in_time')
+                ->whereNull('check_out_time')
+                ->latest('date')
+                ->first();
+
+            $attendance = null;
+
+            if ($type === 'check_out') {
+                if ($lastOpenAttendance) {
+                    // Check out from the OPEN session (even if it's from yesterday)
+                    $attendance = $lastOpenAttendance;
+                } else {
+                    return response()->json(['error' => 'Please check in first before checking out']);
+                }
+            } else {
+                // Check In
+                if ($lastOpenAttendance) {
+                     return response()->json([
+                        'error' => 'Already checked in at ' . Carbon::parse($lastOpenAttendance->check_in_time)->format('M d, h:i A'),
+                    ]);
+                }
+                
+                // Create NEW session for Today
+                $attendance = Attendance::firstOrNew([
+                    'employee_id' => $employee->id,
+                    'date' => $today->format('Y-m-d'),
+                ]);
+            }
+            
+            // Re-fetch date from attendance record (might be yesterday)
+            // Use this $attendanceDate for all shift calculations instead of $today
+            $attendanceDate = Carbon::parse($attendance->date);
 
             // Save photo
             $photoPath = null;
@@ -410,31 +468,40 @@ class AttendanceController extends Controller
                 // Check if already checked in
                 if ($attendance->check_in_time) {
                     return response()->json([
-                        'error' => 'Already checked in today at '.Carbon::parse($attendance->check_in_time)->format('h:i A'),
+                        'error' => 'Already checked in at '.Carbon::parse($attendance->check_in_time)->format('h:i A'),
                     ]);
                 }
 
                 // Start - Late Check Restriction
                 $shiftEndForCheck = $employee->getEndTime();
                 $shiftLabel = $employee->custom_end_time ? 'Custom Shift' : 'Shift';
-                $shiftEndTimeForCheck = Carbon::parse($today->format('Y-m-d').' '.Carbon::parse($shiftEndForCheck)->format('H:i:s'));
+                
+                // Parse Shift End relative to attendance date
+                $shiftEndTimeForCheck = Carbon::parse($attendanceDate->format('Y-m-d').' '.Carbon::parse($shiftEndForCheck)->format('H:i:s'));
+                
+                // Handle Overnight Shift End (if end < start)
+                $sStart = $employee->getStartTime();
+                if ($shiftEndForCheck < $sStart) {
+                     $shiftEndTimeForCheck->addDay();
+                }
 
                 if ($now->gt($shiftEndTimeForCheck)) {
+                    // Force check-in not allowed after shift end
                     return response()->json([
                         'error' => "Cannot check in. Your {$shiftLabel} ended at ".$shiftEndTimeForCheck->format('h:i A'),
                     ]);
                 }
                 // End - Late Check Restriction
 
-                $attendance->check_in_time = $now->format('H:i:s');
+                $attendance->check_in_time = $now->toDateTimeString();
                 $attendance->check_in_photo = $photoPath;
                 $attendance->status = 'present';
 
                 // Check if late
                 $shiftStart = $employee->getStartTime();
                 $graceMinutes = $employee->getGraceMinutes();
-                // Parse specifically for TODAY
-                $shiftStartTime = Carbon::parse($today->format('Y-m-d').' '.Carbon::parse($shiftStart)->format('H:i:s'));
+                // Parse specifically for ATTENDANCE DATE
+                $shiftStartTime = Carbon::parse($attendanceDate->format('Y-m-d').' '.Carbon::parse($shiftStart)->format('H:i:s'));
                 $graceEndTime = $shiftStartTime->copy()->addMinutes($graceMinutes);
 
                 if ($now->gt($graceEndTime)) {
@@ -458,7 +525,7 @@ class AttendanceController extends Controller
                     ]);
                 }
 
-                $attendance->check_out_time = $now->format('H:i:s');
+                $attendance->check_out_time = $now->toDateTimeString();
                 $attendance->check_out_photo = $photoPath;
 
                 // Calculate total hours
@@ -468,8 +535,14 @@ class AttendanceController extends Controller
 
                 // Check if early leave
                 $shiftEnd = $employee->getEndTime();
-                // Parse specificially for TODAY
-                $shiftEndTime = Carbon::parse($today->format('Y-m-d').' '.Carbon::parse($shiftEnd)->format('H:i:s'));
+                // Parse specificially for ATTENDANCE DATE
+                $shiftEndTime = Carbon::parse($attendanceDate->format('Y-m-d').' '.Carbon::parse($shiftEnd)->format('H:i:s'));
+                
+                // Handle Overnight Shift End (if end < start)
+                $sStart = $employee->getStartTime();
+                if ($shiftEnd < $sStart) {
+                     $shiftEndTime->addDay();
+                }
 
                 if ($now->lt($shiftEndTime)) {
                     $isEarlyLeave = true;
@@ -552,6 +625,40 @@ class AttendanceController extends Controller
 
             if (! $employee) {
                 return response()->json(['error' => 'No employee profile found for your account'], 400);
+            }
+
+            // Face Verification
+            $faceDescriptor = $request->input('face_descriptor');
+            if ($faceDescriptor) {
+                $faceService = app(\App\Services\FaceRecognitionService::class);
+
+                // Validate descriptor format
+                if (! $faceService->isValidDescriptor($faceDescriptor)) {
+                    return response()->json(['error' => 'Invalid face descriptor format.'], 422);
+                }
+
+                // Verify face against employee's registered face
+                $verificationResult = $faceService->verifyFaceForEmployee($faceDescriptor, $employee->id);
+
+                if (! $verificationResult['verified']) {
+                    return response()->json([
+                        'error' => 'Face verification failed.',
+                        'similarity' => $verificationResult['similarity_percentage'],
+                        'message' => 'Face does not match your registered profile.',
+                    ], 403);
+                }
+
+                // Log successful verification
+                \Log::info('Self-attendance face verified', [
+                    'employee_id' => $employee->id,
+                    'similarity' => $verificationResult['similarity_percentage'],
+                ]);
+            } else {
+                // Determine if face verification is mandatory (optional config check could go here)
+                // For now, we'll enforce it if the employee has a face registered
+                if ($employee->hasFaceRegistered()) {
+                    return response()->json(['error' => 'Face verification required.'], 422);
+                }
             }
 
             $type = $request->input('type');
@@ -710,10 +817,14 @@ class AttendanceController extends Controller
     /**
      * Get location name from coordinates using OpenStreetMap
      */
+    /**
+     * Get location name from coordinates using OpenStreetMap
+     */
     private function getLocationName($latitude, $longitude)
     {
         try {
-            $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$latitude}&lon={$longitude}&zoom=10";
+            // Increase zoom to 18 for street-level precision
+            $url = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$latitude}&lon={$longitude}&zoom=18&addressdetails=1";
 
             $opts = [
                 'http' => [
@@ -730,21 +841,47 @@ class AttendanceController extends Controller
                     $address = $data['address'];
                     $parts = [];
 
-                    if (isset($address['suburb'])) {
-                        $parts[] = $address['suburb'];
-                    } elseif (isset($address['neighbourhood'])) {
-                        $parts[] = $address['neighbourhood'];
-                    }
+                    // 1. Precise Location (Building/Street)
+                    if (isset($address['amenity'])) $parts[] = $address['amenity'];
+                    if (isset($address['house_number'])) $parts[] = $address['house_number'];
+                    if (isset($address['road'])) $parts[] = $address['road'];
+                   
+                    // 2. Colony / Neighbourhood (Specific Area)
+                    if (isset($address['neighbourhood'])) $parts[] = $address['neighbourhood'];
+                    if (isset($address['residential'])) $parts[] = $address['residential'];
+                    
+                    // 3. Major Area / Suburb
+                    if (isset($address['suburb'])) $parts[] = $address['suburb'];
+                    if (isset($address['city_district'])) $parts[] = $address['city_district'];
 
+                    // 4. City / Town
                     if (isset($address['city'])) {
                         $parts[] = $address['city'];
                     } elseif (isset($address['town'])) {
                         $parts[] = $address['town'];
+                    } elseif (isset($address['village'])) {
+                        $parts[] = $address['village'];
                     } elseif (isset($address['county'])) {
-                        $parts[] = $address['county'];
+                         $parts[] = $address['county'];
                     }
 
-                    return implode(', ', $parts) ?: ($data['display_name'] ?? null);
+                    // 5. Province / State
+                    if (isset($address['state'])) {
+                        $parts[] = $address['state'];
+                    } elseif (isset($address['province'])) {
+                        $parts[] = $address['province'];
+                    } elseif (isset($address['state_district'])) {
+                        $parts[] = $address['state_district'];
+                    }
+                    
+                    // Filter duplicates (e.g. if suburb name equals city name)
+                    $parts = array_unique($parts);
+                    
+                    if (empty($parts)) {
+                        return $data['display_name'] ?? 'Unknown Location';
+                    }
+
+                    return implode(', ', $parts);
                 }
             }
         } catch (\Exception $e) {
@@ -760,33 +897,83 @@ class AttendanceController extends Controller
     public function pullFromDevices()
     {
         if (! auth()->user()->can('hr.biometric.devices.edit')) {
+            \Log::warning('Unauthorized pull attendance attempt by user '.auth()->id());
             return response()->json(['error' => 'Unauthorized action.'], 403);
         }
 
         try {
+            \Log::info('Pull Attendance: Starting pull from devices by user '.auth()->id());
+            
             $devices = \App\Models\BiometricDevice::where('is_active', true)->get();
+            
+            if ($devices->isEmpty()) {
+                \Log::warning('Pull Attendance: No active biometric devices found');
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No active biometric devices configured. Please add and activate at least one device.',
+                ], 400);
+            }
+            
+            \Log::info("Pull Attendance: Found {$devices->count()} active device(s)");
+            
             $syncService = app(\App\Services\BiometricSyncService::class);
 
             $results = [
                 'created' => 0,
                 'duplicates' => 0,
                 'failed' => 0,
+                'skipped' => 0,
             ];
+            
+            $deviceErrors = [];
 
             foreach ($devices as $device) {
-                $result = $syncService->pullAttendanceFromDevice($device);
-                $results['created'] += $result['created'];
-                $results['duplicates'] += $result['duplicates'];
-                $results['failed'] += $result['failed'];
+                try {
+                    \Log::info("Pull Attendance: Processing device '{$device->name}' (ID: {$device->id})");
+                    $result = $syncService->pullAttendanceFromDevice($device);
+                    
+                    $results['created'] += $result['created'] ?? 0;
+                    $results['duplicates'] += $result['duplicates'] ?? 0;
+                    $results['failed'] += $result['failed'] ?? 0;
+                    $results['skipped'] += $result['skipped'] ?? 0;
+                    
+                    \Log::info("Pull Attendance: Device '{$device->name}' - Created: {$result['created']}, Duplicates: {$result['duplicates']}, Skipped: {$result['skipped']}");
+                    
+                } catch (\Exception $e) {
+                    \Log::error("Pull Attendance: Failed for device '{$device->name}': ".$e->getMessage());
+                    $deviceErrors[] = "{$device->name}: {$e->getMessage()}";
+                    $results['failed']++;
+                }
             }
+
+            $message = "Pulled logs from {$devices->count()} device(s). ";
+            $message .= "Created: {$results['created']}, ";
+            $message .= "Duplicates: {$results['duplicates']}, ";
+            $message .= "Skipped: {$results['skipped']}";
+            
+            if (!empty($deviceErrors)) {
+                $message .= ". Errors: " . implode('; ', $deviceErrors);
+            }
+            
+            \Log::info("Pull Attendance: Completed - $message");
 
             return response()->json([
                 'success' => true,
-                'message' => "Pulled logs from {$devices->count()} devices. Created: {$results['created']}, Duplicates: {$results['duplicates']}.",
+                'message' => $message,
+                'results' => $results,
+                'device_errors' => $deviceErrors,
             ]);
 
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            \Log::error('Pull Attendance: Critical error - '.$e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'error' => 'Failed to pull attendance: ' . $e->getMessage(),
+                'details' => config('app.debug') ? $e->getTraceAsString() : null,
+            ], 500);
         }
     }
 
@@ -798,8 +985,8 @@ class AttendanceController extends Controller
         try {
             // Check if employee uses daily wages
             $employee->load('salaryStructure');
-            
-            if (!$employee->salaryStructure || !$employee->salaryStructure->use_daily_wages) {
+
+            if (! $employee->salaryStructure || ! $employee->salaryStructure->use_daily_wages) {
                 return;
             }
 
@@ -812,7 +999,7 @@ class AttendanceController extends Controller
                 ->first();
 
             $payrollService = app(PayrollCalculationService::class);
-            
+
             \DB::beginTransaction();
 
             if ($payroll) {
@@ -833,7 +1020,7 @@ class AttendanceController extends Controller
 
                 // 5. Update Payroll Record
                 $payroll->update(Arr::except($payrollData, [
-                    'allowance_details', 'deduction_details', 'new_pending_deductions'
+                    'allowance_details', 'deduction_details', 'new_pending_deductions',
                 ]));
 
                 // 6. Refresh Details (Delete old, add new)
@@ -853,7 +1040,7 @@ class AttendanceController extends Controller
                     // Fetch fresh instance to ensure atomicity/accuracy
                     $freshEmployee = Employee::find($employee->id);
                     $freshEmployee->update([
-                        'pending_deductions' => $freshEmployee->pending_deductions + $delta
+                        'pending_deductions' => $freshEmployee->pending_deductions + $delta,
                     ]);
                 }
 
@@ -878,15 +1065,15 @@ class AttendanceController extends Controller
                     $employee,
                     $payrollData['new_pending_deductions'] ?? 0
                 );
-                
+
                 \Log::info("Daily payroll auto-generated for employee {$employee->full_name} (ID: {$employee->id})");
             }
 
             \DB::commit();
-            
+
         } catch (\Exception $e) {
             \DB::rollBack();
-            \Log::error('Auto-generate daily payroll failed: ' . $e->getMessage());
+            \Log::error('Auto-generate daily payroll failed: '.$e->getMessage());
         }
     }
 

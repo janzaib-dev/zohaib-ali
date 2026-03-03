@@ -51,12 +51,21 @@ class AccountsHeadController extends Controller
             ],
             [
                 'key' => 'purchase',
-                'title' => 'Purchase Expense',
+                'title' => 'Purchase',
                 'code' => 'PURCHASE',
                 'type' => 'Debit',
                 'nature' => 'Expense',
                 'head' => 'Expenses',
                 'search' => ['account_code', '=', 'PURCHASE'],
+            ],
+            [
+                'key' => 'purchase_expensive',
+                'title' => 'Purchase Expensive',
+                'code' => 'PURCHASE_EXP',
+                'type' => 'Debit',
+                'nature' => 'Expense',
+                'head' => 'Expenses',
+                'search' => ['account_code', '=', 'PURCHASE_EXP'],
             ],
         ];
 
@@ -178,11 +187,12 @@ class AccountsHeadController extends Controller
         // This triggers ensureDefaultCOA() for all heads + selected accounts
         // We call each relevant getter based on keys selected
         $keyMap = [
-            'cash' => fn () => $balanceService->getCashAccountId(),
-            'ar' => fn () => $balanceService->getAccountsReceivableId(),
-            'ap' => fn () => $balanceService->getAccountsPayableId(),
-            'sales' => fn () => $balanceService->getSalesRevenueId(),
-            'purchase' => fn () => $balanceService->getPurchaseExpenseId(),
+            'cash'              => fn () => $balanceService->getCashAccountId(),
+            'ar'                => fn () => $balanceService->getAccountsReceivableId(),
+            'ap'                => fn () => $balanceService->getAccountsPayableId(),
+            'sales'             => fn () => $balanceService->getSalesRevenueId(),
+            'purchase'          => fn () => $balanceService->getPurchaseExpenseId(),
+            'purchase_expensive'=> fn () => $balanceService->getPurchaseExpensiveId(),
         ];
 
         $created = [];

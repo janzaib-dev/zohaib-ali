@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Hr;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hr\Employee;
-use App\Models\Hr\EmployeeSalaryStructure;
 use App\Models\Hr\SalaryStructure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,18 +16,18 @@ class SalaryStructureController extends Controller
     public function index()
     {
         // Need at least view permission to see the list
-        if (! auth()->user()->can('hr.salary.structure.view') && 
-            ! auth()->user()->can('hr.salary.structure.create') && 
+        if (! auth()->user()->can('hr.salary.structure.view') &&
+            ! auth()->user()->can('hr.salary.structure.create') &&
             ! auth()->user()->can('hr.salary.structure.edit')) {
             abort(403, 'Unauthorized action.');
         }
-        
+
         // Fetch salary structures with assigned employee counts
         // Show only Templates (no parent, no specific employee)
         $structures = SalaryStructure::whereNull('parent_structure_id')
             ->whereNull('employee_id')
             ->withCount(['assignedEmployees as assigned_count'])
-            ->with(['children' => function($query) {
+            ->with(['children' => function ($query) {
                 $query->select('id', 'parent_structure_id')->withCount('assignedEmployees as assigned_count');
             }])
             ->orderBy('created_at', 'desc')->paginate(12);
@@ -47,19 +46,19 @@ class SalaryStructureController extends Controller
      */
     public function create()
     {
-        if (!auth()->user()->can('hr.salary.structure.create') && 
-            !auth()->user()->can('hr.salary.structure.edit')) {
+        if (! auth()->user()->can('hr.salary.structure.create') &&
+            ! auth()->user()->can('hr.salary.structure.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
-        $salaryStructure = new SalaryStructure();
+        $salaryStructure = new SalaryStructure;
         $readOnly = false;
         $hasSalaryStructure = false;
         $canCreate = auth()->user()->can('hr.salary.structure.create');
         $canEdit = auth()->user()->can('hr.salary.structure.edit');
-        
+
         // Use a dummy employee for form compatibility
-        $employee = new Employee();
+        $employee = new Employee;
         $employee->id = null; // Will create standalone structure
 
         return view('hr.salary-structure.create', compact('salaryStructure', 'employee', 'readOnly', 'hasSalaryStructure', 'canCreate', 'canEdit'));
@@ -70,8 +69,7 @@ class SalaryStructureController extends Controller
      */
     public function store(Request $request)
     {
-        if (!auth()->user()->can('hr.salary.structure.create') && 
-            !auth()->user()->can('hr.salary.structure.edit')) {
+        if (! auth()->user()->can('hr.salary.structure.create') && ! auth()->user()->can('hr.salary.structure.edit')) {
             return response()->json(['error' => 'Unauthorized action.'], 403);
         }
 
@@ -94,16 +92,18 @@ class SalaryStructureController extends Controller
         // Process allowances, deductions, and attendance rules same as update method
         $allowances = collect($request->allowances ?? [])->filter(function ($item) {
             return ! empty($item['name']) && isset($item['amount']);
-        })->map(function($item) {
-             $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
-             return $item;
+        })->map(function ($item) {
+            $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
+
+            return $item;
         })->values()->toArray();
 
         $deductions = collect($request->deductions ?? [])->filter(function ($item) {
             return ! empty($item['name']) && isset($item['amount']);
-        })->map(function($item) {
-             $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
-             return $item;
+        })->map(function ($item) {
+            $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
+
+            return $item;
         })->values()->toArray();
 
         // Validate and normalize deduction rules
@@ -129,7 +129,7 @@ class SalaryStructureController extends Controller
             'salary_type' => $request->salary_type,
             'base_salary' => $request->base_salary ?? 0,
             'daily_wages' => $request->daily_wages ?? 0,
-            'use_daily_wages' => $request->has('use_daily_wages') || $request->use_daily_wages == '1',
+            'use_daily_wages' => $request->use_daily_wages == '1',
             'commission_percentage' => $request->commission_percentage,
             'sales_target' => $request->sales_target,
             'leave_salary_per_day' => $request->leave_salary_per_day,
@@ -150,7 +150,7 @@ class SalaryStructureController extends Controller
      */
     public function editTemplate(SalaryStructure $salaryStructure)
     {
-        if (!auth()->user()->can('hr.salary.structure.edit')) {
+        if (! auth()->user()->can('hr.salary.structure.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -165,7 +165,7 @@ class SalaryStructureController extends Controller
         $hasAssignments = $salaryStructure->assignedEmployees()->exists() || $salaryStructure->children()->exists();
 
         // Dummy employee for view compatibility
-        $employee = new Employee();
+        $employee = new Employee;
         $employee->id = null;
 
         return view('hr.salary-structure.create', compact('salaryStructure', 'employee', 'readOnly', 'hasSalaryStructure', 'canCreate', 'canEdit', 'hasAssignments'));
@@ -176,7 +176,7 @@ class SalaryStructureController extends Controller
      */
     public function updateTemplate(Request $request, SalaryStructure $salaryStructure)
     {
-        if (!auth()->user()->can('hr.salary.structure.edit')) {
+        if (! auth()->user()->can('hr.salary.structure.edit')) {
             return response()->json(['error' => 'Unauthorized action.'], 403);
         }
 
@@ -214,7 +214,7 @@ class SalaryStructureController extends Controller
 
         // Rule: Payroll type cannot be changed if employees are assigned
         if ($hasAssignments && $request->salary_type !== $salaryStructure->salary_type) {
-             return response()->json(['errors' => ['salary_type' => ['Payroll type cannot be changed because this structure has assigned employees.']]], 422);
+            return response()->json(['errors' => ['salary_type' => ['Payroll type cannot be changed because this structure has assigned employees.']]], 422);
         }
 
         // Validate and normalize deduction rules
@@ -231,16 +231,18 @@ class SalaryStructureController extends Controller
         // Filter and Process Data (logic reused from store/update)
         $allowances = collect($request->allowances ?? [])->filter(function ($item) {
             return ! empty($item['name']) && isset($item['amount']);
-        })->map(function($item) {
-             $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
-             return $item;
+        })->map(function ($item) {
+            $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
+
+            return $item;
         })->values()->toArray();
 
         $deductions = collect($request->deductions ?? [])->filter(function ($item) {
             return ! empty($item['name']) && isset($item['amount']);
-        })->map(function($item) {
-             $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
-             return $item;
+        })->map(function ($item) {
+            $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
+
+            return $item;
         })->values()->toArray();
 
         $commissionTiers = collect($request->commission_tiers ?? [])->filter(function ($item) {
@@ -258,7 +260,7 @@ class SalaryStructureController extends Controller
              * PREVIOUSLY: Separation Logic was here.
              * NOW: Direct update. Changes WILL affect currently assigned employees.
              */
-             // No legacy archiving. Direct update proceeds below.
+            // No legacy archiving. Direct update proceeds below.
 
             // Now Update the Original Structure (which becomes the "New Version" for future assignments)
             // If assignments exist, we DO NOT update salary_type or use_daily_wages to strictly preserve structural integrity
@@ -276,10 +278,10 @@ class SalaryStructureController extends Controller
                 'carry_forward_deductions' => $request->has('carry_forward_deductions') || $request->carry_forward_deductions == '1',
             ];
 
-            if (!$hasAssignments) {
+            if (! $hasAssignments) {
                 // Only allow structure type changes if NO ONE is assigned
                 $updateData['salary_type'] = $request->salary_type;
-                $updateData['use_daily_wages'] = $request->has('use_daily_wages') || $request->use_daily_wages == '1';
+                $updateData['use_daily_wages'] = $request->use_daily_wages == '1';
             }
 
             $salaryStructure->update($updateData);
@@ -287,13 +289,14 @@ class SalaryStructureController extends Controller
             DB::commit();
 
             return response()->json([
-                'success' => 'Salary Structure Updated Successfully' . ($hasAssignments ? ' (Changes applied to all assigned employees).' : ''),
+                'success' => 'Salary Structure Updated Successfully'.($hasAssignments ? ' (Changes applied to all assigned employees).' : ''),
                 'redirect' => route('hr.salary-structure.index'),
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Update failed: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Update failed: '.$e->getMessage()], 500);
         }
     }
 
@@ -302,23 +305,21 @@ class SalaryStructureController extends Controller
      */
     public function destroyTemplate(SalaryStructure $salaryStructure)
     {
-        if (!auth()->user()->can('hr.salary.structure.delete')) {
+        if (! auth()->user()->can('hr.salary.structure.delete')) {
             return response()->json(['error' => 'Unauthorized action.'], 403);
         }
 
         // Hard Block Deletion If Assigned
         // Check for active pivot assignments
-        $hasActiveAssignments = $salaryStructure->assignedEmployees()
-            ->wherePivot('is_active', true)
-            ->exists();
-            
+        $hasActiveAssignments = $salaryStructure->assignedEmployees()->exists();
+
         // Also check if any Custom structures (children) depend on it
         $hasChildren = $salaryStructure->children()->exists();
 
         if ($hasActiveAssignments || $hasChildren) {
-           return response()->json([
-               'error' => 'Cannot delete salary structure assigned to active employees.'
-           ], 422);
+            return response()->json([
+                'error' => 'Cannot delete salary structure assigned to active employees.',
+            ], 422);
         }
 
         // Safe Delete
@@ -326,10 +327,9 @@ class SalaryStructureController extends Controller
 
         return response()->json([
             'success' => 'Salary Structure Template Deleted Successfully',
-            'redirect' => route('hr.salary-structure.index'), 
+            'redirect' => route('hr.salary-structure.index'),
         ]);
     }
-
 
     public function edit(Employee $employee)
     {
@@ -357,7 +357,7 @@ class SalaryStructureController extends Controller
         // Read-only if: has salary structure AND only has view permission (not edit)
         // OR: doesn't have salary structure AND only has view permission (not create or edit)
         $readOnly = false;
-        if ($hasSalaryStructure && $canView && !$canEdit) {
+        if ($hasSalaryStructure && $canView && ! $canEdit) {
             $readOnly = true;
         }
 
@@ -425,17 +425,19 @@ class SalaryStructureController extends Controller
         // Filter out empty allowances/deductions
         $allowances = collect($request->allowances ?? [])->filter(function ($item) {
             return ! empty($item['name']) && isset($item['amount']);
-        })->map(function($item) {
-             // Ensure is_active is boolean
-             $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
-             return $item;
+        })->map(function ($item) {
+            // Ensure is_active is boolean
+            $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
+
+            return $item;
         })->values()->toArray();
 
         $deductions = collect($request->deductions ?? [])->filter(function ($item) {
             return ! empty($item['name']) && isset($item['amount']);
-        })->map(function($item) {
-             $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
-             return $item;
+        })->map(function ($item) {
+            $item['is_active'] = isset($item['is_active']) && ($item['is_active'] == '1' || $item['is_active'] === true || $item['is_active'] === 'true');
+
+            return $item;
         })->values()->toArray();
 
         // Filter out empty commission tiers
@@ -456,7 +458,7 @@ class SalaryStructureController extends Controller
                 'salary_type' => $request->salary_type,
                 'base_salary' => $request->base_salary ?? 0,
                 'daily_wages' => $request->daily_wages ?? 0,
-                'use_daily_wages' => $request->has('use_daily_wages') || $request->use_daily_wages == '1',
+                'use_daily_wages' => $request->use_daily_wages == '1',
                 'commission_percentage' => $request->commission_percentage,
                 'sales_target' => $request->sales_target,
                 'commission_tiers' => $commissionTiers ?: null,
@@ -469,7 +471,7 @@ class SalaryStructureController extends Controller
         );
 
         return response()->json([
-            'success' => 'Salary Structure ' . ($hasSalaryStructure ? 'Updated' : 'Created') . ' Successfully',
+            'success' => 'Salary Structure '.($hasSalaryStructure ? 'Updated' : 'Created').' Successfully',
             'redirect' => route('hr.salary-structure.index'),
         ]);
     }
@@ -498,9 +500,4 @@ class SalaryStructureController extends Controller
         // To be implemented
         return redirect()->back()->with('error', 'Bulk update not fully implemented yet.');
     }
-
-
-
-
 }
-

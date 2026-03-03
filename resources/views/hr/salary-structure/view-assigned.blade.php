@@ -141,74 +141,33 @@
                                         <th>Employee</th>
                                         <th>Department</th>
                                         <th>Designation</th>
-                                        <th>Start Date</th>
-                                        <th>End Date</th>
-                                        <th>Assigned By</th>
-                                        <th>Status</th>
+                                        <th>Assigned On</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="assignmentsTable">
                                     @foreach ($assignments as $assignment)
-                                        <tr class="assignment-row {{ $assignment->is_active ? '' : 'inactive' }}"
-                                            data-status="{{ $assignment->is_active ? 'active' : 'ended' }}">
+                                        <tr class="assignment-row" data-status="active">
                                             <td>
                                                 <strong>{{ $assignment->employee->full_name }}</strong>
-                                                @if ($assignment->salary_structure_id != $salaryStructure->id)
-                                                    <span class="badge bg-warning text-dark ms-1" style="font-size:0.7em"
-                                                        title="Individually Updated">Edited</span>
-                                                @else
+                                                @if ($assignment->parent_structure_id)
                                                     <span class="badge bg-light text-dark ms-1 border"
-                                                        style="font-size:0.7em">Inherited</span>
-                                                @endif
-                                                @if ($assignment->notes)
-                                                    <br><small class="text-muted"><i class="fa fa-comment"></i>
-                                                        {{ $assignment->notes }}</small>
+                                                        style="font-size:0.7em">Assigned</span>
                                                 @endif
                                             </td>
                                             <td>{{ $assignment->employee->department->name ?? 'N/A' }}</td>
                                             <td>{{ $assignment->employee->designation->name ?? 'N/A' }}</td>
                                             <td>
                                                 <i class="fa fa-calendar-check text-success"></i>
-                                                {{ $assignment->start_date->format('M d, Y') }}
+                                                {{ $assignment->created_at->format('M d, Y') }}
                                             </td>
                                             <td>
-                                                @if ($assignment->end_date)
-                                                    <i class="fa fa-calendar-times text-danger"></i>
-                                                    {{ $assignment->end_date->format('M d, Y') }}
-                                                @else
-                                                    <span class="text-muted">-</span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                @if ($assignment->assignedBy)
-                                                    {{ $assignment->assignedBy->name }}
-                                                @else
-                                                    <span class="text-muted">System</span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                @if ($assignment->is_active && !$assignment->end_date)
-                                                    <span class="status-badge status-active">
-                                                        <i class="fa fa-check-circle"></i> Active
-                                                    </span>
-                                                @else
-                                                    <span class="status-badge status-ended">
-                                                        <i class="fa fa-times-circle"></i> Ended
-                                                    </span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                @if ($assignment->is_active && !$assignment->end_date)
-                                                    <button class="btn btn-sm btn-outline-danger end-assignment-btn"
-                                                        data-assignment-id="{{ $assignment->id }}"
-                                                        data-employee-id="{{ $assignment->employee_id }}"
-                                                        data-employee-name="{{ $assignment->employee->full_name }}">
-                                                        <i class="fa fa-stop-circle"></i> End
-                                                    </button>
-                                                @else
-                                                    <span class="text-muted">-</span>
-                                                @endif
+                                                <button class="btn btn-sm btn-outline-danger end-assignment-btn"
+                                                    data-assignment-id="{{ $assignment->id }}"
+                                                    data-employee-id="{{ $assignment->employee_id }}"
+                                                    data-employee-name="{{ $assignment->employee->full_name }}">
+                                                    <i class="fa fa-trash"></i> Remove
+                                                </button>
                                             </td>
                                         </tr>
                                     @endforeach

@@ -238,47 +238,123 @@ class TransactionService
         \Log::info("TransactionService: Create Voucher for Purchase #{$purchase->invoice_no}");
 
         try {
-            $balanceService = app(\App\Services\BalanceService::class);
-            $expenseAccountId = $balanceService->getPurchaseExpenseId();
-            $apAccountId = $balanceService->getAccountsPayableId();
+            $balanceService    = app(\App\Services\BalanceService::class);
+            $purchaseAccountId = $balanceService->getPurchaseExpenseId(); // "Purchase" COA
+            $apAccountId       = $balanceService->getAccountsPayableId();
+
+            $extraCost     = (float) ($purchase->extra_cost ?? 0);
+            // Pure purchase price = net_amount minus extra_cost
+            $purchasePrice = max(0, (float) $purchase->net_amount - $extraCost);
 
             $lines = [];
 
-            // 1. Debit Purchase Expense
+            // 1. Debit "Purchase" account — pure inventory cost only (no extra)
             $lines[] = [
-                'account_id' => $expenseAccountId,
-                'debit' => $purchase->net_amount,
-                'credit' => 0,
-                'narration' => "Purchase Invoice #{$purchase->invoice_no}",
+                'account_id' => $purchaseAccountId,
+                'debit'      => $purchasePrice,
+                'credit'     => 0,
+                'narration'  => "Purchase Invoice #{$purchase->invoice_no}",
             ];
 
-            // 2. Credit Accounts Payable (Vendor Liability)
+            // 2. If extra_cost > 0, also debit "Purchase Expensive" for the additional cost
+            if ($extraCost > 0) {
+                $purchaseExpensiveId = $balanceService->getPurchaseExpensiveId();
+                $lines[] = [
+                    'account_id' => $purchaseExpensiveId,
+                    'debit'      => $extraCost,
+                    'credit'     => 0,
+                    'narration'  => "Extra Cost on Purchase #{$purchase->invoice_no}",
+                ];
+            }
+
+            // 3. Credit Accounts Payable full net_amount (vendor is owed everything)
             $lines[] = [
                 'account_id' => $apAccountId,
-                'debit' => 0,
-                'credit' => $purchase->net_amount,
-                'narration' => "Payable to Vendor " . ($purchase->vendor->name ?? ''),
+                'debit'      => 0,
+                'credit'     => $purchase->net_amount,
+                'narration'  => "Payable to Vendor " . ($purchase->vendor->name ?? ''),
             ];
 
-            // 3. Voucher Header
-            // Using TYPE_PAYMENT so it appears in 'all_Payment_vochers' listing as requested
+            // 4. Voucher Header
             $voucherData = [
-                'voucher_type' => \App\Models\VoucherMaster::TYPE_PAYMENT, 
-                'date' => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
-                'status' => \App\Models\VoucherMaster::STATUS_POSTED,
-                'party_type' => \App\Models\Vendor::class,
-                'party_id' => $purchase->vendor_id,
-                'remarks' => "Purchase Voucher #{$purchase->invoice_no}",
+                'voucher_type' => \App\Models\VoucherMaster::TYPE_JOURNAL,
+                'date'         => $purchase->purchase_date ? \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') : now()->format('Y-m-d'),
+                'status'       => \App\Models\VoucherMaster::STATUS_POSTED,
+                'party_type'   => \App\Models\Vendor::class,
+                'party_id'     => $purchase->vendor_id,
+                'remarks'      => "Purchase Voucher #{$purchase->invoice_no}" . ($extraCost > 0 ? " (Extra Cost: {$extraCost})" : ''),
             ];
 
-            // 4. Create Voucher
+            // 5. Create the V2 Voucher (journal entries)
             $this->voucherService->createVoucher($voucherData, $lines, auth()->id());
 
-            \Log::info("Purchase Voucher Created for Invoice #{$purchase->invoice_no}");
+            \Log::info("Purchase Voucher Created for #{$purchase->invoice_no}. Price: {$purchasePrice}, Extra: {$extraCost}");
+
+            // 6. Auto-create a legacy ExpenseVoucher for extra_cost so it appears in Expense Voucher list
+            if ($extraCost > 0) {
+                $this->createExpenseVoucherForExtraCost($purchase, $extraCost);
+            }
 
         } catch (\Exception $e) {
             \Log::error('TransactionService Purchase Voucher Error: ' . $e->getMessage());
-            // We log but don't rethrow to avoid blocking main flow if config is missing
+        }
+    }
+
+    /**
+     * Auto-create a legacy ExpenseVoucher record for the extra_cost on a purchase.
+     * This makes the expense appear in the existing Expense Voucher listing page.
+     * Accounting: Dr. Purchase Expensive (PURCHASE_EXP) — already done in createPurchaseVoucher V2 lines above.
+     */
+    public function createExpenseVoucherForExtraCost(\App\Models\Purchase $purchase, float $extraCost)
+    {
+        try {
+            $balanceService      = app(\App\Services\BalanceService::class);
+            $purchaseExpensiveId = $balanceService->getPurchaseExpensiveId();
+
+            $evid = \App\Models\ExpenseVoucher::generateInvoiceNo();
+
+            // Find or create the narration for purchase extra costs
+            $narration = \App\Models\Narration::firstOrCreate(
+                ['narration'    => 'Purchase Extra Cost', 'expense_head' => 'Expense voucher'],
+                ['narration'    => 'Purchase Extra Cost', 'expense_head' => 'Expense voucher']
+            );
+
+            \App\Models\ExpenseVoucher::create([
+                'evid'             => $evid,
+                'entry_date'       => $purchase->purchase_date ?? now()->toDateString(),
+                'type'             => 'vendor',
+                'party_id'         => $purchase->vendor_id,
+                'remarks'          => "Auto: Purchase Expensive for Invoice #{$purchase->invoice_no}",
+                'narration_id'     => json_encode([(string) $narration->id]),
+                'row_account_head' => json_encode([null]),
+                'row_account_id'   => json_encode([$purchaseExpensiveId]),
+                'amount'           => json_encode([$extraCost]),
+                'total_amount'     => $extraCost,
+            ]);
+
+            // Update legacy Account Ledger (Row Side = Plus)
+            $rowAccount = \App\Models\Account::find($purchaseExpensiveId);
+            if ($rowAccount) {
+                $rowAccount->opening_balance += $extraCost;
+                $rowAccount->save();
+            }
+
+            // Update legacy Vendor Ledger (Party Side = Minus)
+            $ledger = \App\Models\VendorLedger::where('vendor_id', $purchase->vendor_id)->latest()->first();
+            if ($ledger) {
+                \App\Models\VendorLedger::create([
+                    'vendor_id'         => $purchase->vendor_id,
+                    'admin_or_user_id'  => auth()->id() ?? 1,
+                    'opening_balance'   => $ledger->opening_balance ?? 0,
+                    'previous_balance'  => $ledger->closing_balance,
+                    'closing_balance'   => $ledger->closing_balance - $extraCost,
+                ]);
+            }
+
+            \Log::info("Auto ExpenseVoucher created for Purchase #{$purchase->invoice_no}, Extra Cost: {$extraCost}");
+
+        } catch (\Exception $e) {
+            \Log::error('Auto ExpenseVoucher Error: ' . $e->getMessage());
         }
     }
     

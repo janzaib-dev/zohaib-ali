@@ -156,9 +156,6 @@ class BalanceService
         return $openingBalance + $journalBalance;
     }
 
-    /**
-     * Get Financial Summary for Dashboard
-     */
     public function getFinancialSummary(string $startDate, string $endDate): array
     {
         // 1. Sales Revenue (Credit minus Debit)
@@ -170,29 +167,113 @@ class BalanceService
             ->selectRaw('SUM(credit) - SUM(debit) as net_sales')
             ->value('net_sales') ?? 0;
 
-        // 2. Purchase Expense (Debit minus Credit)
+        // 2. Cost of Goods Sold (COGS)
+        // Sale cost = sale_items.qty * product.purchase_price_per_piece
+        $cogs = \DB::table('sale_items')
+            ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+            ->join('products', 'sale_items.product_id', '=', 'products.id')
+            ->whereBetween('sales.created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->sum(DB::raw('sale_items.qty * products.purchase_price_per_piece'));
+
+        $cogsReturns = \DB::table('sale_return_items')
+            ->join('sale_returns', 'sale_return_items.sale_return_id', '=', 'sale_returns.id')
+            ->join('products', 'sale_return_items.product_id', '=', 'products.id')
+            ->whereBetween('sale_returns.created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->sum(DB::raw('sale_return_items.qty * products.purchase_price_per_piece'));
+
+        $netCogs = $cogs - $cogsReturns;
+
+        // 2.5 Actual Operating Expenses (Excluding Inventory Purchases)
         $expenseHeadId = \App\Models\AccountHead::where('name', 'Expenses')->value('id') ?? 4;
-        $purchases = JournalEntry::whereHas('account', function ($q) use ($expenseHeadId) {
+        
+        // Find Purchase Accounts to EXCLUDE from Expenses
+        $purchaseAccountIds = \App\Models\Account::where('head_id', $expenseHeadId)
+            ->where(function($q) {
+                $q->where('account_code', 'PURCHASE')
+                  ->orWhere('title', 'like', '%Cost of Goods%')
+                  ->orWhere('title', 'like', '%Purchase%');
+            })->pluck('id')->toArray();
+
+        $expenses = JournalEntry::whereHas('account', function ($q) use ($expenseHeadId, $purchaseAccountIds) {
             $q->where('head_id', $expenseHeadId);
+            if (!empty($purchaseAccountIds)) {
+                $q->whereNotIn('id', $purchaseAccountIds);
+            }
         })
             ->whereBetween('entry_date', [$startDate, $endDate])
-            ->selectRaw('SUM(debit) - SUM(credit) as net_purchases')
-            ->value('net_purchases') ?? 0;
+            ->selectRaw('SUM(debit) - SUM(credit) as net_expenses')
+            ->value('net_expenses') ?? 0;
 
-        // 3. Total Receivables (Money people owe us)
-        $arAccount = \App\Models\Account::where('title', 'Accounts Receivable')->first();
-        $receivables = $arAccount ? $arAccount->calculated_balance : 0;
+        $purchases = \DB::table('purchases')
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->sum('net_amount') - \DB::table('purchase_returns')
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->sum('net_amount');
 
-        // 4. Total Payables (Money we owe vendors)
-        $apAccount = \App\Models\Account::where('title', 'Accounts Payable')->first();
-        $payables = $apAccount ? $apAccount->calculated_balance : 0;
+        // 3. Total Receivables & Customer Advances
+        $receivables = 0;
+        $customerAdvances = 0; // Option A: Track customer advances dynamically
+        $customerAdvancesList = []; // Detail list for dashboard
+        
+        $allCustomers = \App\Models\Customer::select('id', 'customer_name', 'opening_balance')->get();
+        $journalBalancesC = \DB::table('journal_entries')
+            ->where('party_type', \App\Models\Customer::class)
+            ->select('party_id', \DB::raw('SUM(debit) - SUM(credit) as net_balance'))
+            ->groupBy('party_id')
+            ->pluck('net_balance', 'party_id');
+            
+        foreach ($allCustomers as $cust) {
+            $jBal = $journalBalancesC[$cust->id] ?? 0;
+            $bal = (float)($cust->opening_balance ?? 0) + (float)$jBal;
+            if ($bal > 0) {
+                // Positive balance = they owe us = Receivable
+                $receivables += $bal;
+            } elseif ($bal < 0) {
+                // Negative balance = we owe them = Customer Advance / Liability
+                // Store as positive absolute number for display
+                $advAmount = abs($bal);
+                $customerAdvances += $advAmount;
+                $customerAdvancesList[] = [
+                    'id' => $cust->id,
+                    'name' => $cust->customer_name,
+                    'amount' => $advAmount
+                ];
+            }
+        }
+        
+        // Sort the list from highest advance to lowest
+        usort($customerAdvancesList, function($a, $b) {
+            return $b['amount'] <=> $a['amount'];
+        });
+
+        // 4. Total Payables (Money we owe vendors - GROSS)
+        $payables = 0;
+        $allVendors = \App\Models\Vendor::select('id', 'opening_balance')->get();
+        $journalBalancesV = \DB::table('journal_entries')
+            ->where('party_type', \App\Models\Vendor::class)
+            ->select('party_id', \DB::raw('SUM(credit) - SUM(debit) as net_balance'))
+            ->groupBy('party_id')
+            ->pluck('net_balance', 'party_id');
+            
+        foreach ($allVendors as $vendor) {
+            $jBal = $journalBalancesV[$vendor->id] ?? 0;
+            $bal = (float)($vendor->opening_balance ?? 0) + (float)$jBal;
+            if ($bal > 0) {
+                $payables += $bal;
+            }
+        }
 
         return [
             'sales' => $sales,
+            'cogs' => $netCogs,
+            'expenses' => $expenses,
             'purchases' => $purchases,
             'receivables' => $receivables,
+            'customer_advances' => $customerAdvances,
+            'customer_advances_list' => $customerAdvancesList,
             'payables' => $payables,
-            'net_cash_flow' => $sales - $purchases, // Rough estimate
+            'net_cash_flow' => $sales - $purchases,
+            'net_profit' => $sales - $netCogs - $expenses,
         ];
     }
 
@@ -486,11 +567,18 @@ class BalanceService
                 'search' => ['account_code', 'SALES'],
             ],
             [
-                'title' => 'Purchase Expense',
+                'title' => 'Purchase',
                 'account_code' => 'PURCHASE',
                 'type' => 'Debit',
                 'head_id' => $headIds['expense'],
                 'search' => ['account_code', 'PURCHASE'],
+            ],
+            [
+                'title' => 'Purchase Expensive',
+                'account_code' => 'PURCHASE_EXP',
+                'type' => 'Debit',
+                'head_id' => $headIds['expense'],
+                'search' => ['account_code', 'PURCHASE_EXP'],
             ],
         ];
 
@@ -576,15 +664,35 @@ class BalanceService
     }
 
     /**
-     * Get Purchase Expense account ID (Expense)
+     * Get the main Purchase account ID (tracks purchase price only — no extra cost)
      */
     public function getPurchaseExpenseId(): int
     {
         $this->ensureDefaultCOA();
 
-        $account = Account::where('account_code', 'PURCHASE')
-            ->orWhere('title', 'like', '%Purchase%')
-            ->orWhere('title', 'like', '%Cost of Goods%')
+        $account = Account::where('account_code', 'PURCHASE')->first();
+
+        if (! $account) {
+            $account = Account::where('title', 'like', '%Cost of Goods%')
+                ->orWhere(function ($q) {
+                    $q->where('title', 'like', '%Purchase%')
+                        ->where('account_code', '!=', 'PURCHASE_EXP');
+                })
+                ->first();
+        }
+
+        return $account->id;
+    }
+
+    /**
+     * Get the Purchase Expensive account ID (tracks extra/additional costs on purchases)
+     */
+    public function getPurchaseExpensiveId(): int
+    {
+        $this->ensureDefaultCOA();
+
+        $account = Account::where('account_code', 'PURCHASE_EXP')
+            ->orWhere('title', 'Purchase Expensive')
             ->first();
 
         return $account->id;

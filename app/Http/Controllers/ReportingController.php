@@ -735,46 +735,24 @@ class ReportingController extends Controller
             return response()->json(['error' => 'Invalid parameters'], 400);
         }
 
-        // ── Opening Balance (before start date) ────────────────────────
-        // For a CUSTOMER LEDGER we want to show:
-        //   DEBIT  = Sale Invoice (customer owes us)
-        //   CREDIT = AR Cleared  (customer payment received / receivable cleared)
-        // We SKIP all internal double-entry sides: cash/bank, revenue accounts, etc.
-        $SKIP_KEYWORDS = [
-            'sales revenue',          // Revenue account credit side
-            'inventory inward',       // Inventory/COGS
-            'vendor payable',         // Vendor side
-            'ap cleared',             // Accounts payable
-            'cash paid',              // Vendor payment
-            'cost of goods',          // COGS
-            'cash received',          // Cash/Bank Dr side (internal); the Cr side is 'ar cleared'
-            'discount allowed',       // Contra-revenue (keep out of customer statement)
-        ];
+        // ── Pre-period (Opening Balance) ──────────────────────────────
+        $lastEntryBeforeStart = DB::table('customer_ledgers')
+            ->where('customer_id', $customerId)
+            ->whereDate('created_at', '<', $start)
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
 
-        $openingEntries = DB::table('journal_entries')
-            ->where('party_type', 'App\\Models\\Customer')
-            ->where('party_id', $customerId)
-            ->where('entry_date', '<', $start)
-            ->get();
-
-        $openingBalance = (float) ($customer->opening_balance ?? 0);
-        foreach ($openingEntries as $e) {
-            $desc = strtolower($e->description ?? '');
-            $skip = false;
-            foreach ($SKIP_KEYWORDS as $kw) {
-                if (str_contains($desc, $kw)) { $skip = true; break; }
-            }
-            if (!$skip) {
-                $openingBalance += ((float)$e->debit - (float)$e->credit);
-            }
-        }
+        // If there's an entry before start, its closing balance is our opening
+        // If not, our opening balance is the master customer balance set initially.
+        $openingBalance = $lastEntryBeforeStart ? (float)$lastEntryBeforeStart->closing_balance : (float)($customer->opening_balance ?? 0);
 
         // ── Transactions in period ─────────────────────────────────────
-        $periodEntries = DB::table('journal_entries')
-            ->where('party_type', 'App\\Models\\Customer')
-            ->where('party_id', $customerId)
-            ->whereBetween('entry_date', [$start, $end])
-            ->orderBy('entry_date', 'asc')
+        $periodEntries = DB::table('customer_ledgers')
+            ->where('customer_id', $customerId)
+            ->whereDate('created_at', '>=', $start)
+            ->whereDate('created_at', '<=', $end)
+            ->orderBy('created_at', 'asc')
             ->orderBy('id', 'asc')
             ->get();
 
@@ -783,38 +761,39 @@ class ReportingController extends Controller
         $totalCredit    = 0;
         $transactions   = [];
 
-        foreach ($periodEntries as $e) {
-            $desc = strtolower($e->description ?? '');
+        foreach ($periodEntries as $row) {
+            $desc = strtolower($row->description ?? '');
 
-            // Skip internal double-entry lines
-            $skip = false;
-            foreach ($SKIP_KEYWORDS as $kw) {
-                if (str_contains($desc, $kw)) { $skip = true; break; }
-            }
-            if ($skip) continue;
+            $prev  = (float) ($row->previous_balance ?? 0);
+            $close = (float) ($row->closing_balance  ?? 0);
+            $diff  = $close - $prev;
 
-            $dr = (float) $e->debit;
-            $cr = (float) $e->credit;
-            $runningBalance += ($dr - $cr);
+            // Positive diff = balance went up = Debit (customer owes more)
+            // Negative diff = balance went down = Credit (customer paid / return)
+            $dr    = $diff > 0 ? $diff : 0;
+            $cr    = $diff < 0 ? abs($diff) : 0;
+            
+            $runningBalance = $close;
             $totalDebit  += $dr;
             $totalCredit += $cr;
 
             // Extract ref from description
             $ref = '-';
-            if (preg_match('/(SLE-\w+|PO-\w+|RV-\w+|PV-\w+|JV-\w+)/i', $e->description ?? '', $m)) {
-                $ref = $m[1];
+            if (preg_match('/#(inv|pv|sr|jv)-?\d+/i', $desc, $m)) {
+                // Keep exactly as matched with the #
+                $ref = $m[0];
             }
 
             // Detect type
             $type = 'journal';
-            if (str_contains($desc, 'sale invoice') || str_contains($desc, 'invoice'))          $type = 'sale';
-            if (str_contains($desc, 'ar cleared') || str_contains($desc, 'receipt'))             $type = 'receipt';
-            if (str_contains($desc, 'return'))                                                    $type = 'return';
+            if (str_contains($desc, 'sale') || str_contains($desc, 'invoice'))  $type = 'sale';
+            elseif (str_contains($desc, 'payment') || str_contains($desc, 'receipt')) $type = 'receipt';
+            elseif (str_contains($desc, 'return'))                                    $type = 'return';
 
             $transactions[] = [
-                'date'        => is_string($e->entry_date) ? explode(' ', $e->entry_date)[0] : $e->entry_date,
-                'invoice'     => $ref,
-                'description' => $e->description ?? '',
+                'date'        => explode(' ', $row->created_at)[0],
+                'invoice'     => $ref !== '-' ? strtoupper(str_replace('#', '', $ref)) : '-',
+                'description' => $row->description ?? '',
                 'type'        => $type,
                 'debit'       => $dr,
                 'credit'      => $cr,
@@ -840,4 +819,329 @@ class ReportingController extends Controller
             'report_period'   => "$start to $end",
         ]);
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  PROFIT & LOSS REPORT
+    // ─────────────────────────────────────────────────────────────────────
+    public function profitLoss(Request $request)
+    {
+        $start = $request->start_date ?? now()->startOfMonth()->toDateString();
+        $end   = $request->end_date   ?? now()->toDateString();
+
+        // ══════════════════════════════════════════════════════════════════
+        // 1. REVENUE  (what we charged customers)
+        // ══════════════════════════════════════════════════════════════════
+        $salesRevenue = (float) DB::table('sales')
+            ->whereBetween(DB::raw('DATE(created_at)'), [$start, $end])
+            ->where('sale_status', '!=', 'returned')
+            ->sum('total_net');
+
+        $saleReturns = (float) DB::table('sale_returns')
+            ->whereBetween(DB::raw('DATE(created_at)'), [$start, $end])
+            ->sum('net_amount');
+
+        $netRevenue = max(0, $salesRevenue - $saleReturns);
+
+        // ══════════════════════════════════════════════════════════════════
+        // 2. COST OF GOODS SOLD — CORRECT METHOD
+        //    COGS = actual pieces sold × purchase price per piece
+        //    (NOT total purchases — unsold stock is NOT an expense!)
+        //
+        //    Example the user described:
+        //      You bought 10 items at 1000 each (total purchase = 10,000)
+        //      You sold only 3 items in this period
+        //      COGS = 3 × 1000 = 3,000   ← correct
+        //      Remaining 7 items are still inventory — not counted here
+        // ══════════════════════════════════════════════════════════════════
+        $cogsRows = DB::table('sale_items')
+            ->join('sales',    'sale_items.sale_id',    '=', 'sales.id')
+            ->join('products', 'sale_items.product_id', '=', 'products.id')
+            ->whereBetween(DB::raw('DATE(sales.created_at)'), [$start, $end])
+            ->where('sales.sale_status', '!=', 'returned')
+            ->selectRaw('
+                sale_items.product_id,
+                products.item_name,
+                products.item_code,
+                products.size_mode,
+                products.purchase_price_per_piece,
+                products.purchase_price_per_box,
+                products.pieces_per_box,
+                products.price_per_m2,
+                products.total_m2,
+                SUM(sale_items.total_pieces) as total_pieces_sold,
+                SUM(sale_items.qty)          as qty_sold,
+                SUM(sale_items.total)        as sale_revenue
+            ')
+            ->groupBy(
+                'sale_items.product_id',
+                'products.item_name',
+                'products.item_code',
+                'products.size_mode',
+                'products.purchase_price_per_piece',
+                'products.purchase_price_per_box',
+                'products.pieces_per_box',
+                'products.price_per_m2',
+                'products.total_m2'
+            )
+            ->get();
+
+        // Compute COGS per product line based on size_mode
+        $cogsPerProduct = [];
+        $totalCOGS = 0;
+
+        foreach ($cogsRows as $row) {
+            $ppp   = (float) ($row->purchase_price_per_piece ?? 0);
+            $ppb   = (float) ($row->purchase_price_per_box   ?? 0);
+            $pcBox = max(1, (int) ($row->pieces_per_box       ?? 1));
+            $pm2   = (float) ($row->price_per_m2              ?? 0);
+            $m2Box = (float) ($row->total_m2                  ?? 0);
+            $piecesS = (float) ($row->total_pieces_sold ?? 0);
+            $qtyS    = (float) ($row->qty_sold          ?? 0);
+            $sizeMode = $row->size_mode ?? 'by_piece';
+
+            // Derive cost for the pieces sold
+            switch ($sizeMode) {
+                case 'by_size':
+                    // by_size: qty = boxes sold, total_pieces = pieces sold
+                    $cost = $pm2 > 0
+                        ? $qtyS * $m2Box * $pm2          // boxes × m2/box × price/m2
+                        : $piecesS * ($ppp ?: $ppb / $pcBox);
+                    break;
+
+                case 'by_cartons':
+                case 'by_carton':
+                    // qty = cartons (boxes), total_pieces includes all pieces
+                    $boxes = floor($piecesS / $pcBox);
+                    $loose = fmod($piecesS, $pcBox);
+                    $cost  = ($boxes * $ppb) + ($loose * ($ppp ?: $ppb / $pcBox));
+                    break;
+
+                default: // by_piece / by_pieces
+                    $costPerPiece = $ppp ?: ($ppb / $pcBox);
+                    $cost = $piecesS > 0 ? $piecesS * $costPerPiece : $qtyS * $costPerPiece;
+                    break;
+            }
+
+            $cost = round($cost, 2);
+            $totalCOGS += $cost;
+
+            $cogsPerProduct[] = [
+                'item_code'    => $row->item_code,
+                'item_name'    => $row->item_name,
+                'size_mode'    => $sizeMode,
+                'pieces_sold'  => $piecesS ?: $qtyS,
+                'sale_revenue' => round((float) $row->sale_revenue, 2),
+                'cogs'         => $cost,
+                'gross_margin' => round((float) $row->sale_revenue, 2) - $cost,
+            ];
+        }
+
+        // COGS = purely the cost of items actually sold. No deductions.
+        // Purchase returns are a separate event — they don't change what was sold.
+        $netCOGS = $totalCOGS;
+
+        // Capture total purchases this period (for the detail breakdown — informational)
+        $totalPurchasedThisPeriod = (float) DB::table('purchases')
+            ->whereBetween('purchase_date', [$start, $end])
+            ->where('status_purchase', 'approved')
+            ->sum('net_amount');
+
+        $purchasesThisPeriodCount = (int) DB::table('purchases')
+            ->whereBetween('purchase_date', [$start, $end])
+            ->where('status_purchase', 'approved')
+            ->count();
+
+        // Inventory value still in stock (not sold — informational only)
+        $inventoryOnHand = (float) DB::table('warehouse_stocks')
+            ->join('products', 'warehouse_stocks.product_id', '=', 'products.id')
+            ->selectRaw('SUM(warehouse_stocks.total_pieces * COALESCE(products.purchase_price_per_piece, 0)) as inv_value')
+            ->value('inv_value');
+
+
+        // ══════════════════════════════════════════════════════════════════
+        // 3. GROSS PROFIT  =  Net Revenue − COGS
+        // ══════════════════════════════════════════════════════════════════
+        $grossProfit       = $netRevenue - $netCOGS;
+        $grossProfitMargin = $netRevenue > 0 ? round(($grossProfit / $netRevenue) * 100, 2) : 0;
+
+        // ══════════════════════════════════════════════════════════════════
+        // 4. OPERATING EXPENSES
+        //    4a. Purchase Expensive (extra_cost field on purchases)
+        //    4b. Manual expense vouchers
+        // ══════════════════════════════════════════════════════════════════
+        $purchaseExpenses = (float) DB::table('purchases')
+            ->whereBetween('purchase_date', [$start, $end])
+            ->where('status_purchase', 'approved')
+            ->sum('extra_cost');
+
+        $otherExpenses = (float) DB::table('expense_vouchers')
+            ->whereBetween(DB::raw('DATE(entry_date)'), [$start, $end])
+            ->where(function ($q) {
+                $q->whereNull('remarks')
+                  ->orWhere('remarks', 'NOT LIKE', '%Auto: Purchase Expensive%');
+            })
+            ->sum('total_amount');
+
+        $totalOperatingExpenses = $purchaseExpenses + $otherExpenses;
+
+        // ══════════════════════════════════════════════════════════════════
+        // 5. NET PROFIT  =  Gross Profit − Operating Expenses
+        // ══════════════════════════════════════════════════════════════════
+        $netProfit       = $grossProfit - $totalOperatingExpenses;
+        $netProfitMargin = $netRevenue > 0 ? round(($netProfit / $netRevenue) * 100, 2) : 0;
+
+        // ══════════════════════════════════════════════════════════════════
+        // 6. DETAIL BREAKDOWNS
+        // ══════════════════════════════════════════════════════════════════
+
+        // Sales by period
+        $daysDiff    = \Carbon\Carbon::parse($start)->diffInDays(\Carbon\Carbon::parse($end));
+        $groupFormat = $daysDiff > 60 ? '%Y-%m' : '%Y-%m-%d';
+        $groupLabel  = $daysDiff > 60 ? 'Month' : 'Date';
+
+        $salesByPeriod = DB::table('sales')
+            ->whereBetween(DB::raw('DATE(created_at)'), [$start, $end])
+            ->where('sale_status', '!=', 'returned')
+            ->selectRaw("DATE_FORMAT(created_at, '{$groupFormat}') as period,
+                         COUNT(*) as txn_count,
+                         COALESCE(SUM(total_bill_amount), 0) as subtotal,
+                         COALESCE(SUM(total_extradiscount), 0) as discount,
+                         COALESCE(SUM(total_net), 0) as net_revenue")
+            ->groupByRaw("DATE_FORMAT(created_at, '{$groupFormat}')")
+            ->orderBy('period')
+            ->get();
+
+        // Top products (by sale revenue, including their COGS for margin calc)
+        $topProducts = collect($cogsPerProduct)
+            ->sortByDesc('sale_revenue')
+            ->take(10)
+            ->values();
+
+        // Expense voucher breakdown
+        $expenseBreakdown = DB::table('expense_vouchers')
+            ->whereBetween(DB::raw('DATE(entry_date)'), [$start, $end])
+            ->where(function ($q) {
+                $q->whereNull('remarks')
+                  ->orWhere('remarks', 'NOT LIKE', '%Auto: Purchase Expensive%');
+            })
+            ->selectRaw('remarks, entry_date, total_amount, evid')
+            ->orderByDesc('entry_date')
+            ->limit(50)
+            ->get();
+
+        // Purchase breakdown
+        $purchaseBreakdown = DB::table('purchases')
+            ->join('vendors', 'purchases.vendor_id', '=', 'vendors.id')
+            ->whereBetween('purchases.purchase_date', [$start, $end])
+            ->where('purchases.status_purchase', 'approved')
+            ->selectRaw('purchases.invoice_no, purchases.purchase_date, vendors.name as vendor_name,
+                         purchases.subtotal, purchases.discount, purchases.extra_cost, purchases.net_amount')
+            ->orderByDesc('purchases.purchase_date')
+            ->limit(50)
+            ->get();
+
+        return view('admin_panel.reporting.profit_loss', compact(
+            'start', 'end',
+            'salesRevenue', 'saleReturns', 'netRevenue',
+            'totalCOGS', 'netCOGS',
+            'grossProfit', 'grossProfitMargin',
+            'purchaseExpenses', 'otherExpenses', 'totalOperatingExpenses',
+            'netProfit', 'netProfitMargin',
+            'cogsPerProduct',
+            'totalPurchasedThisPeriod', 'purchasesThisPeriodCount', 'inventoryOnHand',
+            'salesByPeriod', 'groupLabel',
+            'topProducts', 'expenseBreakdown', 'purchaseBreakdown'
+        ));
+    }
+    public function warehouse_report()
+    {
+        return view('admin_panel.reporting.warehouse_report');
+    }
+
+    public function fetchWarehouseReport(Request $request)
+    {
+        $warehouseId = $request->warehouse_id;
+
+        $query = DB::table('warehouse_stocks')
+            ->join('warehouses', 'warehouse_stocks.warehouse_id', '=', 'warehouses.id')
+            ->join('products', 'warehouse_stocks.product_id', '=', 'products.id')
+            ->leftJoin('brands', 'products.brand_id', '=', 'brands.id')
+            ->leftJoin('units', 'products.unit_id', '=', 'units.id')
+            ->select(
+                'warehouses.warehouse_name',
+                'products.id as product_id',
+                'products.item_code',
+                'products.item_name',
+                'products.size_mode',
+                'products.pieces_per_box',
+                'products.sale_price_per_piece',
+                'products.sale_price_per_box',
+                'products.price_per_m2',
+                'products.total_m2',
+                'brands.name as brand_name',
+                'units.name as unit_name',
+                'warehouse_stocks.total_pieces',
+                'warehouse_stocks.quantity as boxes',
+                'warehouse_stocks.remarks'
+            );
+
+        if ($warehouseId && $warehouseId !== 'all') {
+            $query->where('warehouse_stocks.warehouse_id', $warehouseId);
+        }
+
+        $stocks = $query->orderBy('warehouses.warehouse_name')->orderBy('products.item_name')->get();
+
+        $rows = [];
+        $totalStockValue = 0;
+
+        foreach ($stocks as $stock) {
+            $ppb = max(1, (int)$stock->pieces_per_box);
+            $totalPcs = (float)$stock->total_pieces;
+            $sizeMode = $stock->size_mode ?? 'by_piece';
+
+            $salePricePpc  = (float)($stock->sale_price_per_piece ?? 0);
+            $salePricePbx  = (float)($stock->sale_price_per_box ?? 0);
+            $pricePerM2    = (float)($stock->price_per_m2 ?? 0);
+            $totalM2       = (float)($stock->total_m2 ?? 0);
+
+            if ($sizeMode === 'by_size') {
+                $displayQty = ($totalM2 > 0 && $ppb > 0)
+                    ? round($totalPcs * $totalM2, 2) . ' m²'
+                    : $totalPcs . ' pcs';
+                $val = $pricePerM2 > 0
+                    ? round($totalPcs * $totalM2, 2) * $pricePerM2
+                    : $totalPcs * $salePricePpc;
+            } elseif ($sizeMode === 'by_cartons' || $sizeMode === 'by_carton') {
+                $b = floor($totalPcs / $ppb);
+                $l = $totalPcs % $ppb;
+                $displayQty = $b . ' box' . ($l > 0 ? ' + ' . $l . ' pcs' : '');
+                $val = $b * $salePricePbx + $l * $salePricePpc;
+            } else {
+                $displayQty = $totalPcs . ' pcs';
+                $val = $totalPcs * ($salePricePpc ?: ($salePricePbx / $ppb));
+            }
+
+            $totalStockValue += $val;
+
+            $rows[] = [
+                'warehouse_name' => $stock->warehouse_name,
+                'item_code'      => $stock->item_code ?? '-',
+                'item_name'      => $stock->item_name ?? '-',
+                'brand_name'     => $stock->brand_name ?? '-',
+                'unit_name'      => $stock->unit_name ?? '-',
+                'total_pieces'   => $totalPcs,
+                'display_qty'    => $displayQty,
+                'stock_value'    => $val,
+            ];
+        }
+
+        $warehouses = DB::table('warehouses')->select('id', 'warehouse_name')->orderBy('warehouse_name')->get();
+
+        return response()->json([
+            'data' => $rows,
+            'warehouses' => $warehouses,
+            'grand_value' => $totalStockValue
+        ]);
+    }
 }
+

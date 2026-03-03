@@ -322,8 +322,8 @@
         }
     </style>
 
-    <!-- Script for Face API -->
-    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <!-- Script for Face API (Local) -->
+    <script src="{{ asset('vendor/face-api/face-api.min.js') }}"></script>
 
     <div class="main-content">
         <div class="main-content-inner">
@@ -465,23 +465,38 @@
         let stream = null;
         let isModelsLoaded = false;
         let detectionInterval = null;
+        let lastDescriptor = null;
 
         const video = document.getElementById('video');
         const overlay = document.getElementById('face-overlay');
         const canvas = document.getElementById('canvas');
         const cameraModal = document.getElementById('cameraModal');
 
+        // Employee's registered face descriptor
+        const storedDescriptor = @json($employee && $employee->face_encoding ? $employee->face_encoding : null);
+        let faceMatcher = null;
+
         // Preload Face API Models
         $(document).ready(async function() {
-            const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+            const MODEL_URL = '{{ asset('vendor/face-api/models') }}';
             try {
                 await Promise.all([
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                    // faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL) // Not strictly needed for presence check
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
                 ]);
                 isModelsLoaded = true;
                 console.log('Models Loaded');
                 $('#globalStatusText').text('AI Ready');
+
+                if (storedDescriptor) {
+                    // Create face matcher with employee's descriptor
+                    // Using a higher threshold (0.6) for easier matching, but server will verify strictly
+                    // Or keep same as server (0.45)
+                    const labeledDescriptor = new faceapi.LabeledFaceDescriptors('employee', [new Float32Array(
+                        storedDescriptor)]);
+                    faceMatcher = new faceapi.FaceMatcher(labeledDescriptor, 0.5);
+                }
             } catch (e) {
                 console.error('Model Load Failed', e);
             }
@@ -633,16 +648,49 @@
             detectionInterval = setInterval(async () => {
                 if (!isModelsLoaded || !stream) return;
 
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
 
                 if (detection) {
                     // Face Found
-                    $('.face-guide').css('border-color', '#22c55e'); // Green
-                    $('#aiStatus').html(
-                        '<span class="badge rounded-pill bg-success text-white"><i class="fa fa-check"></i> Face Detected</span>'
-                    );
-                    $('#captureBtn').prop('disabled', false).html('<i class="fa fa-camera"></i> Capture & ' + (
-                        currentType == 'check_in' ? 'Check In' : 'Check Out'));
+                    lastDescriptor = Array.from(detection.descriptor);
+
+                    let isMatch = true;
+                    let matchDistance = 0;
+
+                    // Verify against stored descriptor if available
+                    if (faceMatcher) {
+                        const match = faceMatcher.findBestMatch(detection.descriptor);
+                        if (match.label === 'unknown') {
+                            isMatch = false;
+                            matchDistance = match.distance;
+                        } else {
+                            matchDistance = match.distance;
+                        }
+                    }
+
+                    if (isMatch) {
+                        $('.face-guide').css('border-color', '#22c55e'); // Green
+                        $('#aiStatus').html(
+                            `<span class="badge rounded-pill bg-success text-white">
+                                <i class="fa fa-check"></i> Face Recognized (${Math.round((1 - matchDistance) * 100)}%)
+                            </span>`
+                        );
+                        $('#captureBtn').prop('disabled', false).html(
+                            '<i class="fa fa-camera"></i> Capture & ' + (
+                                currentType == 'check_in' ? 'Check In' : 'Check Out'));
+                    } else {
+                        $('.face-guide').css('border-color', '#ef4444'); // Red
+                        $('#aiStatus').html(
+                            `<span class="badge rounded-pill bg-danger text-white">
+                                <i class="fa fa-times"></i> Not Your Face (${Math.round((1 - matchDistance) * 100)}%)
+                            </span>`
+                        );
+                        $('#captureBtn').prop('disabled', true).html(
+                            '<i class="fa fa-user-times"></i> Face Mismatch');
+                    }
+
                 } else {
                     // No Face
                     $('.face-guide').css('border-color', 'rgba(255,255,255,0.5)');
@@ -695,22 +743,22 @@
             const photo = canvas.toDataURL('image/jpeg', 0.8);
 
             // Get Loc
-            getLocationAndSubmit(photo, btn);
+            getLocationAndSubmit(photo, btn, lastDescriptor);
         });
 
-        function getLocationAndSubmit(photo, btn) {
+        function getLocationAndSubmit(photo, btn, descriptor) {
             if (requiresLocation && navigator.geolocation) {
                 btn.html('Getting Location...');
                 navigator.geolocation.getCurrentPosition(
-                    (p) => submitAttendance(photo, btn, p.coords.latitude, p.coords.longitude),
-                    (e) => submitAttendance(photo, btn, null, null)
+                    (p) => submitAttendance(photo, btn, p.coords.latitude, p.coords.longitude, descriptor),
+                    (e) => submitAttendance(photo, btn, null, null, descriptor)
                 );
             } else {
-                submitAttendance(photo, btn, null, null);
+                submitAttendance(photo, btn, null, null, descriptor);
             }
         }
 
-        function submitAttendance(photo, btn, lat, lng) {
+        function submitAttendance(photo, btn, lat, lng, descriptor) {
             btn.html('Uploading...');
             $.ajax({
                 url: '{{ route('my-attendance.mark') }}',
@@ -720,7 +768,8 @@
                     type: currentType,
                     photo: photo,
                     latitude: lat,
-                    longitude: lng
+                    longitude: lng,
+                    face_descriptor: descriptor
                 },
                 success: function(res) {
                     if (res.success) {

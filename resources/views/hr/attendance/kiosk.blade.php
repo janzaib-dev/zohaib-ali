@@ -8,7 +8,7 @@
     <title>Attendance Kiosk - Face Recognition</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="{{ asset('vendor/face-api/face-api.min.js') }}"></script>
     <style>
         body {
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -248,7 +248,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script>
         // Configuration
-        const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models'; // Using main demo repo for models
+        const MODEL_URL = '{{ asset('vendor/face-api/models') }}'; // Using local models
         let brandedDescriptors = [];
         let faceMatcher = null;
         let verifiedEmployeeId = null;
@@ -283,7 +283,7 @@
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL)
+
                 ]);
 
                 $('#model-loading').html(
@@ -298,9 +298,11 @@
                 // 3. Start Camera
                 startCamera();
             } catch (err) {
-                console.error(err);
+                console.error('Init Error:', err);
                 $('#model-loading').html(
                     '<div class="text-danger">Error loading system resources. <br>Check console.</div>');
+                $('#statusMessage').text('Error loading face recognition models: ' + err.message).css('color',
+                    '#dc3545');
             }
         }
 
@@ -308,6 +310,7 @@
         async function loadLabeledImages() {
             try {
                 const response = await $.get('{{ route('hr.employees.encodings') }}');
+                brandedDescriptors = response; // Store the full response for employee data lookup
                 const labeledDescriptors = [];
 
                 response.forEach(emp => {
@@ -321,7 +324,7 @@
                 });
 
                 if (labeledDescriptors.length > 0) {
-                    faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6); // 0.6 is distance threshold
+                    faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5); // 0.5 is distance threshold
                 }
             } catch (error) {
                 console.error('Error fetching encodings:', error);
@@ -333,18 +336,22 @@
             const video = document.getElementById('video');
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {}
+                    video: {
+                        width: 640,
+                        height: 480
+                    }
                 });
                 video.srcObject = stream;
             } catch (err) {
+                console.error('Camera Error:', err);
                 $('#statusMessage').html('<span class="text-danger">Camera Access Denied</span>');
             }
 
             video.addEventListener('play', () => {
-                const canvas = document.getElementById('canvas-overlay');
+                const canvas = document.getElementById('canvas-overlay'); // Keep this as canvas-overlay
                 const displaySize = {
-                    width: video.width || 640,
-                    height: video.height || 480
+                    width: video.videoWidth,
+                    height: video.videoHeight
                 };
                 faceapi.matchDimensions(canvas, displaySize);
 
@@ -376,17 +383,32 @@
 
                             if (bestMatch.label !== 'unknown') {
                                 verifiedEmployeeId = bestMatch.label;
+                                verifiedDescriptor = Array.from(detection
+                                    .descriptor); // Store descriptor
                                 const distance = bestMatch.distance;
+                                const similarity = Math.round((1 - distance) * 100);
 
                                 faceGuide.removeClass('unknown').addClass('detected');
-                                $('#identifiedName').text('Identified: Employee #' +
-                                    verifiedEmployeeId + ' (' + Math.round((1 - distance) *
-                                    100) + '%)');
+                                // Find employee data
+                                const empData = brandedDescriptors.find(e => e.id ==
+                                    verifiedEmployeeId);
+                                if (empData) {
+                                    $('#identifiedName').html(
+                                        `<i class="fa fa-user-check me-2"></i>${empData.name} (${similarity}%)`
+                                    );
+                                } else {
+                                    $('#identifiedName').text('Identified: Employee #' +
+                                        verifiedEmployeeId + ' (' + similarity + '%)');
+                                }
+
+                                // Draw green box
+                                faceapi.draw.drawDetections(canvas, resizedDetections);
 
                                 // Enable Buttons
                                 enableButtons(true);
                             } else {
                                 verifiedEmployeeId = null;
+                                verifiedDescriptor = null;
                                 faceGuide.removeClass('detected').addClass('unknown');
                                 $('#identifiedName').text('Unknown Person');
                                 enableButtons(false);
@@ -396,6 +418,8 @@
                             $('#identifiedName').text('System Empty: No Faces Registered');
                         }
                     } else {
+                        verifiedEmployeeId = null;
+                        verifiedDescriptor = null;
                         $('#faceGuide').removeClass('detected unknown');
                         $('#identifiedName').text('');
                         enableButtons(false);
@@ -425,7 +449,7 @@
 
         // Mark attendance
         function markAttendance(type) {
-            if (!verifiedEmployeeId) return;
+            if (!verifiedEmployeeId || !verifiedDescriptor) return;
 
             isProcessing = true;
             const photo = capturePhoto();
@@ -444,7 +468,7 @@
                     _token: '{{ csrf_token() }}',
                     type: type,
                     photo: photo,
-                    employee_id: verifiedEmployeeId // Send the identified ID
+                    face_descriptor: verifiedDescriptor // Send descriptor for server-side verification
                 },
                 success: function(response) {
                     $('#loading').hide();

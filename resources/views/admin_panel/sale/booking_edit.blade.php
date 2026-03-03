@@ -1304,21 +1304,32 @@
               });
           }
 
-          function postNow() {
+          function postNow(returnUrlTemplate = null, openInNewTab = false) {
               $.post('{{ route('sales.post_final') }}', serializeForm())
                   .done(function(res) {
                       if (res?.ok) {
-                          window.open(res.invoice_url, '_blank');
                           Swal.fire({
                               title: 'Success!',
-                              text: 'Posted & invoice opened',
+                              text: 'Posted & opening document',
                               icon: 'success',
-                              timer: 2000,
+                              timer: 1500,
                               showConfirmButton: false
                           });
-                          // Optional: maybe reload page or disable buttons after post?
-                          // For now, let's reload to prevent double post if user clicks again (though controller blocks it)
-                          setTimeout(() => window.location.href = "{{ route('sale.index') }}", 2000);
+
+                          let targetUrl = returnUrlTemplate ?
+                              returnUrlTemplate.replace(':id', res.booking_id) :
+                              res.invoice_url;
+
+                          if (openInNewTab) {
+                              window.open(targetUrl, '_blank');
+                              setTimeout(() => {
+                                  window.location.href = "{{ route('sale.index') }}";
+                              }, 500);
+                          } else {
+                              setTimeout(() => {
+                                  window.location.href = targetUrl;
+                              }, 500);
+                          }
                       } else {
                           Swal.fire('Post Failed', res.msg || 'Post failed', 'error');
                       }
@@ -1348,13 +1359,13 @@
               ensureSaved();
           });
           $('#btnPrint').on('click', function() {
-              ensureSaved().then(id => window.open('{{ url('booking/print') }}/' + id, '_blank'));
+              postNow('{{ route('sales.invoice', ':id') }}');
           });
           $('#btnPrint2').on('click', function() {
-              ensureSaved().then(id => window.open('{{ url('booking/print2') }}/' + id, '_blank'));
+              postNow('{{ route('sales.receipt', ':id') }}', true);
           });
           $('#btnDCPrint').on('click', function() {
-              ensureSaved().then(id => window.open('{{ url('booking/dc') }}/' + id, '_blank'));
+              postNow('{{ route('sales.dc', ':id') }}', false, '{{ route('sales.receipt', ':id') }}');
           });
           $('#btnExit').on('click', function() {
               ensureSaved().finally(() => {

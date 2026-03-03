@@ -496,7 +496,7 @@
                         <li class="nav-item mega-menu">
                             @canany(['products.view', 'discount.products.view', 'categories.view', 'subcategories.view',
                                 'brands.view', 'units.view', 'vendors.view', 'warehouse.view', 'warehouse.stock.view',
-                                'stock.transfer.view', 'sales.view', 'customers.view', 'sales.officers.view'])
+                                'stock.transfer.view', 'sales.view', 'customers.view', 'sales.officers.view', 'zones.view'])
                                 <a href="#" class="nav-link">
                                     <i class="menu_icon fas fa-cogs"></i>
                                     <span class="menu-title">Management</span>
@@ -550,7 +550,8 @@
                                                 <p class="category-heading">Purchase & Inventory</p>
                                                 <ul class="submenu-item">
                                                     @can('vendors.view')
-                                                        <li><a href="{{ url('vendor') }}"><i class="fas fa-truck"></i> Vendor</a>
+                                                        <li><a href="{{ url('vendors') }}"><i class="fas fa-truck"></i>
+                                                                Vendor</a>
                                                         </li>
                                                     @endcan
                                                     @can('purchases.view')
@@ -582,8 +583,7 @@
                                             </div>
                                         @endcanany
                                         <!-- Customers & Sales -->
-                                        @canany(['sales.view', 'customers.view', 'sales.officers.view',
-                                            'receipts.voucher.view'])
+                                        @canany(['sales.view', 'customers.view', 'sales.officers.view', 'zones.view'])
                                             <div class="col-group col-md-3">
                                                 <p class="category-heading">Sales & Customers</p>
                                                 <ul class="submenu-item">
@@ -599,10 +599,10 @@
                                                         <li><a href="{{ url('sales-officers') }}"><i class="fas fa-user-tie"></i>
                                                                 Sales Officer</a></li>
                                                     @endcan
-                                                    @can('receipts.voucher.view')
-                                                        <li><a href="{{ route('all_recepit_vochers') }}"><i
-                                                                    class="fas fa-file-invoice-dollar"></i>
-                                                                Receipt Vouchers</a></li>
+                                                    @can('zones.view')
+                                                        <li><a href="{{ route('zone.index') }}"><i
+                                                                    class="fas fa-map-marker-alt"></i>
+                                                                Zones</a></li>
                                                     @endcan
                                                 </ul>
                                             </div>
@@ -665,6 +665,9 @@
                                         @can('item.stock.report.view')
                                             <li><a href="{{ route('report.item_stock') }}"><i class="fa-solid fa-users"></i>
                                                     Item Stock Report</a></li>
+                                            <li><a href="{{ route('report.warehouse') }}"><i
+                                                        class="fa-solid fa-warehouse"></i>
+                                                    Warehouse Report</a></li>
                                         @endcan
                                         @can('purchase.report.view')
                                             <li><a href="{{ route('report.purchase') }}"><i class="fa-solid fa-users"></i>
@@ -684,6 +687,8 @@
                                             <li><a href="{{ route('reports.onhand') }}"><i class="fas fa-warehouse"></i>
                                                     Inventory On-Hand</a></li>
                                         @endcan
+                                        <li><a href="{{ route('reports.profit_loss') }}"><i
+                                                    class="fas fa-chart-line"></i> Profit &amp; Loss</a></li>
                                     </ul>
                                 </div>
                             @endcanany

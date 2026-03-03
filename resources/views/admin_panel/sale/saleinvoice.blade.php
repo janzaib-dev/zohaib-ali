@@ -179,6 +179,24 @@
                 background: #fff;
                 margin: 0;
                 padding: 0;
+                color: #000 !important;
+            }
+
+            * {
+                color: #000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .badge {
+                border: 1px solid #000 !important;
+                color: #000 !important;
+            }
+
+            .text-muted,
+            .text-danger,
+            .text-success {
+                color: #000 !important;
             }
 
             .invoice-container {
@@ -191,12 +209,36 @@
                 min-height: auto;
             }
 
+            .invoice-table th {
+                background-color: #f0f0f0 !important;
+                color: #000 !important;
+                border: 1px solid #000 !important;
+            }
+
+            .invoice-table td {
+                border: 1px solid #000 !important;
+            }
+
+            .info-box,
+            .info-box-header {
+                border-color: #000 !important;
+                color: #000 !important;
+            }
+
+            .totals-table td,
+            .totals-table .total-row td,
+            .footer-section,
+            .signature-area {
+                border-color: #000 !important;
+                color: #000 !important;
+            }
+
             .print-btn-container {
-                display: none;
+                display: none !important;
             }
 
             .no-print {
-                display: none;
+                display: none !important;
             }
 
             @page {
@@ -227,7 +269,7 @@
         <div class="company-info">
             <div class="company-name">ZOAIB ALI COMPANY</div>
             <div style="font-size: 12px;">SADAR BAZAR, HYDERABAD SINDH</div>
-             {{ date('Y') }}
+            {{ date('Y') }}
         </div>
 
         <div class="invoice-title">Sales Invoice</div>
@@ -238,15 +280,16 @@
             <div class="col-4">
                 <div class="info-box">
                     <div class="info-box-header">Customer </div>
-                     @if($sale->customer_relation?->customer_id)
-                    <div style="font-size: 11px; color: #555;">
-                        Code: <strong>{{ $sale->customer_relation->customer_id }}</strong>
-                    </div>
+                    @if ($sale->customer_relation?->customer_id)
+                        <div style="font-size: 11px; color: #555;">
+                            Code: <strong>{{ $sale->customer_relation->customer_id }}</strong>
+                        </div>
                     @endif
-                    <div style="font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    <div
+                        style="font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                         {{ $sale->customer_relation->customer_name ?? 'Walking Customer' }}
                     </div>
-                   
+
                     <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px;">
                         {{ $sale->customer_relation->address ?? '' }}</div>
                     <div class="text-muted small" style="font-size: 11px;">
@@ -265,7 +308,7 @@
                         @php
                             $officer = $sale->customer_relation?->salesOfficer;
                         @endphp
-                        <strong>{{ $officer?->name ?? auth()->user()->name ?? 'Admin' }}</strong>
+                        <strong>{{ $officer?->name ?? (auth()->user()->name ?? 'Admin') }}</strong>
                     </div>
                     <!-- <div><span class="info-label">Type:</span> {{ $sale->sale_status ?? 'Final' }}</div> -->
                 </div>
@@ -356,16 +399,16 @@
                                 @endif
 
                                 @if ($piecesPerBox > 1)
-                                <span class="d-inline-block ms-1">
-                                    Pack: {{ $piecesPerBox }} pcs
-                                </span>
+                                    <span class="d-inline-block ms-1">
+                                        Pack: {{ $piecesPerBox }} pcs
+                                    </span>
                                 @endif
                             </div>
                         </td>
 
                         <td class="text-center" style="vertical-align: middle;">
                             <div style="font-weight: bold; color: #2c3e50;">
-                              
+
                                 @if ($sizeMode == 'by_pieces')
                                     {{ $totalPieces }} Pcs
                                 @else
@@ -385,19 +428,19 @@
                         <td class="text-center" style="vertical-align: middle;">
 
                             @if ($sizeMode == 'by_pieces')
-                            <span class="fw-bold">
-                            Peices
-                        </span> 
+                                <span class="fw-bold">
+                                    Peices
+                                </span>
                             @elseif ($sizeMode == 'by_cartons')
-                            <span class="fw-bold">
-                            Cartons
-                        </span> 
+                                <span class="fw-bold">
+                                    Cartons
+                                </span>
                             @elseif ($sizeMode == 'by_size')
-                            <span class="fw-bold">
-                                    
-                                {{ number_format($totalM2Line, 4) }}
-                            </span> m²
-                                @endif
+                                <span class="fw-bold">
+
+                                    {{ number_format($totalM2Line, 4) }}
+                                </span> m²
+                            @endif
                         </td>
 
                         <td class="text-end" style="vertical-align: middle;">
@@ -407,8 +450,8 @@
                         {{-- DISCOUNT COLUMN --}}
                         <td class="text-end" style="vertical-align: middle;">
                             @php
-                                $discAmt  = (float)($item['discount_amount'] ?? 0);
-                                $discPct  = (float)($item['discount_percent'] ?? 0);
+                                $discAmt = (float) ($item['discount_amount'] ?? 0);
+                                $discPct = (float) ($item['discount_percent'] ?? 0);
                             @endphp
                             @if ($discAmt > 0)
                                 <span class="text-danger">{{ number_format($discAmt, 2) }}</span>
@@ -454,22 +497,22 @@
                 <div class="info-box" style="border: none; padding: 0;">
                     <table class="totals-table">
                         @php
-                            $grossTotal  = collect($saleItems)->sum('total');
-                            $totalDisc   = collect($saleItems)->sum('discount_amount');
-                            $netBill     = $sale->total_net;          // after extra discount
-                            $paidAmount  = (float)($sale->cash ?? 0);
-                            $finalBal    = $previousBalance + $netBill - $paidAmount;
+                            $grossTotal = collect($saleItems)->sum('total');
+                            $totalDisc = collect($saleItems)->sum('discount_amount');
+                            $netBill = $sale->total_net; // after extra discount
+                            $paidAmount = (float) ($sale->cash ?? 0);
+                            $finalBal = $previousBalance + $netBill - $paidAmount;
                         @endphp
 
                         @if ($totalDisc > 0)
-                        <tr>
-                            <td class="text-muted">Gross Total</td>
-                            <td class="text-end text-muted">{{ number_format($grossTotal + $totalDisc, 2) }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Total Discount</td>
-                            <td class="text-end text-danger">- {{ number_format($totalDisc, 2) }}</td>
-                        </tr>
+                            <tr>
+                                <td class="text-muted">Gross Total</td>
+                                <td class="text-end text-muted">{{ number_format($grossTotal + $totalDisc, 2) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Total Discount</td>
+                                <td class="text-end text-danger">- {{ number_format($totalDisc, 2) }}</td>
+                            </tr>
                         @endif
 
                         <tr style="border-bottom: 2px solid #eee;">
@@ -489,7 +532,7 @@
                             <td>Total</td>
                             <td class="text-end">
                                 {{ number_format(abs($previousBalance + $netBill), 2) }}
-                                <small>{{ ($previousBalance + $netBill) >= 0 ? 'Dr' : 'Cr' }}</small>
+                                <small>{{ $previousBalance + $netBill >= 0 ? 'Dr' : 'Cr' }}</small>
                             </td>
                         </tr>
                         <tr>

@@ -244,7 +244,7 @@
             </div>
 
             <div class="card-body p-4">
-                <form action="{{ route('sale.return.store') }}" method="POST">
+                <form action="{{ route('sale.return.store') }}" method="POST" id="saleReturnForm">
                     @csrf
                     <input type="hidden" name="sale_id" value="{{ $sale->id }}">
                     {{-- Assuming Single Branch/Warehouse for now or derived from Purchase --}}
@@ -380,10 +380,10 @@
                                         {{-- Purchased Qty (Read Only) --}}
                                         <td>
                                             @php
-                                                // Controller sends: qty (remaining), original_qty, returned_qty
-                                                $remaining = $item['qty'];
-                                                $original = $item['original_qty'] ?? $remaining; // Fallback
+                                                // Controller sends: qty (original), original_qty, returned_qty, max_returnable
+                                                $original = $item['original_qty'] ?? ($item['qty'] ?? 0);
                                                 $returned = $item['returned_qty'] ?? 0;
+                                                $remaining = $item['max_returnable'] ?? max(0, $original - $returned);
                                             @endphp
                                             <input type="number" class="form-control text-center text-muted"
                                                 value="{{ $remaining }}" readonly
@@ -540,10 +540,10 @@
 
 
                                 <div class="mt-4 d-grid gap-2">
-                                    <button type="submit" class="btn btn-erp-primary btn-lg shadow-sm">
+                                    <button type="submit" id="btnSubmitReturn"
+                                        class="btn btn-erp-primary btn-lg shadow-sm">
                                         <i class="fas fa-check-circle me-2"></i> Process Sale Return
                                     </button>
-
                                 </div>
                             </div>
                         </div>
@@ -856,6 +856,16 @@
             }
 
 
+        });
+
+        // Prevent Duplicate Form Submission
+        $('#saleReturnForm').on('submit', function(e) {
+            const btn = $('#btnSubmitReturn');
+            if (btn.hasClass('disabled')) {
+                e.preventDefault();
+                return false;
+            }
+            btn.addClass('disabled').html('<i class="fas fa-spinner fa-spin me-2"></i> Processing...');
         });
     </script>
 @endsection

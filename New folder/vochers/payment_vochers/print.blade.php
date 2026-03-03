@@ -147,12 +147,14 @@
 
         <header>
             <div class="brand">
-                <h1>Al–Madina Traders</h1>
-                <p>Shop# 2, United Hotel, Qazi Qayoom Road, Hyderabad</p>
-                <p>Mobile / Whatsapp: 0312-0252899; Tel: 022-2780942</p>
+                <h1>Zohaib Ali</h1>
+                <p>SADAR BAZAR, HYDERABAD SINDH
+                    2026</p>
+                <p> </p>
             </div>
             <div class="logo" style="text-align:right;">
-                <img src="{{ asset('amt-logo.png') }}" alt="AMT Logo" style="max-width:200px;" onerror="this.style.display='none'">
+                <img src="{{ asset('amt-logo.png') }}" alt="AMT Logo" style="max-width:200px;"
+                    onerror="this.style.display='none'">
                 <div style="margin-top:8px;">
                     <span class="receipt-badge">PAYMENT VOUCHER</span>
                 </div>
@@ -163,86 +165,82 @@
 
         <div class="meta-row">
             <div class="left">
-                @if(is_numeric($voucher->type))
-                {{-- 🏦 Paid From Account --}}
-                <div class="line">
-                    <div class="label">Paid From (Account):</div>
-                    <div class="value">
-                        {{ $party->name ?? '-' }}
+                @if (is_numeric($voucher->type))
+                    {{-- 🏦 Paid From Account --}}
+                    <div class="line">
+                        <div class="label">Paid From (Account):</div>
+                        <div class="value">
+                            {{ $party->name ?? '-' }}
+                        </div>
                     </div>
-                </div>
-                <div class="line">
-                    <div class="label">Account Head:</div>
-                    <div class="value">
-                        {{ $party->head_name ?? '-' }}
+                    <div class="line">
+                        <div class="label">Account Head:</div>
+                        <div class="value">
+                            {{ $party->head_name ?? '-' }}
+                        </div>
                     </div>
-                </div>
-                <div class="line">
-                    <div class="label">Account Code:</div>
-                    <div class="value">
-                        {{ $party->phone ?? '-' }}
+                    <div class="line">
+                        <div class="label">Account Code:</div>
+                        <div class="value">
+                            {{ $party->phone ?? '-' }}
+                        </div>
                     </div>
-                </div>
-
                 @elseif($voucher->type === 'vendor')
-                {{-- 👷 Vendor --}}
-                <div class="line">
-                    <div class="label">Vendor Name:</div>
-                    <div class="value">{{ $party->name ?? '-' }}</div>
-                </div>
-                <div class="line">
-                    <div class="label">Address:</div>
-                    <div class="value">{{ $party->address ?? '-' }}</div>
-                </div>
-                <div class="line">
-                    <div class="label">Phone:</div>
-                    <div class="value">{{ $party->phone ?? '-' }}</div>
-                </div>
-
+                    {{-- 👷 Vendor --}}
+                    <div class="line">
+                        <div class="label">Vendor Name:</div>
+                        <div class="value">{{ $party->name ?? '-' }}</div>
+                    </div>
+                    <div class="line">
+                        <div class="label">Address:</div>
+                        <div class="value">{{ $party->address ?? '-' }}</div>
+                    </div>
+                    <div class="line">
+                        <div class="label">Phone:</div>
+                        <div class="value">{{ $party->phone ?? '-' }}</div>
+                    </div>
                 @elseif($voucher->type === 'customer')
-                {{-- 🧾 Customer --}}
-                <div class="line">
-                    <div class="label">Customer Name:</div>
-                    <div class="value">{{ $party->customer_name ?? '-' }}</div>
-                </div>
-                <div class="line">
-                    <div class="label">Address:</div>
-                    <div class="value">{{ $party->address ?? '-' }}</div>
-                </div>
-                <div class="line">
-                    <div class="label">Phone:</div>
-                    <div class="value">{{ $party->mobile ?? '-' }}</div>
-                </div>
-
+                    {{-- 🧾 Customer --}}
+                    <div class="line">
+                        <div class="label">Customer Name:</div>
+                        <div class="value">{{ $party->customer_name ?? '-' }}</div>
+                    </div>
+                    <div class="line">
+                        <div class="label">Address:</div>
+                        <div class="value">{{ $party->address ?? '-' }}</div>
+                    </div>
+                    <div class="line">
+                        <div class="label">Phone:</div>
+                        <div class="value">{{ $party->mobile ?? '-' }}</div>
+                    </div>
                 @elseif($voucher->type === 'walkin')
-                {{-- 🚶 Walk-in Customer --}}
-                <div class="line">
-                    <div class="label">Walk-in Customer:</div>
-                    <div class="value">{{ $party->customer_name ?? '-' }}</div>
-                </div>
-                <div class="line">
-                    <div class="label">Address:</div>
-                    <div class="value">{{ $party->address ?? '-' }}</div>
-                </div>
-                <div class="line">
-                    <div class="label">Phone:</div>
-                    <div class="value">{{ $party->mobile ?? '-' }}</div>
-                </div>
-
+                    {{-- 🚶 Walk-in Customer --}}
+                    <div class="line">
+                        <div class="label">Walk-in Customer:</div>
+                        <div class="value">{{ $party->customer_name ?? '-' }}</div>
+                    </div>
+                    <div class="line">
+                        <div class="label">Address:</div>
+                        <div class="value">{{ $party->address ?? '-' }}</div>
+                    </div>
+                    <div class="line">
+                        <div class="label">Phone:</div>
+                        <div class="value">{{ $party->mobile ?? '-' }}</div>
+                    </div>
                 @else
-                {{-- ❌ No data fallback --}}
-                <div class="line">
-                    <div class="label">Party:</div>
-                    <div class="value">-</div>
-                </div>
-                <div class="line">
-                    <div class="label">Address:</div>
-                    <div class="value">-</div>
-                </div>
-                <div class="line">
-                    <div class="label">Phone:</div>
-                    <div class="value">-</div>
-                </div>
+                    {{-- ❌ No data fallback --}}
+                    <div class="line">
+                        <div class="label">Party:</div>
+                        <div class="value">-</div>
+                    </div>
+                    <div class="line">
+                        <div class="label">Address:</div>
+                        <div class="value">-</div>
+                    </div>
+                    <div class="line">
+                        <div class="label">Phone:</div>
+                        <div class="value">-</div>
+                    </div>
                 @endif
             </div>
 
@@ -259,42 +257,43 @@
 
         <div class="payments">
             <h3>Payment(s) Detail.</h3>
-            @foreach($rows as $key => $row)
-            <p>
-                <strong>{{ $key + 1 }} . Amount of Rs. {{ number_format($row['amount'], 2) }}</strong>
-                &nbsp;&nbsp; Received with thanks, Dated:
-                <strong>{{ \Carbon\Carbon::parse($voucher->receipt_date)->format('l, d F, Y') }}</strong>
-                against supply of {{ $row['narration'] ?? 'N/A' }} towards account:
-                <strong>{{ $row['account_head'] ?? '-' }}, {{ $row['account_name'] ?? '' }} Code: {{ $row['account_code'] ?? '' }}</strong>
-            </p>
+            @foreach ($rows as $key => $row)
+                <p>
+                    <strong>{{ $key + 1 }} . Amount of Rs. {{ number_format($row['amount'], 2) }}</strong>
+                    &nbsp;&nbsp; Received with thanks, Dated:
+                    <strong>{{ \Carbon\Carbon::parse($voucher->receipt_date)->format('l, d F, Y') }}</strong>
+                    against supply of {{ $row['narration'] ?? 'N/A' }} towards account:
+                    <strong>{{ $row['account_head'] ?? '-' }}, {{ $row['account_name'] ?? '' }} Code:
+                        {{ $row['account_code'] ?? '' }}</strong>
+                </p>
             @endforeach
 
             <div class="amount-words">
                 Amount in words: <strong id="amountInWords">{{ $voucher->total_amount }}</strong> Only
             </div>
             <!-- <ul class="mini-list">
-                <li>Amount in figures: <strong>Rs. {{ number_format($voucher->total_amount,2) }}</strong></li>
+                <li>Amount in figures: <strong>Rs. {{ number_format($voucher->total_amount, 2) }}</strong></li>
             </ul> -->
         </div>
 
         <!-- summary -->
         <div class="summary">
             @php
-            $amountPayable = $previousBalance - $voucher->total_amount;
+                $amountPayable = $previousBalance - $voucher->total_amount;
             @endphp
 
             <table style="width:100%; border-collapse:collapse; font-size:14px;">
                 <tr>
                     <td>Previous Balance.</td>
-                    <td style="color:#6b0f8a;">>>> {{ number_format($previousBalance,2) }}</td>
+                    <td style="color:#6b0f8a;">>>> {{ number_format($previousBalance, 2) }}</td>
                 </tr>
                 <tr>
                     <td>Total Payment Received. (-)</td>
-                    <td style="color:#6b0f8a;">>>> {{ number_format($voucher->total_amount,2) }}</td>
+                    <td style="color:#6b0f8a;">>>> {{ number_format($voucher->total_amount, 2) }}</td>
                 </tr>
                 <tr>
                     <td>Amount Payable.</td>
-                    <td style="color:#0b5a2b;">>>> {{ number_format($amountPayable,2) }}</td>
+                    <td style="color:#0b5a2b;">>>> {{ number_format($amountPayable, 2) }}</td>
                 </tr>
             </table>
 

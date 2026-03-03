@@ -190,16 +190,16 @@
         }
 
         /* .gp-action-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      background: #f8f9fa;
-      text-decoration: none;
-      color: #333;
-      font-size: 14px;
-    } */
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 6px;
+          background: #f8f9fa;
+          text-decoration: none;
+          color: #333;
+          font-size: 14px;
+        } */
 
         .gp-action-btn:hover {
             background: #e9ecef;
@@ -372,7 +372,7 @@
                             <div class="gp-row gp-2 mb-2">
                                 <div>
                                     <label>Vendor</label>
-                                    
+
                                     <select name="vendor_id" id="vendor_id" class="form-select select2">
                                         <option value="">Select One</option>
                                         @foreach ($vendors as $item)
@@ -441,40 +441,42 @@
                 </div>
             </form>
             <!-- Modal for Add/Edit Vendor -->
-<div class="modal fade" id="vendorModal">
-    <div class="modal-dialog">
-        <form action="{{ url('vendor/store') }}" method="POST">@csrf
-            <input type="hidden" id="vendor_id" name="id">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add/Edit Vendor</h5>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-2">
-                        <input class="form-control" name="name" id="vname" placeholder="Name" required>
-                    </div>
-                    <div class="mb-2">
-                        <input class="form-control" name="opening_balance" id="opening_balance" placeholder="Opening Balance" required>
-                    </div>
-                    <div class="mb-2">
-                        <input class="form-control" name="phone" id="vphone" placeholder="Phone">
-                    </div>
-                    <div class="mb-2">
-                        <textarea class="form-control" name="address" id="vaddress" placeholder="Address"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-primary">Save</button>
+            <div class="modal fade" id="vendorModal">
+                <div class="modal-dialog">
+                    <form action="{{ url('vendors/store') }}" method="POST">@csrf
+                        <input type="hidden" id="vendor_id" name="id">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Add/Edit Vendor</h5>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-2">
+                                    <input class="form-control" name="name" id="vname" placeholder="Name"
+                                        required>
+                                </div>
+                                <div class="mb-2">
+                                    <input class="form-control" name="opening_balance" id="opening_balance"
+                                        placeholder="Opening Balance" required>
+                                </div>
+                                <div class="mb-2">
+                                    <input class="form-control" name="phone" id="vphone" placeholder="Phone">
+                                </div>
+                                <div class="mb-2">
+                                    <textarea class="form-control" name="address" id="vaddress" placeholder="Address"></textarea>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-primary">Save</button>
+                            </div>
+                        </div>
+                    </form>
                 </div>
             </div>
-        </form>
-    </div>
-</div>
 
         </div>
     </div>
     </div>
-    
+
 @endsection
 
 {{-- libs --}}
@@ -483,39 +485,40 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-$(document).ready(function () {
-    // Initialize DataTable
-    $('.datanew').DataTable();
+    $(document).ready(function() {
+        // Initialize DataTable
+        $('.datanew').DataTable();
 
-    // Clear modal fields function
-    window.clearVendor = function () {
-        $('#vendor_id').val('');
-        $('#vname').val('');
-        $('#opening_balance').val('').prop('readonly', false);  // Allow editing
-        $('#vphone').val('');
-        $('#vaddress').val('');
-    };
+        // Clear modal fields function
+        window.clearVendor = function() {
+            $('#vendor_id').val('');
+            $('#vname').val('');
+            $('#opening_balance').val('').prop('readonly', false); // Allow editing
+            $('#vphone').val('');
+            $('#vaddress').val('');
+        };
 
-    // Edit Vendor functionality
-    $('.btn-edit-vendor').click(function () {
-        var row = $(this).closest('tr');
-        var id = $(this).data('id');
-        var name = row.find('td:eq(1)').text().trim();
-        var phone = row.find('td:eq(2)').text().trim();
-        var balance = row.find('td:eq(3)').text().trim();
-        var address = row.find('td:eq(4)').text().trim();
+        // Edit Vendor functionality
+        $('.btn-edit-vendor').click(function() {
+            var row = $(this).closest('tr');
+            var id = $(this).data('id');
+            var name = row.find('td:eq(1)').text().trim();
+            var phone = row.find('td:eq(2)').text().trim();
+            var balance = row.find('td:eq(3)').text().trim();
+            var address = row.find('td:eq(4)').text().trim();
 
-        // Populate modal with vendor data
-        $('#vendor_id').val(id);
-        $('#vname').val(name);
-        $('#vphone').val(phone);
-        $('#opening_balance').val(balance).prop('readonly', true);  // Prevent editing opening balance
-        $('#vaddress').val(address);
+            // Populate modal with vendor data
+            $('#vendor_id').val(id);
+            $('#vname').val(name);
+            $('#vphone').val(phone);
+            $('#opening_balance').val(balance).prop('readonly',
+            true); // Prevent editing opening balance
+            $('#vaddress').val(address);
 
-        var modal = new bootstrap.Modal(document.getElementById('vendorModal'));
-        modal.show();  // Show the modal
+            var modal = new bootstrap.Modal(document.getElementById('vendorModal'));
+            modal.show(); // Show the modal
+        });
     });
-});
 </script>
 
 

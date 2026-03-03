@@ -197,6 +197,16 @@
             background-color: #cbd5e1;
             border-radius: 20px;
         }
+
+        .pl-icon {
+            padding-left: 2.5rem !important;
+        }
+
+        .modern-control[readonly] {
+            background-color: #f1f5f9;
+            color: #64748b;
+            cursor: not-allowed;
+        }
     </style>
 
     <div class="main-content">
@@ -226,121 +236,165 @@
                     <div class="form-grid">
 
                         <!-- Section 1 -->
-                        <div class="section-label mt-0">Personal & Account Information</div>
+                        <div class="section-label mt-0"><i class="fas fa-user-circle me-2"></i>Personal & Account
+                            Information</div>
 
-                        <div class="input-group-modern" style="grid-column: span 2;">
+                        <div class="input-group-modern" style="grid-column: span 4;">
                             <label class="modern-label">Customer Code</label>
-                            <input type="text" class="modern-control bg-light" name="customer_id"
-                                value="{{ $latestId }}" >
+                            <input type="text" class="modern-control" name="customer_id" value="{{ $latestId }}"
+                                readonly>
                         </div>
-                        <div class="input-group-modern" style="grid-column: span 3;">
+                        <div class="input-group-modern" style="grid-column: span 4;">
                             <label class="modern-label">Customer Type <span class="text-danger">*</span></label>
                             <select class="modern-control" name="customer_type" required>
                                 <option value="Main Customer">Main Customer</option>
                                 <option value="Walking Customer">Walking Customer</option>
                             </select>
                         </div>
-                        <div class="input-group-modern" style="grid-column: span 3;">
+                        <div class="input-group-modern" style="grid-column: span 4;">
+                            <label class="modern-label">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" class="modern-control" name="customer_name" required
+                                placeholder="Customer Name">
+                        </div>
+
+                        <!-- Section 2 -->
+                        <div class="section-label"><i class="fas fa-address-book me-2"></i>Contact Details</div>
+
+                        <div class="input-group-modern" style="grid-column: span 4;">
+                            <label class="modern-label">Mobile</label>
+                            <div class="position-relative">
+                                <i class="fas fa-phone position-absolute text-muted"
+                                    style="top: 50%; left: 12px; transform: translateY(-50%);"></i>
+                                <input type="text" class="modern-control pl-icon" name="mobile"
+                                    placeholder="0300-1234567">
+                            </div>
+                        </div>
+
+                        <div class="input-group-modern" style="grid-column: span 4;">
+                            <label class="modern-label">Email Address</label>
+                            <div class="position-relative">
+                                <i class="fas fa-envelope position-absolute text-muted"
+                                    style="top: 50%; left: 12px; transform: translateY(-50%);"></i>
+                                <input type="email" class="modern-control pl-icon" name="email_address"
+                                    placeholder="info@example.com">
+                            </div>
+                        </div>
+                        <div class="input-group-modern" style="grid-column: span 4;">
                             <label class="modern-label">Sales Officer</label>
                             <select class="modern-control" name="sales_officer_id">
                                 <option value="">-- Select Officer --</option>
-                                @foreach($salesOfficers as $officer)
+                                @foreach ($salesOfficers as $officer)
                                     <option value="{{ $officer->id }}">{{ $officer->name }}
-                                        @if($officer->mobile) ({{ $officer->mobile }}) @endif
+                                        @if ($officer->mobile)
+                                            ({{ $officer->mobile }})
+                                        @endif
                                     </option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="input-group-modern" style="grid-column: span 4;">
-                            <label class="modern-label">Full Name <span class="text-danger">*</span></label>
-                            <input type="text" class="modern-control" name="customer_name" required
-                                placeholder="Customer">
-                        </div>
-                        <div class="input-group-modern" style="grid-column: span 2;">
-                            <label class="modern-label ms-auto"
-                                style="font-family: 'Noto Nastaliq Urdu', serif; font-size: 0.8rem; letter-spacing: 0;">کسٹمر
-                                کا نام (اردو)</label>
-                            <input type="text" class="modern-control text-end" dir="rtl" name="customer_name_ur"
-                                placeholder="یہاں نام لکھیں"
-                                style="font-family: 'Noto Nastaliq Urdu', serif; padding-top: 4px;">
-                        </div>
-
-                        <!-- Section 2 -->
-                        <div class="section-label">Contact & Location</div>
-
-                        <div class="input-group-modern" style="grid-column: span 3;">
-                            <label class="modern-label">Contact Person</label>
-                            <input type="text" class="modern-control" name="contact_person" placeholder="Manager Name">
-                        </div>
-                        <div class="input-group-modern" style="grid-column: span 3;">
-                            <label class="modern-label">Mobile</label>
-                            <input type="text" class="modern-control" name="mobile" placeholder="0300-1234567">
-                        </div>
-                        <div class="input-group-modern" style="grid-column: span 4;">
-                            <label class="modern-label">Email Address</label>
-                            <input type="email" class="modern-control" name="email_address"
-                                placeholder="info@example.com">
-                        </div>
-                        <div class="input-group-modern" style="grid-column: span 2;">
-                            <label class="modern-label">Region (Zone)</label>
-                            <select class="modern-control" name="zone">
-                                <option value="Hyderabad">Hyderabad</option>
-                                <option value="Karachi">Karachi</option>
-                            </select>
-                        </div>
-
-                        <!-- Address spans full width -->
-                        <div class="input-group-modern" style="grid-column: span 12;">
-                            <label class="modern-label">Billing Address</label>
-                            <input type="text" class="modern-control" name="address"
-                                placeholder="Shop No, Street Area, City">
-                        </div>
 
                         <!-- Section 3 -->
-                        <div class="section-label">Tax & Financials</div>
+                        <div class="section-label"><i class="fas fa-map-marker-alt me-2"></i>Region & Location</div>
+
+                        <div class="input-group-modern" style="grid-column: span 4;">
+                            <label class="modern-label">Region (Zone)</label>
+                            <div class="d-flex w-100 gap-1" style="align-items: stretch;">
+                                <select class="modern-control" name="zone" id="zone_select" style="flex: 1;">
+                                    <option value="">-- Select Zone --</option>
+                                    @foreach ($zones as $z)
+                                        <option value="{{ $z->zone }}">{{ $z->zone }}</option>
+                                    @endforeach
+                                </select>
+                                <button type="button"
+                                    class="btn btn-primary d-flex align-items-center justify-content-center border-0 shadow-sm"
+                                    style="border-radius: 8px; padding: 0 15px; margin-left: 5px; background: var(--primary-color);"
+                                    onclick="$('#zoneModal').modal('show')">
+                                    <i class="fa fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Address spans full width -->
+                        <div class="input-group-modern" style="grid-column: span 8;">
+                            <label class="modern-label">Billing Address</label>
+                            <div class="position-relative">
+                                <i class="fas fa-home position-absolute text-muted"
+                                    style="top: 50%; left: 12px; transform: translateY(-50%);"></i>
+                                <input type="text" class="modern-control pl-icon" name="address"
+                                    placeholder="Shop No, Street Area, City">
+                            </div>
+                        </div>
+
+                        <!-- Section 4 -->
+                        <div class="section-label"><i class="fas fa-file-invoice-dollar me-2"></i>Tax & Financials</div>
 
                         <div class="input-group-modern" style="grid-column: span 3;">
                             <label class="modern-label">CNIC / NTN</label>
-                            <input type="text" class="modern-control" name="cnic" placeholder="42201-...">
+                            <div class="position-relative">
+                                <i class="fas fa-id-card position-absolute text-muted"
+                                    style="top: 50%; left: 12px; transform: translateY(-50%);"></i>
+                                <input type="text" class="modern-control pl-icon" name="cnic"
+                                    placeholder="42201-...">
+                            </div>
                         </div>
                         <div class="input-group-modern" style="grid-column: span 3;">
                             <label class="modern-label">Tax Status</label>
                             <select class="modern-control" name="filer_type">
                                 <option value="filer">Active Filer</option>
-                                <option value="non filer">Non Filer</option>
+                                <option value="non filer" selected>Non Filer</option>
                                 <option value="exempt">Tax Exempt</option>
                             </select>
                         </div>
                         <div class="input-group-modern" style="grid-column: span 3;">
                             <label class="modern-label text-danger">Opening Balance (Dr)</label>
-                            <input type="number" step="0.01" class="modern-control" name="opening_balance"
-                                value="0" style="border-color: #fca5a5; background: #fff1f2;">
+                            <div class="position-relative">
+                                <span class="position-absolute fw-bold text-danger"
+                                    style="top: 50%; left: 12px; transform: translateY(-50%); border-right: 1px solid #fca5a5; padding-right: 8px;">Rs</span>
+                                <input type="number" step="0.01" class="modern-control" name="opening_balance"
+                                    value="0"
+                                    style="padding-left: 3rem; border-color: #fca5a5; background: #fff1f2; font-weight: bold; color: #dc2626;">
+                            </div>
                         </div>
                         <div class="input-group-modern" style="grid-column: span 3;">
                             <label class="modern-label text-success">Credit Limit</label>
-                            <input type="number" step="0.01" class="modern-control" name="balance_range"
-                                value="0" style="border-color: #86efac; background: #f0fdf4;">
-                        </div>
-
-                        <!-- Section 4 (secondary contact compacted) -->
-                        <div class="section-label">Secondary Contact (Optional)</div>
-
-                        <div class="input-group-modern" style="grid-column: span 4;">
-                            <input type="text" class="modern-control" name="contact_person_2"
-                                placeholder="Secondary Name (Optional)" style="font-size: 0.85rem;">
-                        </div>
-                        <div class="input-group-modern" style="grid-column: span 4;">
-                            <input type="text" class="modern-control" name="mobile_2" placeholder="Secondary Mobile"
-                                style="font-size: 0.85rem;">
-                        </div>
-                        <div class="input-group-modern" style="grid-column: span 4;">
-                            <input type="email" class="modern-control" name="email_address_2"
-                                placeholder="Secondary Email" style="font-size: 0.85rem;">
+                            <div class="position-relative">
+                                <span class="position-absolute fw-bold text-success"
+                                    style="top: 50%; left: 12px; transform: translateY(-50%); border-right: 1px solid #86efac; padding-right: 8px;">Rs</span>
+                                <input type="number" step="0.01" class="modern-control" name="balance_range"
+                                    value="0"
+                                    style="padding-left: 3rem; border-color: #86efac; background: #f0fdf4; font-weight: bold; color: #16a34a;">
+                            </div>
                         </div>
 
                     </div>
                     <!-- End Grid -->
 
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zone Modal -->
+    <div class="modal fade" id="zoneModal" tabindex="-1" aria-labelledby="zoneModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="zoneForm">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="zoneModalLabel">Add New Zone</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                            onclick="$('#zoneModal').modal('hide')"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group border-0">
+                            <label class="modern-label mb-2">Zone Name</label>
+                            <input type="text" name="zone" class="modern-control" id="new_zone_name" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modern-secondary" data-bs-dismiss="modal"
+                            onclick="$('#zoneModal').modal('hide')">Close</button>
+                        <button type="submit" class="btn-modern-primary">Save Zone</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -385,6 +439,34 @@
                     });
                 });
             }
+
+            // Zone Addition via Ajax
+            $('#zoneForm').submit(function(e) {
+                e.preventDefault();
+                let newZone = $('#new_zone_name').val();
+                if (!newZone) return;
+
+                $.ajax({
+                    url: "{{ route('zone.store') }}",
+                    type: "POST",
+                    data: $(this).serialize(),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Append new zone to select and select it
+                            $('#zone_select').append('<option value="' + newZone +
+                                '" selected>' + newZone + '</option>');
+                            $('#zoneModal').modal('hide');
+                            $('#zoneForm')[0].reset();
+                            Swal.fire('Success', 'Zone added successfully!', 'success');
+                        }
+                    },
+                    error: function(err) {
+                        Swal.fire('Error', "Error adding zone. Make sure it isn't empty.",
+                            'error');
+                        console.error(err);
+                    }
+                });
+            });
         });
     </script>
 @endsection

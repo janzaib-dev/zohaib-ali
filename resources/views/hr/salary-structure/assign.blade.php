@@ -61,9 +61,18 @@
                         <h1 class="page-title"><i class="fa fa-user-plus"></i> Assign Employees to Salary Structure</h1>
                         <p class="page-subtitle">Select employees to assign this salary structure</p>
                     </div>
-                    <a href="{{ route('hr.salary-structure.index') }}" class="btn btn-secondary">
-                        <i class="fa fa-arrow-left"></i> Back to Structures
-                    </a>
+                    <div class="d-flex gap-2">
+                        <a href="{{ route('hr.salary-structure.view-assigned', $salaryStructure->id) }}" class="btn btn-info">
+                            <i class="fa fa-eye"></i> View Assigned ({{ $salaryStructure->assigned_count }})
+                        </a>
+                        <a href="{{ route('hr.salary-structure.individual-update-page', $salaryStructure->id) }}"
+                            class="btn btn-warning">
+                            <i class="fa fa-user-cog"></i> Edit Individual
+                        </a>
+                        <a href="{{ route('hr.salary-structure.index') }}" class="btn btn-secondary">
+                            <i class="fa fa-arrow-left"></i> Back to Structures
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Structure Info Card -->
@@ -296,12 +305,13 @@
                 }
 
                 let html =
-                    '<table class="table table-hover mb-0"><thead><tr><th width="50"><input type="checkbox" id="selectAllCheckbox"></th><th>Employee</th><th>Department</th><th>Designation</th><th>Status</th></tr></thead><tbody>';
+                    '<table class="table table-hover mb-0"><thead><tr><th width="50"><input type="checkbox" id="selectAllCheckbox"></th><th>Employee</th><th>Department</th><th>Designation</th><th>Status</th><th width="120">Actions</th></tr></thead><tbody>';
 
                 employees.forEach(emp => {
                     let rowClass = '';
                     let statusBadge = '';
                     let disabled = '';
+                    let actionButtons = '';
 
                     // Check employee status first
                     if (emp.status !== 'active') {
@@ -309,15 +319,26 @@
                         statusBadge =
                             `<span class="badge bg-secondary">${emp.status ? emp.status.toUpperCase() : 'INACTIVE'}</span>`;
                         disabled = 'disabled';
+                        actionButtons = '<small class="text-muted">N/A</small>';
                     } else if (emp.is_already_assigned) {
                         rowClass = 'already-assigned';
                         statusBadge = '<span class="badge bg-warning">Already Assigned</span>';
                         disabled = 'disabled';
+                        actionButtons = `
+                            <button class="btn btn-sm btn-danger" onclick="unassignEmployee(${emp.id}, '${emp.first_name} ${emp.last_name || ''}')" title="Unassign">
+                                <i class="fa fa-user-times"></i>
+                            </button>
+                            <a href="{{ route('hr.salary-structure.edit-individual', ':empId') }}".replace(':empId', ${emp.id}) class="btn btn-sm btn-info" title="Edit Individual">
+                                <i class="fa fa-edit"></i>
+                            </a>
+                        `;
                     } else if (emp.has_other_structure) {
                         rowClass = 'has-other-structure';
                         statusBadge = '<span class="badge bg-info">Has Other Structure</span>';
+                        actionButtons = '<small class="text-muted">Assign to replace</small>';
                     } else {
                         statusBadge = '<span class="badge bg-success">Available</span>';
+                        actionButtons = '<small class="text-muted">Select to assign</small>';
                     }
 
                     html += `
@@ -330,6 +351,7 @@
                             <td>${emp.department ? emp.department.name : 'N/A'}</td>
                             <td>${emp.designation ? emp.designation.name : 'N/A'}</td>
                             <td>${statusBadge}</td>
+                            <td>${actionButtons}</td>
                         </tr>
                     `;
                 });
@@ -443,6 +465,46 @@
                     }
                 });
             }
+
+            // Unassign employee function
+            window.unassignEmployee = function(employeeId, employeeName) {
+                Swal.fire({
+                    title: 'Unassign Employee?',
+                    html: `Remove salary structure assignment from <strong>${employeeName}</strong>?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Yes, Unassign',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: '{{ route('hr.salary-structure.remove-assignment', ['salaryStructure' => $salaryStructure->id, 'employee' => ':empId']) }}'
+                                .replace(':empId', employeeId),
+                            method: 'POST',
+                            data: {
+                                _token: '{{ csrf_token() }}',
+                                _method: 'DELETE'
+                            },
+                            success: function(response) {
+                                Swal.fire('Success!', response.success, 'success').then(
+                                () => {
+                                        // Reload employees to refresh the list
+                                        $('#fetchEmployeesBtn').click();
+                                    });
+                            },
+                            error: function(xhr) {
+                                let errorMsg = 'Failed to unassign employee';
+                                if (xhr.responseJSON && xhr.responseJSON.error) {
+                                    errorMsg = xhr.responseJSON.error;
+                                }
+                                Swal.fire('Error', errorMsg, 'error');
+                            }
+                        });
+                    }
+                });
+            };
         });
     </script>
 @endsection

@@ -239,7 +239,7 @@
                                                                             class="menu_icon ti-alert"></i><span>warehouse</span></a>
                                                                 </li>
                                                                 <li class="nav-item"><a class="nav-link"
-                                                                        href="{{ url('vendor') }}"><i
+                                                                        href="{{ url('vendors') }}"><i
                                                                             class="menu_icon ti-alert"></i><span>vendor</span></a>
                                                                 </li>
                                                                 <li class="nav-item"><a class="nav-link"

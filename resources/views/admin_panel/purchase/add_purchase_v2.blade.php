@@ -826,8 +826,14 @@
                 // Total Amount calculation
                 if (sizeMode == 'by_size') {
                     total = pieces_per_m2 * totalPieces * price;
+                } else if (sizeMode == 'by_cartons' || sizeMode == 'by_carton') {
+                    if (ppb > 0) {
+                        total = totalPieces * (price / ppb);
+                    } else {
+                        total = totalPieces * price;
+                    }
                 } else {
-                    total = totalPieces * p_price_piece;
+                    total = totalPieces * price;
                 }
                 // Discount Amount
                 const discAmt = total * (discPct / 100);

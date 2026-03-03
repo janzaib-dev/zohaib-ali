@@ -248,8 +248,9 @@ class ProductController extends Controller
         $categories = Category::select('id', 'name')->get();
         $units = Unit::select('id', 'name')->get();
         $brands = Brand::select('id', 'name')->get();
+        $warehouses = \App\Models\Warehouse::select('id', 'warehouse_name')->get();
 
-        return view('admin_panel.product.create', compact('categories', 'units', 'brands'));
+        return view('admin_panel.product.create', compact('categories', 'units', 'brands', 'warehouses'));
     }
 
     // ===== Dependent subcategories =====
@@ -677,8 +678,9 @@ class ProductController extends Controller
                     'note' => 'Manual stock adjustment',
                 ]);
 
-                // Update actual stock
-                $this->upsertStocks($id, $adjQty, 1, 1);
+                // Update actual stock (warehouseId from request or default to 1)
+                $warehouseId = $request->warehouse_id ?? 1;
+                $this->upsertStocks($id, $adjQty, 1, $warehouseId);
             }
         });
 
@@ -696,8 +698,9 @@ class ProductController extends Controller
         $categories = Category::all();
         $subcategories = SubCategory::all();
         $brands = Brand::all();
+        $warehouses = \App\Models\Warehouse::all();
 
-        return view('admin_panel.product.edit', compact('product', 'categories', 'subcategories', 'brands'));
+        return view('admin_panel.product.edit', compact('product', 'categories', 'subcategories', 'brands', 'warehouses'));
     }
 
     // ===== Barcode view =====

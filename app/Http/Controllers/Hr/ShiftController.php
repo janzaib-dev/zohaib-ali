@@ -55,7 +55,7 @@ class ShiftController extends Controller
             $message = 'Shift Created Successfully';
         }
 
-        return response()->json(['success' => $message]);
+        return response()->json(['success' => $message, 'reload' => true]);
     }
 
     public function destroy($id)
@@ -74,7 +74,7 @@ class ShiftController extends Controller
 
         $shift->delete();
 
-        return response()->json(['success' => 'Shift Deleted Successfully']);
+        return response()->json(['success' => 'Shift Deleted Successfully', 'reload' => true]);
     }
 
     /**

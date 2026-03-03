@@ -510,6 +510,7 @@
                 @if (isset($financialSummary) && !empty($financialSummary))
                     <h5 class="mb-3 text-muted d-flex align-items-center gap-2"
                         style="font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                        <i class="fas fa-heartbeat me-1" style="color: #6366f1;"></i>
                         Financial Health (This Month)
                         <button type="button"
                             class="btn btn-sm btn-outline-info d-flex align-items-center gap-1 rounded-pill px-3 shadow-none"
@@ -517,71 +518,604 @@
                             <i class="fas fa-info-circle"></i> Info
                         </button>
                     </h5>
-                    <div class="stats-grid mb-4" style="grid-template-columns: repeat(5, 1fr);">
-                        <!-- Sales Revenue -->
-                        <div class="stat-card success">
+
+                    @php
+                        $sales = abs($financialSummary['sales'] ?? 0);
+                        $cogs = abs($financialSummary['cogs'] ?? 0);
+                        $expenses = abs($financialSummary['expenses'] ?? 0);
+                        $profit = $financialSummary['net_profit'] ?? 0;
+                        $recv = abs($financialSummary['receivables'] ?? 0);
+                        $advances = abs($financialSummary['customer_advances'] ?? 0);
+                        $pay = abs($financialSummary['payables'] ?? 0);
+                        $isLoss = $profit < 0;
+                        $totalExpense = $cogs + $expenses;
+                    @endphp
+
+                    <div class="stats-grid mb-4" style="grid-template-columns: repeat(4, 1fr);">
+
+                        {{-- CARD 1: Sales Revenue --}}
+                        <div class="stat-card success" style="cursor:default;">
                             <div class="stat-header">
                                 <div class="stat-icon"><i class="fa fa-hand-holding-usd"></i></div>
-                                <div class="stat-trend up">Accounting</div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="stat-trend up">Revenue</div>
+                                    <button class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" data-fh-modal="salesModal"
+                                        title="Detailed Analytics">
+                                        <i class="fas fa-chart-pie me-1"></i>Details
+                                    </button>
+                                </div>
                             </div>
-                            <div class="stat-value">Rs {{ number_format(abs($financialSummary['sales'] ?? 0), 0) }}</div>
-                            <div class="stat-label">Sales Revenue</div>
+                            <div class="stat-value" style="font-size:1.4rem;">Rs {{ number_format($sales, 0) }}</div>
+                            <div class="stat-label mb-2">Sales Revenue</div>
+                            <div id="mini-sales" style="height:55px;"></div>
                         </div>
 
-                        <!-- Purchase Expense -->
+                        {{-- CARD 2: COGS --}}
+                        <div class="stat-card warning">
+                            <div class="stat-header">
+                                <div class="stat-icon" style="background:#fef3c7;color:#f59e0b;"><i
+                                        class="fa fa-box-open"></i></div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="stat-trend down">Cost</div>
+                                    <button class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" data-fh-modal="cogsModal"
+                                        title="Detailed Analytics">
+                                        <i class="fas fa-chart-pie me-1"></i>Details
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="stat-value" style="font-size:1.4rem;">Rs {{ number_format($cogs, 0) }}</div>
+                            <div class="stat-label mb-2">Cost of Goods Sold</div>
+                            <div id="mini-cogs" style="height:55px;"></div>
+                        </div>
+
+                        {{-- CARD 3: Expenses --}}
                         <div class="stat-card danger">
                             <div class="stat-header">
                                 <div class="stat-icon"><i class="fa fa-money-bill-wave"></i></div>
-                                <div class="stat-trend down">Accounting</div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="stat-trend down">Expense</div>
+                                    <button class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" data-fh-modal="expenseModal"
+                                        title="Detailed Analytics">
+                                        <i class="fas fa-chart-pie me-1"></i>Details
+                                    </button>
+                                </div>
                             </div>
-                            <div class="stat-value">Rs {{ number_format(abs($financialSummary['purchases'] ?? 0), 0) }}
-                            </div>
-                            <div class="stat-label">Purchase Expenses</div>
+                            <div class="stat-value" style="font-size:1.4rem;">Rs {{ number_format($expenses, 0) }}</div>
+                            <div class="stat-label mb-2">Operating Expenses</div>
+                            <div id="mini-expenses" style="height:55px;"></div>
                         </div>
 
-                        <!-- Net Profit / Loss -->
-                        @php
-                            $absSales = abs($financialSummary['sales'] ?? 0);
-                            $absPurchases = abs($financialSummary['purchases'] ?? 0);
-                            $profit = $absSales - $absPurchases;
-                            $isLoss = $profit < 0;
-                        @endphp
+                        {{-- CARD 4: Net Profit/Loss --}}
                         <div class="stat-card {{ $isLoss ? 'danger' : 'success' }}"
-                            style="background: {{ $isLoss ? '#fff5f5' : '#f0fdf4' }}; border: 1px solid {{ $isLoss ? '#fecaca' : '#bbf7d0' }};">
+                            style="background:{{ $isLoss ? '#fff5f5' : '#f0fdf4' }};border:1px solid {{ $isLoss ? '#fecaca' : '#bbf7d0' }};">
                             <div class="stat-header">
                                 <div class="stat-icon"
-                                    style="background: {{ $isLoss ? '#fef2f2' : '#dcfce7' }}; color: {{ $isLoss ? '#ef4444' : '#22c55e' }};">
+                                    style="background:{{ $isLoss ? '#fef2f2' : '#dcfce7' }};color:{{ $isLoss ? '#ef4444' : '#22c55e' }};">
                                     <i class="fa {{ $isLoss ? 'fa-arrow-down' : 'fa-chart-line' }}"></i>
                                 </div>
-                                <div class="stat-trend {{ $isLoss ? 'down' : 'up' }}">Bottom Line</div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="stat-trend {{ $isLoss ? 'down' : 'up' }}">Bottom Line</div>
+                                    <button class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" data-fh-modal="profitModal"
+                                        title="Detailed Analytics">
+                                        <i class="fas fa-chart-pie me-1"></i>Details
+                                    </button>
+                                </div>
                             </div>
-                            <div class="stat-value" style="color: {{ $isLoss ? '#ef4444' : '#22c55e' }};">Rs
-                                {{ number_format(abs($profit), 0) }}</div>
-                            <div class="stat-label fw-bold text-dark">{{ $isLoss ? 'Net Loss' : 'Net Profit' }}</div>
+                            <div class="stat-value"
+                                style="font-size:1.4rem;color:{{ $isLoss ? '#ef4444' : '#22c55e' }};">
+                                Rs {{ number_format(abs($profit), 0) }}
+                            </div>
+                            <div class="stat-label mb-2 fw-bold text-dark">{{ $isLoss ? 'Net Loss' : 'Net Profit' }}</div>
+                            <div id="mini-profit" style="height:55px;"></div>
                         </div>
 
-                        <!-- Receivables -->
+                        {{-- CARD 5: Receivables --}}
                         <div class="stat-card info">
                             <div class="stat-header">
                                 <div class="stat-icon"><i class="fa fa-user-clock"></i></div>
-                                <div class="stat-trend">Assets</div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="stat-trend">Assets</div>
+                                    <a href="{{ route('customers.ledger') }}"
+                                        class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" title="Go to Customer Ledger">
+                                        <i class="fas fa-external-link-alt me-1"></i>Ledger
+                                    </a>
+                                    <button class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" data-fh-modal="recvModal"
+                                        title="Detailed Analytics">
+                                        <i class="fas fa-chart-pie me-1"></i>Details
+                                    </button>
+                                </div>
                             </div>
-                            <div class="stat-value">Rs {{ number_format(abs($financialSummary['receivables'] ?? 0), 0) }}
-                            </div>
-                            <div class="stat-label">Total Receivables (Due)</div>
+                            <div class="stat-value" style="font-size:1.4rem;">Rs {{ number_format($recv, 0) }}</div>
+                            <div class="stat-label mb-2">Total Receivables (Due)</div>
+                            <div id="mini-recv" style="height:55px;"></div>
                         </div>
 
-                        <!-- Payables -->
+                        {{-- CARD 6: Payables --}}
                         <div class="stat-card warning">
                             <div class="stat-header">
                                 <div class="stat-icon"><i class="fa fa-file-invoice"></i></div>
-                                <div class="stat-trend">Liabilities</div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="stat-trend">Liability</div>
+                                    <a href="{{ route('vendors-ledger') }}"
+                                        class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" title="Go to Vendor Ledger">
+                                        <i class="fas fa-external-link-alt me-1"></i>Ledger
+                                    </a>
+                                    <button class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" data-fh-modal="payModal"
+                                        title="Detailed Analytics">
+                                        <i class="fas fa-chart-pie me-1"></i>Details
+                                    </button>
+                                </div>
                             </div>
-                            <div class="stat-value">Rs {{ number_format(abs($financialSummary['payables'] ?? 0), 0) }}
+                            <div class="stat-value" style="font-size:1.4rem;">Rs {{ number_format($pay, 0) }}</div>
+                            <div class="stat-label mb-2">Total Payables (Owe)</div>
+                            <div id="mini-pay" style="height:55px;"></div>
+                        </div>
+
+                        {{-- CARD 7: Customer Advances --}}
+                        <div class="stat-card purple">
+                            <div class="stat-header">
+                                <div class="stat-icon"><i class="fa fa-hand-holding-heart"></i></div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="stat-trend">Liability</div>
+                                    <a href="{{ route('customers.ledger') }}"
+                                        class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" title="Go to Customer Ledger">
+                                        <i class="fas fa-external-link-alt me-1"></i>Ledger
+                                    </a>
+                                    <button class="btn btn-sm btn-light rounded-pill px-2 py-0 shadow-sm"
+                                        style="font-size:0.7rem;border:1px solid #e2e8f0;" data-fh-modal="advModal"
+                                        title="Detailed Analytics">
+                                        <i class="fas fa-chart-pie me-1"></i>Details
+                                    </button>
+                                </div>
                             </div>
-                            <div class="stat-label">Total Payables (Owe)</div>
+                            <div class="stat-value" style="font-size:1.4rem;">Rs {{ number_format($advances, 0) }}</div>
+                            <div class="stat-label mb-2">Customer Advances</div>
+                            <div id="mini-adv" style="height:55px;"></div>
+                        </div>
+
+                    </div>
+
+                    {{-- ===== DETAIL MODALS ===== --}}
+
+                    @php
+                        $grossMargin = $sales > 0 ? round((($sales - $cogs) / $sales) * 100, 1) : 0;
+                        $profitMargin = $sales > 0 ? round(($profit / $sales) * 100, 1) : 0;
+                        $recvRatio = $recv + $pay > 0 ? round(($recv / ($recv + $pay)) * 100, 1) : 50;
+                        $payRatio = 100 - $recvRatio;
+                    @endphp
+
+                    {{-- SALES Detail Modal --}}
+                    <div class="modal fade" id="salesModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-xl">
+                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                <div class="modal-header"
+                                    style="background: linear-gradient(135deg,#22c55e,#16a34a); color:white;">
+                                    <h5 class="modal-title fw-bold"><i class="fas fa-hand-holding-usd me-2"></i>Sales
+                                        Revenue — Detailed Analytics</h5>
+                                    <button type="button" class="close" data-dismiss="modal"
+                                        style="background:none;border:none;color:white;font-size:1.5rem;"><span>&times;</span></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#f0fdf4;border:1px solid #bbf7d0;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#22c55e;">Rs
+                                                    {{ number_format($sales, 0) }}</div>
+                                                <div class="text-muted small">Total Sales Revenue</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#fff7ed;border:1px solid #fed7aa;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#f59e0b;">Rs
+                                                    {{ number_format($cogs, 0) }}</div>
+                                                <div class="text-muted small">Cost of Goods (COGS)</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#eef2ff;border:1px solid #c7d2fe;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#6366f1;">
+                                                    {{ $grossMargin }}%</div>
+                                                <div class="text-muted small">Gross Margin</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Revenue Breakdown
+                                            </div>
+                                            <div id="modal-sales-donut" style="height:260px;"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Revenue vs Cost
+                                                Bar</div>
+                                            <div id="modal-sales-bar" style="height:260px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <a href="{{ route('customers.ledger') }}"
+                                        class="btn btn-success rounded-pill px-4"><i
+                                            class="fas fa-external-link-alt me-1"></i> Customer Ledger</a>
+                                    <button type="button" class="btn btn-secondary rounded-pill px-4"
+                                        data-dismiss="modal">Close</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
+                    {{-- COGS Detail Modal --}}
+                    <div class="modal fade" id="cogsModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-xl">
+                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                <div class="modal-header"
+                                    style="background: linear-gradient(135deg,#f59e0b,#d97706); color:white;">
+                                    <h5 class="modal-title fw-bold"><i class="fas fa-box-open me-2"></i>Cost of Goods Sold
+                                        — Detailed Analytics</h5>
+                                    <button type="button" class="close" data-dismiss="modal"
+                                        style="background:none;border:none;color:white;font-size:1.5rem;"><span>&times;</span></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#fff7ed;border:1px solid #fed7aa;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#f59e0b;">Rs
+                                                    {{ number_format($cogs, 0) }}</div>
+                                                <div class="text-muted small">Total COGS</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#f0fdf4;border:1px solid #bbf7d0;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#22c55e;">Rs
+                                                    {{ number_format($sales, 0) }}</div>
+                                                <div class="text-muted small">Sales Revenue</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#eef2ff;border:1px solid #c7d2fe;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#6366f1;">
+                                                    {{ $sales > 0 ? round(($cogs / $sales) * 100, 1) : 0 }}%</div>
+                                                <div class="text-muted small">COGS as % of Sales</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Cost vs Revenue
+                                                Donut</div>
+                                            <div id="modal-cogs-donut" style="height:260px;"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Expense Structure
+                                            </div>
+                                            <div id="modal-cogs-bar" style="height:260px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary rounded-pill px-4"
+                                        data-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- EXPENSE Detail Modal --}}
+                    <div class="modal fade" id="expenseModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-xl">
+                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                <div class="modal-header"
+                                    style="background: linear-gradient(135deg,#ef4444,#dc2626); color:white;">
+                                    <h5 class="modal-title fw-bold"><i class="fas fa-money-bill-wave me-2"></i>Operating
+                                        Expenses — Detailed Analytics</h5>
+                                    <button type="button" class="close" data-dismiss="modal"
+                                        style="background:none;border:none;color:white;font-size:1.5rem;"><span>&times;</span></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#fef2f2;border:1px solid #fecaca;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#ef4444;">Rs
+                                                    {{ number_format($expenses, 0) }}</div>
+                                                <div class="text-muted small">Operating Expenses</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#fff7ed;border:1px solid #fed7aa;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#f59e0b;">Rs
+                                                    {{ number_format($cogs, 0) }}</div>
+                                                <div class="text-muted small">COGS</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#fef2f2;border:1px solid #fecaca;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#dc2626;">Rs
+                                                    {{ number_format($totalExpense, 0) }}</div>
+                                                <div class="text-muted small">Total Outflow</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Expense
+                                                Distribution</div>
+                                            <div id="modal-expense-donut" style="height:260px;"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Income vs Total
+                                                Expense</div>
+                                            <div id="modal-expense-bar" style="height:260px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary rounded-pill px-4"
+                                        data-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- PROFIT Detail Modal --}}
+                    <div class="modal fade" id="profitModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-xl">
+                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                <div class="modal-header"
+                                    style="background: linear-gradient(135deg,{{ $isLoss ? '#ef4444,#dc2626' : '#22c55e,#16a34a' }}); color:white;">
+                                    <h5 class="modal-title fw-bold"><i
+                                            class="fas fa-chart-line me-2"></i>{{ $isLoss ? 'Net Loss' : 'Net Profit' }} —
+                                        Detailed Analytics</h5>
+                                    <button type="button" class="close" data-dismiss="modal"
+                                        style="background:none;border:none;color:white;font-size:1.5rem;"><span>&times;</span></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#eef2ff;border:1px solid #c7d2fe;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#6366f1;">
+                                                    {{ $profitMargin }}%</div>
+                                                <div class="text-muted small">Net Profit Margin</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#f0fdf4;border:1px solid #bbf7d0;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#22c55e;">Rs
+                                                    {{ number_format($sales, 0) }}</div>
+                                                <div class="text-muted small">Revenue</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#fef2f2;border:1px solid #fecaca;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#ef4444;">Rs
+                                                    {{ number_format($totalExpense, 0) }}</div>
+                                                <div class="text-muted small">Total Costs</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">P&L Waterfall
+                                                (Donut)</div>
+                                            <div id="modal-profit-donut" style="height:260px;"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Revenue vs Costs
+                                                vs Profit</div>
+                                            <div id="modal-profit-bar" style="height:260px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary rounded-pill px-4"
+                                        data-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- RECEIVABLES Detail Modal --}}
+                    <div class="modal fade" id="recvModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-xl">
+                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                <div class="modal-header"
+                                    style="background:linear-gradient(135deg,#0ea5e9,#0284c7);color:white;">
+                                    <h5 class="modal-title fw-bold"><i class="fas fa-user-clock me-2"></i>Total
+                                        Receivables — Detailed Analytics</h5>
+                                    <button type="button" class="close" data-dismiss="modal"
+                                        style="background:none;border:none;color:white;font-size:1.5rem;"><span>&times;</span></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#e0f2fe;border:1px solid #bae6fd;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#0ea5e9;">Rs
+                                                    {{ number_format($recv, 0) }}</div>
+                                                <div class="text-muted small">Money Owed to You</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#fef3c7;border:1px solid #fde68a;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#f59e0b;">Rs
+                                                    {{ number_format($pay, 0) }}</div>
+                                                <div class="text-muted small">Money You Owe</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#eef2ff;border:1px solid #c7d2fe;">
+                                                <div
+                                                    style="font-size:1.6rem;font-weight:800;color:#{{ $recv >= $pay ? '22c55e' : 'ef4444' }};">
+                                                    Rs {{ number_format(abs($recv - $pay), 0) }}</div>
+                                                <div class="text-muted small">Net Position</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Receivable vs
+                                                Payable (Donut)</div>
+                                            <div id="modal-recv-donut" style="height:260px;"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Comparison Bar
+                                            </div>
+                                            <div id="modal-recv-bar" style="height:260px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <a href="{{ route('customers.ledger') }}"
+                                        class="btn btn-info rounded-pill px-4 text-white"><i
+                                            class="fas fa-external-link-alt me-1"></i> Customer Ledger</a>
+                                    <button type="button" class="btn btn-secondary rounded-pill px-4"
+                                        data-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- PAYABLES Detail Modal --}}
+                    <div class="modal fade" id="payModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-xl">
+                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                <div class="modal-header"
+                                    style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;">
+                                    <h5 class="modal-title fw-bold"><i class="fas fa-file-invoice me-2"></i>Total Payables
+                                        — Detailed Analytics</h5>
+                                    <button type="button" class="close" data-dismiss="modal"
+                                        style="background:none;border:none;color:white;font-size:1.5rem;"><span>&times;</span></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#fef3c7;border:1px solid #fde68a;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#f59e0b;">Rs
+                                                    {{ number_format($pay, 0) }}</div>
+                                                <div class="text-muted small">Vendor Payables</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#e0f2fe;border:1px solid #bae6fd;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#0ea5e9;">Rs
+                                                    {{ number_format($recv, 0) }}</div>
+                                                <div class="text-muted small">Customer Receivables</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-3 rounded-3 text-center"
+                                                style="background:#eef2ff;border:1px solid #c7d2fe;">
+                                                <div style="font-size:1.6rem;font-weight:800;color:#6366f1;">
+                                                    {{ $pay > 0 ? round(($pay / max($recv, 1)) * 100, 1) : 0 }}%</div>
+                                                <div class="text-muted small">Payables Coverage</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Payable vs
+                                                Receivable (Donut)</div>
+                                            <div id="modal-pay-donut" style="height:260px;"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2 text-muted small text-uppercase">Comparison Bar
+                                            </div>
+                                            <div id="modal-pay-bar" style="height:260px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <a href="{{ route('vendors-ledger') }}" class="btn btn-warning rounded-pill px-4"><i
+                                            class="fas fa-external-link-alt me-1"></i> Vendor Ledger</a>
+                                    <button type="button" class="btn btn-secondary rounded-pill px-4"
+                                        data-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Customer Advances Modal --}}
+                    <div class="modal fade" id="advModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-lg">
+                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                <div class="modal-header"
+                                    style="background: linear-gradient(135deg,#8b5cf6,#7c3aed); color:white;">
+                                    <h5 class="modal-title fw-bold"><i class="fas fa-hand-holding-heart me-2"></i>Customer
+                                        Advances (Liabilities)</h5>
+                                    <button type="button" class="close" data-dismiss="modal"
+                                        style="background:none;border:none;color:white;font-size:1.5rem;"><span>&times;</span></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="p-3 rounded-3 text-center mb-4"
+                                        style="background:#f3e8ff;border:1px solid #d8b4fe;">
+                                        <div style="font-size:1.6rem;font-weight:800;color:#8b5cf6;">Rs
+                                            {{ number_format($advances, 0) }}</div>
+                                        <div class="text-muted small">Total Customer Advances Held</div>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-striped">
+                                            <thead class="bg-light">
+                                                <tr>
+                                                    <th>Customer Name</th>
+                                                    <th class="text-center">Advance Amount</th>
+                                                    <th class="text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @if (isset($financialSummary['customer_advances_list']) && count($financialSummary['customer_advances_list']) > 0)
+                                                    @foreach ($financialSummary['customer_advances_list'] as $advCustomer)
+                                                        <tr>
+                                                            <td class="fw-bold">{{ $advCustomer['name'] }}</td>
+                                                            <td class="text-center text-success fw-bold">Rs
+                                                                {{ number_format($advCustomer['amount'], 0) }}</td>
+                                                            <td class="text-center">
+                                                                <a href="{{ route('customers.ledger', ['customer_id' => $advCustomer['id']]) }}"
+                                                                    target="_blank"
+                                                                    class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1">View
+                                                                    Ledger</a>
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                @else
+                                                    <tr>
+                                                        <td colspan="3" class="text-center text-muted py-3">No customer
+                                                            advances currently held.</td>
+                                                    </tr>
+                                                @endif
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <p class="text-muted small mt-3 mb-0 text-center"><i class="fas fa-info-circle"></i>
+                                        This represents money customers have paid you in advance, or credit left on their
+                                        account. It is a liability.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 @endif
 
                 <!-- Main Stats (Legacy/Ops) -->
@@ -928,7 +1462,297 @@
                     });
                 });
             });
-        });
+
+            // ================ FINANCIAL HEALTH MINI CHARTS + MODAL CHARTS ================
+            @if (isset($financialSummary) && !empty($financialSummary))
+                @php
+                    $fhSales = floatval($financialSummary['sales'] ?? 0);
+                    $fhCogs = floatval($financialSummary['cogs'] ?? 0);
+                    $fhExpenses = floatval($financialSummary['expenses'] ?? 0);
+                    $fhRecv = floatval($financialSummary['receivables'] ?? 0);
+                    $fhAdvances = floatval($financialSummary['customer_advances'] ?? 0);
+                    $fhPay = floatval($financialSummary['payables'] ?? 0);
+                    $fhProfit = floatval($financialSummary['net_profit'] ?? 0);
+                    $fhIsLoss = $fhProfit < 0;
+                @endphp
+                const fhSales = {{ $fhSales }};
+                const fhCogs = {{ $fhCogs }};
+                const fhExpenses = {{ $fhExpenses }};
+                const fhRecv = {{ $fhRecv }};
+                const fhAdvances = {{ $fhAdvances }};
+                const fhPay = {{ $fhPay }};
+                const isLoss = {{ $fhIsLoss ? 'true' : 'false' }};
+
+                function mkSparkBar(el, val1, val2, c1, c2, labels) {
+                    return new ApexCharts(document.querySelector(el), {
+                        chart: {
+                            type: 'bar',
+                            height: 55,
+                            sparkline: {
+                                enabled: true
+                            }
+                        },
+                        series: [{
+                            name: labels[0],
+                            data: [val1]
+                        }, {
+                            name: labels[1],
+                            data: [val2]
+                        }],
+                        colors: [c1, c2],
+                        plotOptions: {
+                            bar: {
+                                horizontal: false,
+                                columnWidth: '50%',
+                                borderRadius: 4
+                            }
+                        },
+                        tooltip: {
+                            y: {
+                                formatter: v => 'Rs ' + v.toLocaleString()
+                            }
+                        }
+                    });
+                }
+
+                function mkSparkLine(el, vals, color) {
+                    return new ApexCharts(document.querySelector(el), {
+                        chart: {
+                            type: 'line',
+                            height: 55,
+                            sparkline: {
+                                enabled: true
+                            }
+                        },
+                        series: [{
+                            data: vals
+                        }],
+                        stroke: {
+                            curve: 'smooth',
+                            width: 2
+                        },
+                        colors: [color],
+                        tooltip: {
+                            y: {
+                                formatter: v => 'Rs ' + v.toLocaleString()
+                            }
+                        }
+                    });
+                }
+
+                // Mini sparklines inside each card
+                mkSparkLine('#mini-sales', [0, fhCogs, fhSales], '#22c55e').render();
+                mkSparkLine('#mini-cogs', [0, fhCogs], '#f59e0b').render();
+                mkSparkLine('#mini-expenses', [0, fhExpenses], '#ef4444').render();
+                mkSparkLine('#mini-profit', [fhSales, fhSales - fhCogs, fhSales - fhCogs - fhExpenses], isLoss ?
+                    '#ef4444' :
+                    '#22c55e').render();
+                mkSparkLine('#mini-recv', [0, fhRecv], '#0ea5e9').render();
+                mkSparkLine('#mini-adv', [0, fhAdvances], '#8b5cf6').render();
+                mkSparkLine('#mini-pay', [0, fhPay], '#f59e0b').render();
+
+                // Helper: render or skip if empty
+                function safePie(el, labels, vals, colors) {
+                    const total = vals.reduce((a, b) => a + b, 0);
+                    if (total <= 0) {
+                        document.querySelector(el).innerHTML =
+                            '<p class="text-center text-muted pt-5 small">No data available</p>';
+                        return;
+                    }
+                    new ApexCharts(document.querySelector(el), {
+                        chart: {
+                            type: 'donut',
+                            height: 260,
+                            fontFamily: 'inherit'
+                        },
+                        series: vals,
+                        labels: labels,
+                        colors: colors,
+                        legend: {
+                            position: 'bottom'
+                        },
+                        plotOptions: {
+                            pie: {
+                                donut: {
+                                    size: '60%'
+                                }
+                            }
+                        },
+                        dataLabels: {
+                            formatter: (v) => v.toFixed(1) + '%'
+                        },
+                        tooltip: {
+                            y: {
+                                formatter: v => 'Rs ' + v.toLocaleString()
+                            }
+                        }
+                    }).render();
+                }
+
+                function safeBar(el, cats, series) {
+                    new ApexCharts(document.querySelector(el), {
+                        chart: {
+                            type: 'bar',
+                            height: 260,
+                            toolbar: {
+                                show: false
+                            },
+                            fontFamily: 'inherit'
+                        },
+                        series: series,
+                        xaxis: {
+                            categories: cats,
+                            labels: {
+                                style: {
+                                    colors: '#64748b',
+                                    fontSize: '12px'
+                                }
+                            }
+                        },
+                        yaxis: {
+                            labels: {
+                                formatter: v => 'Rs ' + Number(v).toLocaleString()
+                            }
+                        },
+                        colors: series.map(s => s.color || '#6366f1'),
+                        plotOptions: {
+                            bar: {
+                                columnWidth: '50%',
+                                borderRadius: 5
+                            }
+                        },
+                        dataLabels: {
+                            enabled: false
+                        },
+                        tooltip: {
+                            y: {
+                                formatter: v => 'Rs ' + v.toLocaleString()
+                            }
+                        },
+                        legend: {
+                            show: true
+                        }
+                    }).render();
+                }
+
+                // Render modal charts on open
+                let rendered = {};
+                document.querySelectorAll('[data-fh-modal]').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const id = this.dataset.fhModal;
+                        $('#' + id).modal('show');
+                        if (rendered[id]) return;
+                        rendered[id] = true;
+
+                        // wait for modal to finish animating before drawing charts
+                        setTimeout(function() {
+
+                            if (id === 'salesModal') {
+                                safePie('#modal-sales-donut', ['COGS', 'Gross Profit'], [
+                                    fhCogs, Math
+                                    .max(fhSales -
+                                        fhCogs, 0)
+                                ], ['#f59e0b', '#22c55e']);
+                                safeBar('#modal-sales-bar', ['Sales', 'COGS',
+                                    'Gross Profit'
+                                ], [{
+                                    name: 'Value',
+                                    data: [fhSales, fhCogs, Math.max(fhSales -
+                                        fhCogs, 0)],
+                                    color: undefined
+                                }]);
+                            }
+                            if (id === 'cogsModal') {
+                                safePie('#modal-cogs-donut', ['COGS', 'Remaining Revenue'],
+                                    [fhCogs,
+                                        Math.max(
+                                            fhSales - fhCogs, 0)
+                                    ], ['#f59e0b', '#22c55e']);
+                                safeBar('#modal-cogs-bar', ['COGS', 'Operating Exp',
+                                    'Total Cost'
+                                ], [{
+                                    name: 'Amount',
+                                    data: [fhCogs, fhExpenses, fhCogs +
+                                        fhExpenses
+                                    ],
+                                    color: undefined
+                                }]);
+                            }
+                            if (id === 'expenseModal') {
+                                safePie('#modal-expense-donut', ['COGS',
+                                    'Operating Expenses'
+                                ], [fhCogs,
+                                    fhExpenses
+                                ], ['#f59e0b', '#ef4444']);
+                                safeBar('#modal-expense-bar', ['Revenue', 'COGS',
+                                        'Op.Expenses', 'Net'
+                                    ],
+                                    [{
+                                        name: 'Amount',
+                                        data: [fhSales, fhCogs, fhExpenses, Math
+                                            .abs(fhSales -
+                                                fhCogs -
+                                                fhExpenses)
+                                        ],
+                                        color: undefined
+                                    }]);
+                            }
+                            if (id === 'profitModal') {
+                                const profitVal = fhSales - fhCogs - fhExpenses;
+                                safePie('#modal-profit-donut', ['COGS', 'Expenses', isLoss ?
+                                        'Loss' :
+                                        'Net Profit'
+                                    ],
+                                    [fhCogs, fhExpenses, Math.abs(profitVal)],
+                                    ['#f59e0b', '#ef4444', isLoss ? '#dc2626' :
+                                        '#22c55e'
+                                    ]);
+                                safeBar('#modal-profit-bar', ['Revenue', 'Total Costs',
+                                        'Net'
+                                    ],
+                                    [{
+                                        name: 'Rs',
+                                        data: [fhSales, fhCogs + fhExpenses, Math
+                                            .abs(
+                                                profitVal)
+                                        ],
+                                        color: undefined
+                                    }]);
+                            }
+                            if (id === 'recvModal') {
+                                safePie('#modal-recv-donut', ['Receivables', 'Payables'], [
+                                    fhRecv,
+                                    fhPay
+                                ], [
+                                    '#0ea5e9', '#f59e0b'
+                                ]);
+                                safeBar('#modal-recv-bar', ['Receivables', 'Payables'],
+                                    [{
+                                        name: 'Amount',
+                                        data: [fhRecv, fhPay],
+                                        color: undefined
+                                    }]);
+                            }
+                            if (id === 'payModal') {
+                                safePie('#modal-pay-donut', ['Payables', 'Receivables'], [
+                                    fhPay,
+                                    fhRecv
+                                ], [
+                                    '#f59e0b', '#0ea5e9'
+                                ]);
+                                safeBar('#modal-pay-bar', ['Payables', 'Receivables'],
+                                    [{
+                                        name: 'Amount',
+                                        data: [fhPay, fhRecv],
+                                        color: undefined
+                                    }]);
+                            }
+                        }, 350); // end setTimeout
+                    }); // end click handler
+                }); // end forEach
+            @endif
+
+        }); // end DOMContentLoaded
     </script>
 
     {{-- Financial Health Info Modal --}}

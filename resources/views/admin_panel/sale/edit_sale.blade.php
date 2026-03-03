@@ -838,13 +838,13 @@
                     });
 
                     $('#btnPrint').on('click', function() {
-                        ensureSaved().then(id => window.open('{{ url('booking/print') }}/' + id, '_blank'));
+                        postNow('{{ route('sales.invoice', ':id') }}');
                     });
                     $('#btnPrint2').on('click', function() {
-                        ensureSaved().then(id => window.open('{{ url('booking/print2') }}/' + id, '_blank'));
+                        postNow('{{ route('sales.receipt', ':id') }}', true);
                     });
                     $('#btnDCPrint').on('click', function() {
-                        ensureSaved().then(id => window.open('{{ url('booking/dc') }}/' + id, '_blank'));
+                        postNow('{{ route('sales.dc', ':id') }}', false, '{{ route('sales.receipt', ':id') }}');
                     });
                     $('#btnExit').on('click', function() {
                         ensureSaved().finally(() => {

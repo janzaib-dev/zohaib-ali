@@ -24,15 +24,16 @@ class HrSetting extends Model
      */
     public static function getValue(string $key, mixed $default = null): mixed
     {
-        $setting = Cache::remember("hr_setting_{$key}", 3600, function () use ($key) {
-            return self::where('key', $key)->first();
+        // Use the global settings cache for better performance
+        // This key matches HrCacheService implementation
+        $settings = Cache::remember('hr.settings.all', 86400, function () {
+            // Fetch all settings and map them key => value
+            return self::all()->mapWithKeys(function ($setting) {
+                return [$setting->key => self::castValue($setting->value, $setting->type)];
+            });
         });
 
-        if (!$setting) {
-            return $default;
-        }
-
-        return self::castValue($setting->value, $setting->type);
+        return $settings->get($key, $default);
     }
 
     /**
@@ -45,8 +46,8 @@ class HrSetting extends Model
             ['value' => (string) $value, 'type' => 'integer', 'group' => 'attendance']
         );
 
-        // Clear cache
-        Cache::forget("hr_setting_{$key}");
+        // Clear global settings cache
+        Cache::forget('hr.settings.all');
 
         return true;
     }

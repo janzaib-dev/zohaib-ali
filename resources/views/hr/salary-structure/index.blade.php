@@ -211,9 +211,7 @@
                 <!-- Stats Row -->
                 @php
                     $totalStructures = \App\Models\Hr\SalaryStructure::count();
-                    $totalAssignments = \App\Models\Hr\EmployeeSalaryStructure::where('is_active', true)
-                        ->distinct('employee_id')
-                        ->count();
+                    $totalAssignments = \App\Models\Hr\Employee::has('activeSalaryStructure')->count();
                     $unassignedEmployees = \App\Models\Hr\Employee::where('status', 'active')
                         ->whereDoesntHave('activeSalaryStructure')
                         ->count();
@@ -261,7 +259,11 @@
                                         <h3 class="structure-title">
                                             {{ $structure->name }}
                                             @if ($structure->salary_type == 'both')
-                                                <span class="structure-type-badge">Monthly + Comm.</span>
+                                                @if ($structure->use_daily_wages)
+                                                    <span class="structure-type-badge">Monthly + Comm. + Daily</span>
+                                                @else
+                                                    <span class="structure-type-badge">Monthly + Comm.</span>
+                                                @endif
                                             @elseif($structure->salary_type == 'commission')
                                                 <span class="structure-type-badge">Commission</span>
                                             @elseif($structure->use_daily_wages)

@@ -33,7 +33,7 @@
                                                     <td class="zone">{{ $zone->zone }}</td>
                                                     <td>
                                                         @include('admin_panel.partials.action_buttons', [
-                                                            'editRoute' => route('zones.edit', $zone->id),
+                                                            'editRoute' => route('zone.edit', $zone->id),
                                                             'deleteRoute' => route('zone.delete', $zone->id),
                                                             'editIsLink' => false,
                                                             'permissions' => [
@@ -145,7 +145,7 @@
                     success: function(res) {
                         $('#createModal').modal('hide');
                         Swal.fire('Success!', 'Zone created successfully.', 'success').then(
-                        () => location.reload());
+                            () => location.reload());
                     }
                 });
             });
@@ -175,7 +175,7 @@
                     success: function(res) {
                         $('#editModal').modal('hide');
                         Swal.fire('Updated!', 'Zone updated successfully.', 'success').then(
-                        () => location.reload());
+                            () => location.reload());
                     }
                 });
             });

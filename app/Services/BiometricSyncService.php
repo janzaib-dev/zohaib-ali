@@ -136,156 +136,151 @@ class BiometricSyncService
 
             if (! $employee) {
                 $skipped++;
-
                 continue;
             }
 
             // Parse timestamp
             $timestamp = Carbon::parse($log['timestamp']);
-            $date = $timestamp->toDateString();
+            $gap = $this->getPunchGapMinutes();
 
-            // Find or create attendance record for this date
-            $attendance = Attendance::firstOrCreate([
-                'employee_id' => $employee->id,
-                'date' => $date,
-            ], [
-                'status' => 'present',
-            ]);
+            // 1. Check for OPEN Session
+            $openSession = Attendance::where('employee_id', $employee->id)
+                ->whereNotNull('check_in_time')
+                ->whereNull('check_out_time')
+                ->latest('check_in_time')
+                ->first();
 
-            // LOGIC WITH 20-MINUTE GAP:
-            // 1. First punch of the day = Check-In
-            // 2. Punches within 20 min of Check-In = Ignored (duplicate/accidental)
-            // 3. Punches after 20 min from Check-In AND is LATER = Check-Out
-            // 4. Punches within 20 min of Check-Out = Ignored (duplicate/accidental)
-            // 5. Punches after 20 min from Check-Out AND is LATER = Update Check-Out
+            // Safety check: If open session is too old (e.g., > 20 hours), assume it's a forgotten check-out
+            // and treat this new punch as a NEW Check-In for the current day.
+            if ($openSession) {
+                $checkInTime = Carbon::parse($openSession->check_in_time);
+                if ($checkInTime->diffInHours($timestamp) > 20) {
+                    $openSession = null; // Ignore old session, force new check-in
+                }
+            }
 
-            if (! $attendance->check_in_time) {
-                // No check-in yet - this is the first punch (Check-In)
-                // Calculate Late Status
+            if ($openSession) {
+                // We have an open session. Check if this punch updates it (OUT) or is duplicate (IN)
+                $checkInTime = Carbon::parse($openSession->check_in_time);
+                
+                if ($timestamp->lte($checkInTime)) {
+                     $duplicates++; // Out of order
+                     continue;
+                }
+
+                $diff = $checkInTime->diffInMinutes($timestamp);
+                
+                if ($diff < $gap) {
+                    $duplicates++; // Duplicate IN within gap
+                    continue;
+                }
+
+                // Treat as Check-Out
+                $openSession->check_out_time = $timestamp->toDateTimeString();
+                $openSession->check_out_location = 'Biometric Device';
+                
+                // Early Leave Calculation
+                $shift = $employee->shift ?? \App\Models\Hr\Shift::where('is_default', true)->first();
+                if ($shift) {
+                    $endTimeStr = $employee->custom_end_time ?: ($shift->end_time ? \Carbon\Carbon::parse($shift->end_time)->format('H:i:s') : null);
+                     if ($endTimeStr) {
+                         // Shift End Logic handling Overnight
+                         // Use attendance date
+                         $attDate = Carbon::parse($openSession->date);
+                         $shiftEnd = Carbon::parse($attDate->format('Y-m-d').' '.$endTimeStr);
+                         
+                         $sStart = $employee->getStartTime();
+                         if ($endTimeStr < $sStart) { // Simple AM/PM heuristic or comparing strings
+                              $shiftEnd->addDay();
+                         }
+                         
+                         if ($timestamp->lt($shiftEnd)) {
+                             $openSession->is_early_leave = true;
+                             $openSession->early_leave_minutes = $timestamp->diffInMinutes($shiftEnd);
+                         } else {
+                             $openSession->is_early_leave = false;
+                             $openSession->early_leave_minutes = 0;
+                         }
+                     }
+                }
+
+                $this->calculateTotalHours($openSession);
+                $openSession->save();
+                $created++; // Updated effectively
+                \Log::info("Biometric: Check-Out for {$employee->full_name} at {$timestamp}.");
+
+            } else {
+                // No Open Session. Check if it's a Duplicate OUT (Start of new session too soon after last out)
+                $lastClosedSession = Attendance::where('employee_id', $employee->id)
+                    ->whereNotNull('check_out_time')
+                    ->latest('check_out_time')
+                    ->first();
+
+                if ($lastClosedSession) {
+                     $lastOut = Carbon::parse($lastClosedSession->check_out_time);
+                     if ($timestamp->lte($lastOut)) { $duplicates++; continue; }
+                     if ($timestamp->diffInMinutes($lastOut) < $gap) {
+                         $duplicates++; // Duplicate OUT
+                         continue;
+                     }
+                }
+
+                // Create NEW Session (Check-In)
+                $date = $timestamp->toDateString();
+                
+                // Late Logic
                 $shift = $employee->shift ?? \App\Models\Hr\Shift::where('is_default', true)->first();
                 $isLate = false;
                 $lateMinutes = 0;
 
                 if ($shift) {
                     $timeStr = null;
-
                     if ($employee->custom_start_time) {
                         $timeStr = $employee->custom_start_time;
                     } elseif ($shift->start_time) {
-                        // Ensure we only get the time part if it's a Carbon object or full datetime string
                         $timeStr = \Carbon\Carbon::parse($shift->start_time)->format('H:i:s');
                     }
 
                     if ($timeStr) {
-                        // Parse start time relative to the attendance date
-                        $shiftStart = Carbon::parse($attendance->date.' '.$timeStr);
-
-                        // Add grace period
+                        $shiftStart = Carbon::parse($date.' '.$timeStr);
                         $lateThreshold = $shiftStart->copy()->addMinutes($shift->grace_minutes ?? 0);
 
                         if ($timestamp->gt($lateThreshold)) {
                             $isLate = true;
                             $lateMinutes = $shiftStart->diffInMinutes($timestamp);
                         }
-
-                        // Calculate Early In
-                        if ($timestamp->lt($shiftStart)) {
-                            $attendance->is_early_in = true;
-                            $attendance->early_in_minutes = $timestamp->diffInMinutes($shiftStart);
-                        }
                     }
                 }
 
-                $attendance->is_late = $isLate;
-                $attendance->late_minutes = $lateMinutes;
-                $attendance->status = $isLate ? 'late' : 'present';
+                // Check if we already have a record for this date (Re-open session)
+                $existingAttendance = Attendance::where('employee_id', $employee->id)
+                    ->where('date', $date)
+                    ->first();
 
-                $attendance->check_in_time = $timestamp->toDateTimeString();
-                $attendance->check_in_location = 'Biometric Device';
-                $attendance->save();
-                $created++;
-                $lastLogDate = $date;
-                \Log::info("Created Check-In for {$employee->full_name} at {$timestamp}. Shifts: ".($shift ? $shift->name : 'None').'. Late: '.($isLate ? "Yes ({$lateMinutes}m)" : 'No'));
-            } else { // Existing attendance record
-                // RE-CALCULATE LATE STATUS (In case shift changed or first sync was incorrect)
-                $shift = $employee->shift ?? \App\Models\Hr\Shift::where('is_default', true)->first();
-                if ($shift && $attendance->check_in_time) {
-                    $checkInTime = Carbon::parse($attendance->check_in_time);
-                    $timeStr = null;
-
-                    if ($employee->custom_start_time) {
-                        $timeStr = $employee->custom_start_time;
-                    } elseif ($shift->start_time) {
-                        $timeStr = \Carbon\Carbon::parse($shift->start_time)->format('H:i:s');
-                    }
-
-                    if ($timeStr) {
-                        $shiftStart = Carbon::parse($attendance->date.' '.$timeStr);
-                        $lateThreshold = $shiftStart->copy()->addMinutes($shift->grace_minutes ?? 0);
-
-                        if ($checkInTime->gt($lateThreshold)) {
-                            $isLate = true;
-                            $lateMinutes = $shiftStart->diffInMinutes($checkInTime);
-
-                            // Only update if changed
-                            if (! $attendance->is_late || $attendance->late_minutes != $lateMinutes || $attendance->status != 'late') {
-                                $attendance->is_late = true;
-                                $attendance->late_minutes = $lateMinutes;
-                                $attendance->status = 'late';
-                                $attendance->save(); // Save update
-                                \Log::info("Updated Late Status for {$employee->full_name}. CheckIn: {$checkInTime->toTimeString()}. Late: Yes ({$lateMinutes}m)");
-                            }
-                        }
-                    }
-                }
-
-                $checkInTime = Carbon::parse($attendance->check_in_time);
-                $gap = $this->getPunchGapMinutes();
-
-                // IMPORTANT: Punch must be AFTER check-in time (not before or same)
-                if ($timestamp->lte($checkInTime)) {
-                    // This punch is at or before check-in - skip (likely already processed or out of order)
-                    $duplicates++;
-
-                    continue;
-                }
-
-                $minutesSinceCheckIn = $checkInTime->diffInMinutes($timestamp);
-                \Log::info("Processing punch for {$employee->full_name}. Time: {$timestamp}. CheckIn: {$checkInTime}. Diff: {$minutesSinceCheckIn}m. Gap: {$gap}m");
-
-                if ($minutesSinceCheckIn < $gap) {
-                    // Within gap - ignore (accidental duplicate)
-                    $duplicates++;
-                    \Log::info("IGNORED: Punch within gap ({$minutesSinceCheckIn}m < {$gap}m)");
-
-                    continue;
-                }
-
-                // This punch is more than gap minutes AFTER check-in - can be check-out
-                if (! $attendance->check_out_time || $timestamp->gt(Carbon::parse($attendance->check_out_time))) {
-                    $attendance->check_out_time = $timestamp->toDateTimeString();
-                    $attendance->check_out_location = 'Biometric Device';
-
-                    // Calculate Early Leave
-                    $shift = $employee->shift ?? \App\Models\Hr\Shift::where('is_default', true)->first();
-                    if ($shift) {
-                        $endTimeStr = $employee->custom_end_time ?: ($shift->end_time ? \Carbon\Carbon::parse($shift->end_time)->format('H:i:s') : null);
-                        if ($endTimeStr) {
-                            $shiftEnd = Carbon::parse($attendance->date.' '.$endTimeStr);
-                            if ($timestamp->lt($shiftEnd)) {
-                                $attendance->is_early_leave = true;
-                                $attendance->early_leave_minutes = $timestamp->diffInMinutes($shiftEnd);
-                            } else {
-                                $attendance->is_early_leave = false;
-                                $attendance->early_leave_minutes = 0;
-                            }
-                        }
-                    }
-
-                    $this->calculateTotalHours($attendance);
-                    $attendance->save();
+                if ($existingAttendance) {
+                    // Re-open the existing session (effectively merging the break)
+                    // We keep the original check_in_time (First In) and clear the check_out_time.
+                    $existingAttendance->check_out_time = null;
+                    $existingAttendance->check_out_location = null;
+                    // We don't update check_in_time, preserving the earliest start
+                    $existingAttendance->save();
+                    
+                    $created++; // meaningful update
+                    \Log::info("Biometric: Re-opened session for {$employee->full_name} at {$timestamp} (Merged break).");
+                } else {
+                    // Create NEW Session (Check-In)
+                    $attendance = Attendance::create([
+                        'employee_id' => $employee->id,
+                        'date' => $date,
+                        'status' => $isLate ? 'late' : 'present',
+                        'check_in_time' => $timestamp->toDateTimeString(),
+                        'check_in_location' => 'Biometric Device',
+                        'is_late' => $isLate,
+                        'late_minutes' => $lateMinutes,
+                    ]);
+                    
                     $created++;
-                    \Log::info("ACCEPTED: Check-out recorded at {$timestamp}. Early Leave: ".($attendance->is_early_leave ? "Yes ({$attendance->early_leave_minutes}m)" : 'No'));
+                    \Log::info("Biometric: Check-In for {$employee->full_name} at {$timestamp}.");
                 }
             }
         }

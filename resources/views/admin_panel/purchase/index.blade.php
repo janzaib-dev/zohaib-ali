@@ -145,11 +145,11 @@
                                                         class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Paid</span>
                                                 @endif
 
-                                                @if ($purchase->has_partial_return)
+                                                @if ($purchase->is_fully_returned)
+                                                    <br><small class="badge bg-danger mt-1">Fully Returned</small>
+                                                @elseif ($purchase->has_partial_return)
                                                     <br><small class="badge bg-warning text-dark mt-1">Partial
                                                         Return</small>
-                                                @elseif($purchase->is_fully_returned)
-                                                    <br><small class="badge bg-danger mt-1">Fully Returned</small>
                                                 @endif
                                             </td>
 
@@ -209,12 +209,15 @@
                                                                 </li>
                                                             @endcan
                                                             @can('purchases.create')
-                                                                <li>
-                                                                    <a class="dropdown-item d-flex align-items-center gap-2 py-2"
-                                                                        href="{{ route('purchase.return.show', $purchase->id) }}">
-                                                                        <i class="fas fa-undo text-warning fa-fw"></i> Return
-                                                                    </a>
-                                                                </li>
+                                                                @if (!$purchase->is_fully_returned)
+                                                                    <li>
+                                                                        <a class="dropdown-item d-flex align-items-center gap-2 py-2"
+                                                                            href="{{ route('purchase.return.show', $purchase->id) }}">
+                                                                            <i class="fas fa-undo text-warning fa-fw"></i>
+                                                                            Return
+                                                                        </a>
+                                                                    </li>
+                                                                @endif
                                                             @endcan
                                                         @endif
 

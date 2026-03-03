@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Hr;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\Hr\GenerateMonthlyPayrollJob;
+use App\Jobs\Hr\GenerateDailyPayrollJob;
 use App\Models\Hr\Attendance;
 use App\Models\Hr\Employee;
 use App\Models\Hr\Payroll;
@@ -77,9 +79,11 @@ class PayrollController extends Controller
         }
 
         $payrolls = $query->latest()->paginate(12);
-        $employees = Employee::whereHas('salaryStructure', function ($q) {
-            $q->whereIn('salary_type', ['salary', 'both']);
-        })->get();
+
+        // Show employees eligible for monthly payroll using scope
+        $employees = Employee::forMonthlyPayroll()
+            ->with('activeSalaryStructure', 'designation', 'department')
+            ->get();
 
         return view('hr.payroll.index', compact('payrolls', 'employees'))->with('activeTab', 'monthly');
     }
@@ -105,9 +109,11 @@ class PayrollController extends Controller
         }
 
         $payrolls = $query->latest()->paginate(12);
-        $employees = Employee::whereHas('salaryStructure', function ($q) {
-            $q->where('use_daily_wages', true);
-        })->get();
+
+        // Show employees eligible for daily payroll using scope
+        $employees = Employee::forDailyPayroll()
+            ->with('activeSalaryStructure', 'designation', 'department')
+            ->get();
 
         return view('hr.payroll.index', compact('payrolls', 'employees'))->with('activeTab', 'daily');
     }
@@ -121,7 +127,17 @@ class PayrollController extends Controller
             return response()->json(['error' => 'Unauthorized action.'], 403);
         }
 
-        $payroll = Payroll::with(['employee.designation', 'details', 'reviewer'])->findOrFail($id);
+        $payroll = Payroll::with(['employee.designation', 'employee.salaryStructure', 'details', 'reviewer'])->findOrFail($id);
+
+        // Get salary structure information
+        $salaryStructure = $payroll->employee->salaryStructure;
+        $structureInfo = [
+            'salary_type' => $salaryStructure->salary_type ?? 'salary',
+            'use_daily_wages' => $salaryStructure->use_daily_wages ?? false,
+            'daily_wages' => $salaryStructure->daily_wages ?? 0,
+            'base_salary' => $salaryStructure->base_salary ?? 0,
+            'commission_percentage' => $salaryStructure->commission_percentage ?? 0,
+        ];
 
         // Format payroll period based on type
         $payrollPeriod = $this->formatPayrollPeriod($payroll);
@@ -145,17 +161,28 @@ class PayrollController extends Controller
             ];
         });
 
+        // Get commission details
+        $commissionDetails = $payroll->details()->where('type', 'commission')->get()->map(function ($detail) {
+            return [
+                'name' => $detail->name,
+                'amount' => $detail->amount,
+                'description' => $detail->description,
+            ];
+        });
+
         // Get attendance breakdown for the payroll period
         $attendanceBreakdown = $this->getAttendanceBreakdown($payroll);
 
         return response()->json([
             'payroll' => $payroll,
             'payroll_period' => $payrollPeriod,
+            'structure_info' => $structureInfo,
             'breakdown' => [
                 'earnings' => [
                     'basic_salary' => $payroll->basic_salary,
                     'allowances' => $payroll->allowances,
                     'manual_allowances' => $payroll->manual_allowances,
+                    'commission' => $payroll->commission,
                     'total' => $payroll->gross_salary,
                 ],
                 'deductions' => [
@@ -169,6 +196,7 @@ class PayrollController extends Controller
                 'net_payable' => $payroll->net_salary,
             ],
             'allowance_details' => $allowanceDetails,
+            'commission_details' => $commissionDetails,
             'deduction_details' => $deductionDetails,
             'attendance_breakdown' => $attendanceBreakdown,
         ]);
@@ -182,6 +210,7 @@ class PayrollController extends Controller
         if ($payroll->payroll_type === 'daily') {
             // For daily: Display Date, Month, and Year (e.g., "15 March 2026")
             $date = \Carbon\Carbon::parse($payroll->month);
+
             return [
                 'type' => 'daily',
                 'formatted' => $date->format('d F Y'),
@@ -191,7 +220,8 @@ class PayrollController extends Controller
             ];
         } else {
             // For monthly: Display Month and Year only (e.g., "March 2026")
-            $date = \Carbon\Carbon::parse($payroll->month . '-01');
+            $date = \Carbon\Carbon::parse($payroll->month.'-01');
+
             return [
                 'type' => 'monthly',
                 'formatted' => $date->format('F Y'),
@@ -207,53 +237,53 @@ class PayrollController extends Controller
     private function getAttendanceBreakdown($payroll): array
     {
         $employee = $payroll->employee;
-        
+
         // Get salary structure for deduction policy
         $structure = $this->payrollService->getEffectiveSalaryStructure($employee);
         $policy = $structure ? ($structure->attendance_deduction_policy ?? []) : [];
         $perDayDeduction = $structure ? ($structure->leave_salary_per_day ?? 0) : 0;
-        
+
         if ($payroll->payroll_type === 'monthly') {
             // For monthly payroll, get attendance stats for the entire month
-            $startDate = \Carbon\Carbon::parse($payroll->month . '-01')->startOfMonth();
-            $endDate = \Carbon\Carbon::parse($payroll->month . '-01')->endOfMonth();
-            
+            $startDate = \Carbon\Carbon::parse($payroll->month.'-01')->startOfMonth();
+            $endDate = \Carbon\Carbon::parse($payroll->month.'-01')->endOfMonth();
+
             $totalWorkingDays = $this->getWorkingDaysInRange($startDate, $endDate);
-            
+
             $attendances = Attendance::where('employee_id', $employee->id)
                 ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                 ->orderBy('date', 'asc')
                 ->get();
-            
+
             // Check if attendance data is complete
             $hasData = $attendances->count() > 0;
-            
-            $daysPresent = $attendances->filter(fn($att) => strtolower($att->status) === 'present')->count();
-            $daysAbsent = $attendances->filter(fn($att) => strtolower($att->status) === 'absent')->count();
+
+            $daysPresent = $attendances->filter(fn ($att) => strtolower($att->status) === 'present')->count();
+            $daysAbsent = $attendances->filter(fn ($att) => strtolower($att->status) === 'absent')->count();
             $lateCheckIns = $attendances->where('is_late', true)->count();
             $earlyCheckOuts = $attendances->where('is_early_leave', true)->count(); // Fixed: is_early_leave
-            
+
             // Calculate deduction breakdown
             $lateMinutesTotal = $attendances->sum('late_minutes');
             $earlyMinutesTotal = $attendances->sum('early_leave_minutes'); // Fixed: early_leave_minutes
-            
+
             // Calculate actual deduction amounts
             $absenceDeduction = $daysAbsent * $perDayDeduction;
-            
+
             $lateDeduction = 0;
             $latePenalty = $policy['late_penalty_per_instance'] ?? 0;
             if ($latePenalty > 0) {
                 $lateDeduction = $lateCheckIns * $latePenalty;
             }
-            
+
             $earlyDeduction = 0;
             $earlyPenalty = $policy['early_penalty_per_instance'] ?? 0;
             if ($earlyPenalty > 0) {
                 $earlyDeduction = $earlyCheckOuts * $earlyPenalty;
             }
-            
+
             // Build detailed records for each issue type
-            $absentDays = $attendances->filter(fn($att) => strtolower($att->status) === 'absent')
+            $absentDays = $attendances->filter(fn ($att) => strtolower($att->status) === 'absent')
                 ->map(function ($att) use ($perDayDeduction) {
                     return [
                         'date' => \Carbon\Carbon::parse($att->date)->format('d M Y'),
@@ -261,7 +291,7 @@ class PayrollController extends Controller
                         'deduction' => $perDayDeduction,
                     ];
                 })->values()->toArray();
-            
+
             $lateDays = $attendances->where('is_late', true)->map(function ($att) use ($latePenalty) {
                 return [
                     'date' => \Carbon\Carbon::parse($att->date)->format('d M Y'),
@@ -271,7 +301,7 @@ class PayrollController extends Controller
                     'deduction' => $latePenalty,
                 ];
             })->values()->toArray();
-            
+
             $earlyDays = $attendances->where('is_early_leave', true)->map(function ($att) use ($earlyPenalty) { // Fixed: is_early_leave
                 return [
                     'date' => \Carbon\Carbon::parse($att->date)->format('d M Y'),
@@ -281,7 +311,7 @@ class PayrollController extends Controller
                     'deduction' => $earlyPenalty,
                 ];
             })->values()->toArray();
-            
+
             return [
                 'has_data' => $hasData,
                 'data_message' => $hasData ? null : 'Attendance data incomplete for this period',
@@ -310,19 +340,19 @@ class PayrollController extends Controller
         } else {
             // For daily payroll
             $date = \Carbon\Carbon::parse($payroll->month);
-            
+
             $attendance = Attendance::where('employee_id', $employee->id)
                 ->where('date', $date->format('Y-m-d'))
                 ->first();
-            
+
             if ($attendance) {
                 // Get specific deduction amounts from saved details
                 $lateDeductionAmount = $payroll->details
-                    ->filter(fn($d) => str_contains(strtolower($d->name), 'late check-in'))
+                    ->filter(fn ($d) => str_contains(strtolower($d->name), 'late check-in'))
                     ->sum('amount');
-                    
+
                 $earlyDeductionAmount = $payroll->details
-                    ->filter(fn($d) => str_contains(strtolower($d->name), 'early leave') || str_contains(strtolower($d->name), 'early check-out'))
+                    ->filter(fn ($d) => str_contains(strtolower($d->name), 'early leave') || str_contains(strtolower($d->name), 'early check-out'))
                     ->sum('amount');
 
                 return [
@@ -343,7 +373,7 @@ class PayrollController extends Controller
                     'early_deduction_amount' => $earlyDeductionAmount,
                 ];
             }
-            
+
             return [
                 'has_data' => false,
                 'data_message' => 'Attendance data incomplete for this period',
@@ -354,8 +384,6 @@ class PayrollController extends Controller
         }
     }
 
-
-
     /**
      * Calculate working days in a date range (excluding weekends)
      */
@@ -363,15 +391,15 @@ class PayrollController extends Controller
     {
         $workingDays = 0;
         $current = $startDate->copy();
-        
+
         while ($current->lte($endDate)) {
             // Exclude Saturdays (6) and Sundays (0)
-            if (!in_array($current->dayOfWeek, [0, 6])) {
+            if (! in_array($current->dayOfWeek, [0, 6])) {
                 $workingDays++;
             }
             $current->addDay();
         }
-        
+
         return $workingDays;
     }
 
@@ -492,12 +520,17 @@ class PayrollController extends Controller
         try {
             DB::beginTransaction();
 
-            $employees = Employee::with('salaryStructure')
-                ->whereHas('salaryStructure', function ($q) {
-                    $q->whereIn('salary_type', ['salary', 'both']);
-                })
-                ->where('status', 'active')
+            // Get active employees eligible for monthly payroll using scope
+            $employees = Employee::forMonthlyPayroll()
+                ->with(['activeSalaryStructure', 'designation', 'department'])
                 ->get();
+
+            if ($employees->isEmpty()) {
+                return response()->json([
+                    'error' => 'No eligible employees found for monthly payroll. Employees must be active and have either: (1) a salary structure without daily wages, OR (2) commission enabled.',
+                ], 400);
+            }
+            // The extra brace was here, it has been removed.
 
             $generated = 0;
             $skipped = 0;
@@ -505,32 +538,14 @@ class PayrollController extends Controller
 
             foreach ($employees as $employee) {
                 // Skip if already exists
-                $exists = Payroll::where('employee_id', $employee->id)
-                    ->where('month', $request->month)
-                    ->where('payroll_type', 'monthly')
-                    ->exists();
-
-                if ($exists) {
-                    $skipped++;
-
-                    continue;
-                }
-
                 try {
-                    $payrollData = $this->payrollService->calculateMonthlyPayroll($employee, $request->month);
+                    $payroll = $this->payrollService->generateMonthlyPayrollForEmployee($employee, $request->month);
 
-                    $payroll = Payroll::create(array_merge(
-                        ['employee_id' => $employee->id],
-                        Arr::except($payrollData, ['allowance_details', 'deduction_details'])
-                    ));
-
-                    $this->payrollService->savePayrollDetails(
-                        $payroll,
-                        $payrollData['allowance_details'] ?? [],
-                        $payrollData['deduction_details'] ?? []
-                    );
-
-                    $generated++;
+                    if ($payroll) {
+                        $generated++;
+                    } else {
+                        $skipped++;
+                    }
                 } catch (\Exception $e) {
                     $errors[] = $employee->full_name.': '.$e->getMessage();
                 }
@@ -553,6 +568,31 @@ class PayrollController extends Controller
     }
 
     /**
+     * Generate monthly payroll in background
+     */
+    public function generateMonthlyBackground(Request $request)
+    {
+        if (! auth()->user()->can('hr.payroll.create')) {
+            return response()->json(['error' => 'Unauthorized action.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'month' => 'required|date_format:Y-m',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        GenerateMonthlyPayrollJob::dispatch($request->month, auth()->id());
+
+        return response()->json([
+            'success' => 'Payroll generation started in background. You will be notified when completed.',
+            'reload' => true,
+        ]);
+    }
+
+    /**
      * Generate daily payrolls for all daily wage employees for a specific date
      */
     public function generateDaily(Request $request)
@@ -572,13 +612,16 @@ class PayrollController extends Controller
         try {
             DB::beginTransaction();
 
-            // Fetch employees configured for daily wages
-            $employees = Employee::with('salaryStructure')
-                ->whereHas('salaryStructure', function ($q) {
-                    $q->where('use_daily_wages', true);
-                })
-                ->where('status', 'active')
+            // Fetch active employees eligible for daily payroll using scope
+            $employees = Employee::forDailyPayroll()
+                ->with(['activeSalaryStructure', 'designation', 'department'])
                 ->get();
+
+            if ($employees->isEmpty()) {
+                return response()->json([
+                    'error' => 'No eligible employees found for daily payroll. Employees must be active, have daily wages enabled, and NOT have commission (commission employees are in monthly payroll).',
+                ], 400);
+            }
 
             $generated = 0;
             $skipped = 0;
@@ -590,13 +633,13 @@ class PayrollController extends Controller
                 // Check exact date overlap for daily payroll
                 $exists = Payroll::where('employee_id', $employee->id)
                     ->where('payroll_type', 'daily')
-                    ->whereDate('created_at', $request->date) // Usually we might check a date column, currently daily stores date in 'month' or created_at? 
-                    // Let's check how calculateDailyPayroll stores it. It stores 'month' => Y-m-d.
-                    ->where('month', $request->date) 
+                    ->whereDate('created_at', $request->date)
+                    ->where('month', $request->date)
                     ->exists();
 
                 if ($exists) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -606,7 +649,8 @@ class PayrollController extends Controller
                     ->first();
 
                 if (! $attendance || ! $attendance->clock_out) {
-                    $errors[] = $employee->full_name . ': No completed attendance found.';
+                    $errors[] = $employee->full_name.': No completed attendance found.';
+
                     continue;
                 }
 
@@ -631,14 +675,14 @@ class PayrollController extends Controller
 
                     $generated++;
                 } catch (\Exception $e) {
-                    $errors[] = $employee->full_name . ': ' . $e->getMessage();
+                    $errors[] = $employee->full_name.': '.$e->getMessage();
                 }
             }
 
             DB::commit();
 
             return response()->json([
-                'success' => "Daily payroll generated for {$generated} employees. {$skipped} skipped. " . (count($errors) > 0 ? count($errors) . " errors." : ""),
+                'success' => "Daily payroll generated for {$generated} employees. {$skipped} skipped. ".(count($errors) > 0 ? count($errors).' errors.' : ''),
                 'errors' => $errors,
                 'reload' => true,
             ]);
@@ -649,6 +693,31 @@ class PayrollController extends Controller
                 'errors' => ['general' => [$e->getMessage()]],
             ], 422);
         }
+    }
+
+    /**
+     * Generate daily payroll in background
+     */
+    public function generateDailyBackground(Request $request)
+    {
+        if (! auth()->user()->can('hr.payroll.create')) {
+            return response()->json(['error' => 'Unauthorized action.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'date' => 'required|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        GenerateDailyPayrollJob::dispatch($request->date, auth()->id());
+
+        return response()->json([
+            'success' => 'Daily payroll generation started in background. You will be notified when completed.',
+            'reload' => true,
+        ]);
     }
 
     /**
@@ -696,7 +765,8 @@ class PayrollController extends Controller
 
             $grossSalary = $payroll->basic_salary +
                           $payroll->allowances +
-                          $payroll->manual_allowances;
+                          $payroll->manual_allowances +
+                          $payroll->commission;
 
             $payroll->update([
                 'gross_salary' => $grossSalary,
@@ -708,6 +778,7 @@ class PayrollController extends Controller
             return response()->json([
                 'success' => 'Payroll updated successfully.',
                 'payroll' => $payroll->fresh(),
+                'reload' => true,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -743,6 +814,7 @@ class PayrollController extends Controller
 
         return response()->json([
             'success' => 'Payroll marked as reviewed successfully.',
+            'reload' => true,
         ]);
     }
 
@@ -770,6 +842,7 @@ class PayrollController extends Controller
 
         return response()->json([
             'success' => 'Payroll marked as paid successfully.',
+            'reload' => true,
         ]);
     }
 
@@ -795,6 +868,7 @@ class PayrollController extends Controller
 
         return response()->json([
             'success' => 'Payroll deleted successfully.',
+            'reload' => true,
         ]);
     }
 

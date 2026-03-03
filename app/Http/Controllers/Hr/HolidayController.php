@@ -4,11 +4,20 @@ namespace App\Http\Controllers\Hr;
 
 use App\Http\Controllers\Controller;
 use App\Models\Hr\Holiday;
+use App\Services\HrCacheService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon;
 
 class HolidayController extends Controller
 {
+    protected $hrCache;
+
+    public function __construct(HrCacheService $hrCache)
+    {
+        $this->hrCache = $hrCache;
+    }
+
     public function index()
     {
         if (!auth()->user()->can('hr.holidays.view')) {
@@ -37,7 +46,17 @@ class HolidayController extends Controller
                 return response()->json(['error' => 'Unauthorized action.'], 403);
             }
             $holiday = Holiday::findOrFail($request->edit_id);
+            $oldYear = Carbon::parse($holiday->date)->year;
+            
             $holiday->update($request->all());
+            
+            // Clear cache for old and new year
+            $newYear = Carbon::parse($request->date)->year;
+            $this->hrCache->clearHolidaysCache($oldYear);
+            if ($oldYear !== $newYear) {
+                $this->hrCache->clearHolidaysCache($newYear);
+            }
+            
             $message = 'Holiday Updated Successfully';
         } else {
             if (!auth()->user()->can('hr.holidays.create')) {
@@ -47,11 +66,17 @@ class HolidayController extends Controller
             if (Holiday::whereDate('date', $request->date)->exists()) {
                 return response()->json(['errors' => ['date' => ['A holiday already exists on this date.']]], 422);
             }
-            Holiday::create($request->all());
+            
+            $holiday = Holiday::create($request->all());
+            
+            // Clear cache for the year
+            $year = Carbon::parse($request->date)->year;
+            $this->hrCache->clearHolidaysCache($year);
+            
             $message = 'Holiday Created Successfully';
         }
 
-        return response()->json(['success' => $message]);
+        return response()->json(['success' => $message, 'reload' => true]);
     }
 
     public function destroy($id)
@@ -60,8 +85,16 @@ class HolidayController extends Controller
             return response()->json(['error' => 'Unauthorized action.'], 403);
         }
         $holiday = Holiday::findOrFail($id);
+        
+        // Capture year before deleting
+        $year = Carbon::parse($holiday->date)->year;
+        
         $holiday->delete();
-        return response()->json(['success' => 'Holiday Deleted Successfully']);
+        
+        // Clear cache
+        $this->hrCache->clearHolidaysCache($year);
+        
+        return response()->json(['success' => 'Holiday Deleted Successfully', 'reload' => true]);
     }
 
     /**
@@ -75,12 +108,15 @@ class HolidayController extends Controller
         $year = $request->get('year', date('Y'));
         $month = $request->get('month');
         
-        $query = Holiday::whereYear('date', $year);
+        // Use cache for logic optimization
+        $holidays = $this->hrCache->getHolidays($year);
         
         if ($month) {
-            $query->whereMonth('date', $month);
+            $holidays = $holidays->filter(function($holiday) use ($month) {
+                return Carbon::parse($holiday->date)->month == $month;
+            })->values();
         }
         
-        return response()->json($query->orderBy('date')->get());
+        return response()->json($holidays);
     }
 }

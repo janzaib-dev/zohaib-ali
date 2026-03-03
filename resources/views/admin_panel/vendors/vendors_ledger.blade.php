@@ -11,7 +11,8 @@
                         <p class="text-muted mb-0 small">View and manage vendor balances and history</p>
                     </div>
                     <div>
-                        <a href="{{ url('vendor') }}" class="btn btn-outline-secondary d-flex align-items-center gap-2">
+                        <a href="{{ route('vendors.index') }}"
+                            class="btn btn-outline-secondary d-flex align-items-center gap-2">
                             <i class="fas fa-arrow-left"></i> Back to Vendors
                         </a>
                     </div>

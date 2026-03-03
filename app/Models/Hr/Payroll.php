@@ -26,6 +26,7 @@ class Payroll extends Model
         'carried_forward_deduction',
         'carried_forward_to_next',
         'bonuses',
+        'commission',
         'net_salary',
         'notes',
         'auto_generated',

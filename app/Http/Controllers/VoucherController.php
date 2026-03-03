@@ -118,10 +118,14 @@ class VoucherController extends Controller
     public function all_recepit_vochers()
     {
         // V2: Fetch Receipt AND Journal Vouchers (to show Sales Invoices + Receipts)
-        $receipts = \App\Models\VoucherMaster::whereIn('voucher_type', [
-            \App\Models\VoucherMaster::TYPE_RECEIPT,
-            \App\Models\VoucherMaster::TYPE_JOURNAL,
-        ])
+        // Filter out Purchase Journals (party_type = Vendor)
+        $receipts = \App\Models\VoucherMaster::where(function ($q) {
+            $q->where('voucher_type', \App\Models\VoucherMaster::TYPE_RECEIPT)
+                ->orWhere(function ($q2) {
+                    $q2->where('voucher_type', \App\Models\VoucherMaster::TYPE_JOURNAL)
+                        ->where('party_type', \App\Models\Customer::class);
+                });
+        })
             ->with('party') // Eager load the polymorphic party
             ->orderBy('id', 'DESC')
             ->get();
@@ -489,11 +493,57 @@ class VoucherController extends Controller
                     } else {
                         \Log::warning('V2 Lines Empty. Total Amt: '.$totalAmt);
                     }
+
+                    // =====================================================================
+                    // SYNC LEDGER: Update Customer / Vendor ledger after receipt
+                    // Receipt = money received FROM customer → their balance (receivable) decreases
+                    // =====================================================================
+                    if ($totalAmt > 0 && $request->vendor_id) {
+                        $partyId = $request->vendor_id;
+
+                        if ($vType === 'customer' || $vType === 'walkin') {
+                            // Get the last closing balance for this customer
+                            $lastLedger = \App\Models\CustomerLedger::where('customer_id', $partyId)
+                                ->orderBy('id', 'desc')
+                                ->first();
+                            $prevBal = $lastLedger ? (float) $lastLedger->closing_balance : 0;
+
+                            // Receipt reduces what the customer owes (their payable to us decreases)
+                            \App\Models\CustomerLedger::create([
+                                'customer_id' => $partyId,
+                                'admin_or_user_id' => auth()->id(),
+                                'previous_balance' => $prevBal,
+                                'opening_balance' => $prevBal,
+                                'closing_balance' => $prevBal - $totalAmt,
+                                'description' => 'Receipt Voucher '.$rvid.($request->remarks ? ' — '.$request->remarks : ''),
+                            ]);
+
+                            \Log::info("CustomerLedger Updated. Customer: $partyId, Amount: $totalAmt, New Balance: ".($prevBal - $totalAmt));
+
+                        } elseif ($vType === 'vendor') {
+                            // Receipt from vendor (e.g. refund) → reduces what we owe them
+                            $lastLedger = \App\Models\VendorLedger::where('vendor_id', $partyId)
+                                ->orderBy('id', 'desc')
+                                ->first();
+                            $prevBal = $lastLedger ? (float) $lastLedger->closing_balance : 0;
+
+                            \App\Models\VendorLedger::create([
+                                'vendor_id' => $partyId,
+                                'admin_or_user_id' => auth()->id(),
+                                'opening_balance' => $prevBal,
+                                'previous_balance' => $prevBal,
+                                'closing_balance' => $prevBal - $totalAmt,
+                            ]);
+
+                            \Log::info("VendorLedger Updated. Vendor: $partyId, Amount: $totalAmt");
+                        }
+                    }
+                    // =====================================================================
                 } else {
                     \Log::warning("Credit Account ID missing for type: $vType");
                 }
             } catch (\Exception $e) {
-                \Log::error('V2 Sync Error: '.$e->getMessage());
+                \Log::error('V2 Sync Error: '.$e->getMessage().' Line: '.$e->getLine());
                 // Silently fail or return error message if preferred, but usually we log.
             }
 
@@ -608,18 +658,9 @@ class VoucherController extends Controller
                         VendorLedger::create([
                             'vendor_id' => $partyId,
                             'admin_or_user_id' => auth()->id(),
-                            'date' => now(),
-                            'description' => "Payment Voucher #$pvid",
-                            'opening_balance' => 0, // Not strictly tracking opening this way usually
-                            'debit' => $rowAmount, // Payment to vendor is Debit (reduces liability)
-                            'credit' => 0,
+                            'opening_balance' => $bal,
                             'previous_balance' => $bal,
-                            'closing_balance' => $bal + $rowAmount, // Vendor Balance (Liability) decreases? Or is this logic implied "Paid Amount"?
-                            // Typically: Vendor Credit = Payable. Debit = Paid.
-                            // If I pay a vendor, their Balance (Payable) decreases.
-                            // Here logic says `closing_balance + amount`.
-                            // This implies we are INCREASING the balance?
-                            // Let's stick to previous logic to avoid breaking convention, assuming "Debit" increases the ledger value stored.
+                            'closing_balance' => $bal + $rowAmount,
                         ]);
                     } elseif ($type === 'customer') {
                         $ledger = CustomerLedger::where('customer_id', $partyId)->latest()->first();
@@ -639,6 +680,59 @@ class VoucherController extends Controller
                             $acc->save();
                         }
                     }
+
+                    // ✅ V2 VOUCHER INTEGRATION (For Payment Vouchers)
+                    try {
+                        $vType = strtolower($type);
+                        $partyTypeStr = null;
+                        $debitAccountId = null; // Who is getting the payment? (Vendor AP, Customer AR, or direct Acc)
+                        $balanceService = app(\App\Services\BalanceService::class);
+
+                        if ($vType === 'vendor') {
+                            $partyTypeStr = \App\Models\Vendor::class;
+                            $debitAccountId = $balanceService->getAccountsPayableId();
+                        } elseif ($vType === 'customer' || $vType === 'walkin') {
+                            $partyTypeStr = \App\Models\Customer::class;
+                            $debitAccountId = $balanceService->getAccountsReceivableId();
+                        } else {
+                            // Assumed account ID directly
+                            $partyTypeStr = \App\Models\Account::class;
+                            $debitAccountId = $partyId;
+                        }
+
+                        if ($debitAccountId && $request->header_account_id) {
+                            $v2Lines = [];
+
+                            // DEBIT SIDE (Destination - AP/AR or specific Account) --> Reduces Liability
+                            $v2Lines[] = [
+                                'account_id' => $debitAccountId,
+                                'debit' => $rowAmount,
+                                'credit' => 0,
+                                'narration' => $request->narration_text[$index] ?? 'Payment to '.$vType,
+                            ];
+
+                            // CREDIT SIDE (Source - Cash/Bank) --> Reduces Asset
+                            $v2Lines[] = [
+                                'account_id' => $request->header_account_id,
+                                'debit' => 0,
+                                'credit' => $rowAmount,
+                                'narration' => 'Payment Source',
+                            ];
+
+                            app(\App\Services\VoucherService::class)->createVoucher([
+                                'voucher_type' => \App\Models\VoucherMaster::TYPE_PAYMENT,
+                                'date' => $request->entry_date,
+                                'status' => \App\Models\VoucherMaster::STATUS_POSTED,
+                                'party_type' => $partyTypeStr,
+                                'party_id' => $partyId,
+                                'remarks' => ($request->remarks ?? 'Payment Voucher')." (Ref: $pvid)",
+                            ], $v2Lines, auth()->id());
+
+                            \Log::info("V2 Payment Voucher created for $vType $partyId, Amount: $rowAmount");
+                        }
+                    } catch (\Exception $e) {
+                        \Log::error('V2 Integration Error on Payment Voucher: '.$e->getMessage());
+                    }
                 }
             }
 
@@ -654,8 +748,14 @@ class VoucherController extends Controller
 
     public function all_Payment_vochers()
     {
-        // V2: Fetch from VoucherMaster where type is PAYMENT
-        $receipts = \App\Models\VoucherMaster::where('voucher_type', \App\Models\VoucherMaster::TYPE_PAYMENT)
+        // V2: Fetch Payment AND Journal Vouchers (to show Purchase Invoices + Payments)
+        $receipts = \App\Models\VoucherMaster::where(function ($q) {
+            $q->where('voucher_type', \App\Models\VoucherMaster::TYPE_PAYMENT)
+                ->orWhere(function ($q2) {
+                    $q2->where('voucher_type', \App\Models\VoucherMaster::TYPE_JOURNAL)
+                        ->where('party_type', \App\Models\Vendor::class);
+                });
+        })
             ->with('party') // Eager load the polymorphic party
             ->orderBy('id', 'DESC')
             ->get();
@@ -1001,11 +1101,7 @@ class VoucherController extends Controller
                     VendorLedger::create([
                         'vendor_id' => $request->vendor_id,
                         'admin_or_user_id' => auth()->id(),
-                        'date' => now(),
-                        'description' => "Expense Voucher #$evid",
                         'opening_balance' => 0,
-                        'debit' => 0,
-                        'credit' => $amount,
                         'previous_balance' => 0,
                         'closing_balance' => -$amount,
                     ]);
@@ -1168,8 +1264,8 @@ class VoucherController extends Controller
             ->whereNotNull('head_id')
             ->get();
 
-        $lastId   = \App\Models\VoucherMaster::where('voucher_type', 'journal')->max('id') ?? 0;
-        $nextJVID = 'JVID-' . str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
+        $lastId = \App\Models\VoucherMaster::where('voucher_type', 'journal')->max('id') ?? 0;
+        $nextJVID = 'JVID-'.str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
 
         return view('admin_panel.vochers.journal_voucher', compact('AccountHeads', 'accounts', 'nextJVID'));
     }
@@ -1177,14 +1273,14 @@ class VoucherController extends Controller
     public function store_journal_voucher(Request $request)
     {
         $request->validate([
-            'voucher_date'     => 'required|date',
-            'rows.*.account_id'=> 'required|exists:accounts,id',
-            'rows.*.debit'     => 'required|numeric|min:0',
-            'rows.*.credit'    => 'required|numeric|min:0',
+            'voucher_date' => 'required|date',
+            'rows.*.account_id' => 'required|exists:accounts,id',
+            'rows.*.debit' => 'required|numeric|min:0',
+            'rows.*.credit' => 'required|numeric|min:0',
         ]);
 
         // Ensure debits == credits
-        $totalDebit  = collect($request->rows)->sum('debit');
+        $totalDebit = collect($request->rows)->sum('debit');
         $totalCredit = collect($request->rows)->sum('credit');
 
         if (abs($totalDebit - $totalCredit) > 0.01) {
@@ -1197,17 +1293,17 @@ class VoucherController extends Controller
             foreach ($request->rows as $row) {
                 $lines[] = [
                     'account_id' => $row['account_id'],
-                    'debit'      => (float) $row['debit'],
-                    'credit'     => (float) $row['credit'],
-                    'narration'  => $row['narration'] ?? 'Journal Entry',
+                    'debit' => (float) $row['debit'],
+                    'credit' => (float) $row['credit'],
+                    'narration' => $row['narration'] ?? 'Journal Entry',
                 ];
             }
 
             app(\App\Services\VoucherService::class)->createVoucher([
                 'voucher_type' => 'journal',
-                'date'         => $request->voucher_date,
-                'status'       => 'posted',
-                'remarks'      => $request->remarks,
+                'date' => $request->voucher_date,
+                'status' => 'posted',
+                'remarks' => $request->remarks,
             ], $lines, auth()->id());
 
             DB::commit();
@@ -1215,7 +1311,8 @@ class VoucherController extends Controller
             return redirect()->route('journal.voucher')->with('success', 'Journal Voucher saved and posted successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->withInput()->with('error', 'Error: ' . $e->getMessage());
+
+            return back()->withInput()->with('error', 'Error: '.$e->getMessage());
         }
     }
 

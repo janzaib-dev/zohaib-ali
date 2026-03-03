@@ -14,11 +14,7 @@
                     </div>
                     @can('hr.shifts.create')
                         <div class="btn-group">
-                            @can('hr.shifts.edit')
-                                <button type="button" class="btn btn-dark" id="syncBtn">
-                                    <i class="fa fa-sync"></i> Sync to Device
-                                </button>
-                            @endcan
+
                             <button type="button" class="btn btn-create" id="createBtn">
                                 <i class="fa fa-plus"></i> Add Shift
                             </button>
@@ -236,34 +232,6 @@
 
     <script>
         $(document).ready(function() {
-            $('#syncBtn').click(function() {
-                Swal.fire({
-                    title: 'Sync Shifts?',
-                    text: 'This will push all shift schedules to connected biometric devices.',
-                    icon: 'info',
-                    showCancelButton: true,
-                    confirmButtonText: 'Yes, Sync',
-                    showLoaderOnConfirm: true,
-                    preConfirm: () => {
-                        return $.ajax({
-                            url: '{{ route('hr.shifts.sync') }}',
-                            type: 'POST',
-                            data: {
-                                _token: '{{ csrf_token() }}'
-                            },
-                        }).catch(error => {
-                            Swal.showValidationMessage(
-                                `Request failed: ${error.responseJSON.error || error.statusText}`
-                            )
-                        });
-                    },
-                    allowOutsideClick: () => !Swal.isLoading()
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        Swal.fire('Synced!', result.value.success, 'success');
-                    }
-                });
-            });
 
             $('#createBtn').click(function() {
                 $('#shiftForm')[0].reset();

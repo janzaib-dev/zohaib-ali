@@ -144,221 +144,298 @@
         </div>
     </div>
 
-    <!-- Product Detail View Modal (BS4 Simple 3-Panel) -->
-    <div class="modal fade" id="productViewModal" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-            <div class="modal-content border-0 shadow-sm">
 
-                <!-- Header -->
-                <div class="modal-header bg-white border-bottom-0 pb-0">
-                    <div>
-                        <h5 class="modal-title font-weight-bold text-dark" id="view_item_name">Product Name</h5>
-                        <p class="text-muted small mb-0"><i class="las la-barcode"></i> <span
-                                id="view_item_code">CODE</span></p>
+    <!-- Product Detail View Modal (Premium UI) -->
+    <div class="modal fade" id="productViewModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg"
+                style="border-radius: 16px; overflow: hidden; background-color: #f8f9fa;">
+
+                <!-- Modal Header -->
+                <div class="modal-header bg-white border-bottom align-items-center py-3 px-4 shadow-sm z-index-1">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center"
+                            style="width: 48px; height: 48px;">
+                            <i class="las la-box-open fs-2"></i>
+                        </div>
+                        <div>
+                            <h4 class="modal-title fw-bold text-dark mb-0" id="view_item_name">Product Name</h4>
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                <span class="badge bg-light text-dark border"><i class="las la-barcode"></i> <span
+                                        id="view_item_code">CODE</span></span>
+                                <span class="badge" id="view_size_mode_badge">Mode</span>
+                            </div>
+                        </div>
                     </div>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
 
-                <!-- Body -->
-                <div class="modal-body bg-light p-3">
-
+                <!-- Modal Body -->
+                <div class="modal-body p-0">
                     <!-- Loading Spinner -->
                     <div id="modalLoadingSpinner" class="text-center py-5 d-none">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="sr-only">Loading...</span>
-                        </div>
+                        <div class="spinner-border text-primary shadow-sm" style="width: 3rem; height: 3rem;"
+                            role="status"></div>
+                        <p class="mt-3 text-muted fw-semibold">Loading product details...</p>
                     </div>
 
                     <!-- Main Content -->
-                    <div class="row" id="modalContentRow">
+                    <div class="row g-0" id="modalContentRow">
 
-                        <!-- Panel 1: Information -->
-                        <div class="col-md-4 mb-3 mb-md-0">
-                            <div class="card h-100 border-0 shadow-sm rounded">
-                                <div class="card-body p-3">
-                                    <h6 class="text-uppercase text-primary font-weight-bold small mb-3 border-bottom pb-2">
-                                        1. Information</h6>
-
-                                    <div class="text-center mb-3">
-                                        <div class="bg-light rounded d-flex align-items-center justify-content-center mx-auto"
-                                            style="width: 100px; height: 100px; overflow: hidden; border: 1px solid #eee;">
-                                            <img id="view_image_preview" src="" class="img-fluid d-none">
-                                            <div id="view_image_placeholder" class="text-center">
-                                                <i class="las la-image text-muted" style="font-size: 2rem;"></i>
-                                                <small class="d-block text-muted" style="font-size: 10px;">No
-                                                    Image</small>
-                                            </div>
-                                        </div>
+                        <!-- Left Sidebar: Image & Core Info -->
+                        <div class="col-lg-4 bg-white border-end p-4">
+                            <!-- Image Container -->
+                            <div class="text-center mb-4">
+                                <div class="position-relative mx-auto rounded-4 shadow-sm"
+                                    style="width: 200px; height: 200px; overflow: hidden; border: 4px solid #fff; background: #f8f9fa;">
+                                    <img id="view_image_preview" src=""
+                                        class="img-fluid w-100 h-100 object-fit-cover d-none">
+                                    <div id="view_image_placeholder"
+                                        class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                                        <i class="las la-image opacity-50" style="font-size: 4rem;"></i>
+                                        <small class="fw-semibold mt-2">No Image</small>
                                     </div>
+                                </div>
+                            </div>
 
-                                    <div class="mb-2">
-                                        <small class="text-muted d-block">Category</small>
-                                        <span class="font-weight-bold text-dark" id="view_cat_sub">-</span>
+                            <!-- Hierarchy / Categorization -->
+                            <h6 class="fw-bold text-uppercase text-muted letter-spacing-1 mb-3"
+                                style="font-size: 0.75rem;">Classification</h6>
+                            <div class="d-flex flex-column gap-3 mb-4">
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="text-primary bg-primary bg-opacity-10 p-2 rounded"><i
+                                            class="las la-tags fs-5"></i></div>
+                                    <div>
+                                        <small class="text-muted d-block">Category & Sub</small>
+                                        <span class="fw-bold text-dark" id="view_cat_sub">-</span>
                                     </div>
-                                    <div class="mb-2">
+                                </div>
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="text-info bg-info bg-opacity-10 p-2 rounded"><i
+                                            class="las la-copyright fs-5"></i></div>
+                                    <div>
                                         <small class="text-muted d-block">Brand / Model</small>
-                                        <span class="font-weight-bold text-dark" id="view_brand_model">-</span>
+                                        <span class="fw-bold text-dark" id="view_brand_model">-</span>
                                     </div>
-                                    <div class="mb-2">
+                                </div>
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="text-secondary bg-secondary bg-opacity-10 p-2 rounded"><i
+                                            class="las la-palette fs-5"></i></div>
+                                    <div>
                                         <small class="text-muted d-block">Colors</small>
-                                        <span class="text-dark" id="view_color" style="font-size: 0.9rem;">-</span>
+                                        <span class="fw-bold text-dark" id="view_color">-</span>
                                     </div>
-                                    <div class="mb-2">
+                                </div>
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="text-warning bg-warning bg-opacity-10 p-2 rounded"><i
+                                            class="las la-file-alt fs-5"></i></div>
+                                    <div>
                                         <small class="text-muted d-block">HS Code</small>
-                                        <span class="text-secondary font-weight-bold" id="view_hs_code">-</span>
+                                        <span class="fw-bold text-dark" id="view_hs_code">-</span>
                                     </div>
-                                    <div class="mb-0 border-top pt-2 mt-2">
+                                </div>
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="text-success bg-success bg-opacity-10 p-2 rounded"><i
+                                            class="las la-calendar fs-5"></i></div>
+                                    <div>
                                         <small class="text-muted d-block">Created On</small>
-                                        <span class="text-dark small" id="view_created_at">-</span>
+                                        <span class="fw-bold text-dark" id="view_created_at">-</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Panel 2: Measurement & Stock -->
-                        <div class="col-md-4 mb-3 mb-md-0">
-                            <div class="card h-100 border-0 shadow-sm rounded">
-                                <div class="card-body p-3">
-                                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-                                        <h6 class="text-uppercase text-info font-weight-bold small mb-0">2. Measurement
-                                        </h6>
-                                        <span class="badge badge-secondary" id="view_size_mode_badge">Mode</span>
-                                    </div>
+                        <!-- Right Body: Specs, Stock & Financials -->
+                        <div class="col-lg-8 p-4">
 
-                                    <!-- By Size -->
-                                    <div id="sec_by_size" class="d-none">
-                                        <div class="row no-gutters mb-2">
-                                            <div class="col-6 pr-1">
-                                                <small class="text-muted d-block">Dim (HxW)</small>
-                                                <span class="font-weight-bold text-dark" id="view_dimensions">-</span>
-                                            </div>
-                                            <div class="col-6 pl-1">
-                                                <small class="text-muted d-block">m²/Pc</small>
-                                                <span class="font-weight-bold text-dark" id="view_m2_piece">-</span>
-                                            </div>
-                                        </div>
-                                        <div class="bg-light p-2 rounded mb-2 border">
-                                            <div class="d-flex justify-content-between">
-                                                <small class="text-muted">Box Qty</small>
-                                                <strong class="text-dark" id="view_boxes_qty_size">-</strong>
-                                            </div>
-                                            <div class="d-flex justify-content-between">
-                                                <small class="text-muted">Pcs/Box</small>
-                                                <strong class="text-dark" id="view_pcs_box_size">-</strong>
-                                            </div>
-                                        </div>
-                                        <div class="text-center mt-2">
-                                            <small class="text-muted d-block Uppercase">Total Area (m²)</small>
-                                            <div class="h5 font-weight-bold text-info" id="view_total_m2">-</div>
-                                        </div>
-                                    </div>
+                            <div class="row g-4">
+                                <!-- Measurement & Dimensions Container -->
+                                <div class="col-12">
+                                    <h6 class="fw-bold text-uppercase text-info mb-3" style="font-size: 0.75rem;">
+                                        <i class="las la-ruler-combined fs-6 me-1"></i> Measurement & Packings
+                                    </h6>
+                                    <div class="card shadow-sm border-0 border-start border-4 border-info">
+                                        <div class="card-body">
 
-                                    <!-- By Box/Carton -->
-                                    <div id="sec_packing" class="d-none">
-                                        <div class="row text-center mb-2 mx-0">
-                                            <div class="col-4 px-1">
-                                                <div class="bg-light p-1 rounded border">
-                                                    <small class="d-block" style="font-size: 0.6rem;">PCS/BOX</small>
-                                                    <strong class="text-dark" id="view_pcs_box">-</strong>
+                                            <!-- By Size Layout -->
+                                            <div id="sec_by_size" class="d-none">
+                                                <div class="row text-center g-3">
+                                                    <div class="col-sm-3 col-6">
+                                                        <div class="p-3 bg-light rounded-3 h-100">
+                                                            <small
+                                                                class="text-muted d-block text-uppercase fw-semibold mb-1"
+                                                                style="font-size:10px;">Dimensions</small>
+                                                            <strong class="fs-5 text-dark" id="view_dimensions">-</strong>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-sm-3 col-6">
+                                                        <div class="p-3 bg-light rounded-3 h-100">
+                                                            <small
+                                                                class="text-muted d-block text-uppercase fw-semibold mb-1"
+                                                                style="font-size:10px;">m² / Pc</small>
+                                                            <strong class="fs-5 text-dark" id="view_m2_piece">-</strong>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-sm-3 col-6">
+                                                        <div class="p-3 bg-light rounded-3 h-100">
+                                                            <small
+                                                                class="text-muted d-block text-uppercase fw-semibold mb-1"
+                                                                style="font-size:10px;">Pcs / Box</small>
+                                                            <strong class="fs-5 text-dark"
+                                                                id="view_pcs_box_size">-</strong>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-sm-3 col-6">
+                                                        <div
+                                                            class="p-3 text-white rounded-3 shadow-sm bg-info h-100 d-flex flex-column justify-content-center">
+                                                            <small
+                                                                class="text-white-50 d-block text-uppercase fw-bold mb-1"
+                                                                style="font-size:10px;">Total Area</small>
+                                                            <strong class="fs-4" id="view_total_m2">-</strong><small>
+                                                                m²</small>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div class="col-4 px-1">
-                                                <div class="bg-light p-1 rounded border">
-                                                    <small class="d-block" style="font-size: 0.6rem;">BOXES</small>
-                                                    <strong class="text-primary" id="view_boxes_qty">-</strong>
+
+                                            <!-- By Box Layout -->
+                                            <div id="sec_packing" class="d-none">
+                                                <div class="row text-center g-3">
+                                                    <div class="col-4">
+                                                        <div class="p-3 bg-light rounded-3">
+                                                            <small
+                                                                class="text-muted d-block text-uppercase fw-semibold mb-1"
+                                                                style="font-size:10px;">Pcs / Box</small>
+                                                            <strong class="fs-4 text-dark" id="view_pcs_box">-</strong>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <div class="p-3 bg-primary bg-opacity-10 text-primary rounded-3">
+                                                            <small class="d-block text-uppercase fw-bold mb-1"
+                                                                style="font-size:10px;">Total Boxes</small>
+                                                            <strong class="fs-4" id="view_boxes_qty">-</strong>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <div class="p-3 bg-warning bg-opacity-10 text-warning rounded-3">
+                                                            <small class="d-block text-uppercase fw-bold mb-1"
+                                                                style="font-size:10px;">Loose Pcs</small>
+                                                            <strong class="fs-4" id="view_loose_pcs">-</strong>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div class="col-4 px-1">
-                                                <div class="bg-light p-1 rounded border">
-                                                    <small class="d-block" style="font-size: 0.6rem;">LOOSE</small>
-                                                    <strong class="text-warning" id="view_loose_pcs">-</strong>
+
+                                            <!-- By Piece Layout -->
+                                            <div id="sec_by_piece" class="d-none text-center">
+                                                <div
+                                                    class="p-4 bg-light rounded-3 d-flex align-items-center justify-content-center gap-3">
+                                                    <i class="las la-puzzle-piece fs-1 text-primary"></i>
+                                                    <div class="text-start">
+                                                        <h5 class="fw-bold mb-0">Single Unit Item</h5>
+                                                        <small class="text-muted">Tracked exclusively by individual
+                                                            pieces.</small>
+                                                    </div>
                                                 </div>
                                             </div>
+
                                         </div>
                                     </div>
-
-                                    <!-- By Piece -->
-                                    <div id="sec_by_piece" class="d-none text-center mb-3">
-                                        <div class="alert alert-light border">
-                                            <i class="las la-layer-group text-primary" style="font-size: 1.5rem;"></i>
-                                            <br>
-                                            <span class="text-muted small">Unit Tracking Only</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Total Stock -->
-                                    <div class="mt-auto pt-3 border-top">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <small class="text-muted font-weight-bold">TOTAL PCS</small>
-                                            <span class="h4 mb-0 font-weight-bold text-success"
-                                                id="view_total_stock_qty">0</span>
-                                        </div>
-                                    </div>
-
                                 </div>
-                            </div>
-                        </div>
 
-                        <!-- Panel 3: Financial -->
-                        <div class="col-md-4">
-                            <div class="card h-100 border-0 shadow-sm rounded">
-                                <div class="card-body p-3">
-                                    <h6 class="text-uppercase text-success font-weight-bold small mb-3 border-bottom pb-2">
-                                        3. Financials</h6>
+                                <!-- Financials Container -->
+                                <div class="col-md-6">
+                                    <h6 class="fw-bold text-uppercase text-success mb-3" style="font-size: 0.75rem;">
+                                        <i class="las la-wallet fs-6 me-1"></i> Pricing Summary
+                                    </h6>
+                                    <div class="card shadow-sm border-0 h-100 border-start border-4 border-success">
+                                        <div class="card-body">
 
-                                    <div class="mb-3">
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <small class="text-muted font-weight-bold" id="lbl_price_unit">Sale
-                                                Price</small>
-                                            <span class="font-weight-bold text-dark" id="view_price_unit">-</span>
-                                        </div>
-                                        <div class="progress" style="height: 4px;">
-                                            <div class="progress-bar bg-success" style="width: 100%"></div>
+                                            <div class="mb-4">
+                                                <div
+                                                    class="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                                                    <div>
+                                                        <small class="text-muted d-block text-uppercase fw-bold mb-1"
+                                                            style="font-size:10px;" id="lbl_price_unit">Sale Price</small>
+                                                        <span class="fs-4 fw-bold text-success"
+                                                            id="view_price_unit">-</span>
+                                                    </div>
+                                                    <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center"
+                                                        style="width: 36px; height: 36px;">
+                                                        <i class="las la-arrow-up"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <small class="text-muted d-block text-uppercase fw-bold mb-1"
+                                                            style="font-size:10px;" id="lbl_purch_unit">Purchase
+                                                            Price</small>
+                                                        <span class="fs-5 fw-bold text-dark" id="view_purch_unit">-</span>
+                                                    </div>
+                                                    <div class="bg-light text-secondary rounded-circle d-flex align-items-center justify-content-center"
+                                                        style="width: 36px; height: 36px;">
+                                                        <i class="las la-arrow-down"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                         </div>
                                     </div>
-
-                                    <div class="mb-3">
-                                        <div class="d-flex justify-content-between mb-1">
-                                            <small class="text-muted font-weight-bold" id="lbl_purch_unit">Purch
-                                                Price</small>
-                                            <span class="text-secondary" id="view_purch_unit">-</span>
-                                        </div>
-                                        <div class="progress" style="height: 4px;">
-                                            <div class="progress-bar bg-secondary" style="width: 60%"></div>
-                                        </div>
-                                    </div>
-
-                                    <div class="alert alert-success p-2 mb-0 mt-4 mx-0 text-center"
-                                        style="background-color: #d1e7dd; border-color: #badbcc;">
-                                        <small class="d-block text-success font-weight-bold text-uppercase"
-                                            style="font-size: 0.7rem;">Est. Sale Value</small>
-                                        <div class="font-weight-bold text-dark h4 mb-0" id="view_sale_total">-</div>
-                                    </div>
-                                    <div class="text-center mt-2">
-                                        <small class="text-muted">Total Purch: <span id="view_purch_total"
-                                                class="text-danger">-</span></small>
-                                    </div>
-
                                 </div>
-                            </div>
-                        </div>
 
+                                <!-- Stock Valuation Container -->
+                                <div class="col-md-6">
+                                    <h6 class="fw-bold text-uppercase text-danger mb-3" style="font-size: 0.75rem;">
+                                        <i class="las la-boxes fs-6 me-1"></i> Stock Valuation
+                                    </h6>
+                                    <div class="card shadow-sm border-0 h-100 bg-dark text-white position-relative overflow-hidden"
+                                        style="border-radius: 12px;">
+                                        <i class="las la-chart-pie position-absolute text-white opacity-25"
+                                            style="font-size: 10rem; right: -20px; bottom: -20px;"></i>
+                                        <div class="card-body position-relative z-index-1">
+
+                                            <div class="mb-3">
+                                                <small class="text-white-50 d-block text-uppercase fw-bold mb-1"
+                                                    style="font-size:10px;">Total Physical Stock (Pcs)</small>
+                                                <span class="display-6 fw-bold text-warning"
+                                                    id="view_total_stock_qty">0</span>
+                                            </div>
+
+                                            <hr class="text-secondary opacity-50 my-2">
+
+                                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                                <div>
+                                                    <small class="text-white-50 d-block text-uppercase fw-bold mb-0"
+                                                        style="font-size:10px;">Est. Total Sale Value</small>
+                                                    <span class="fs-5 fw-bold text-white lh-1"
+                                                        id="view_sale_total">-</span>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                                <div>
+                                                    <small class="text-white-50 d-block text-uppercase fw-bold mb-0"
+                                                        style="font-size:10px;">Est. Purchase Value</small>
+                                                    <span class="fs-6 fw-semibold text-white-50 lh-1"
+                                                        id="view_purch_total">-</span>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div> <!-- End Row -->
+
+                        </div>
                     </div>
-                </div>
-
-                <!-- Simple Footer -->
-                <div class="modal-footer border-top-0 py-2 bg-white rounded-bottom">
-                    <button type="button" class="btn btn-secondary btn-sm rounded-pill px-4"
-                        data-dismiss="modal">Close</button>
                 </div>
 
             </div>
         </div>
     </div>
-
-
 
 
     <!-- SweetAlert2 CSS -->
@@ -410,14 +487,19 @@
 
                     // --- Colors ---
                     if (product.color) {
+                        let parsed = [];
                         try {
-                            let colors = JSON.parse(product.color);
-                            $('#view_color').text(Array.isArray(colors) ? colors.join(', ') : colors);
+                            parsed = JSON.parse(product.color);
                         } catch (e) {
-                            $('#view_color').text(product.color);
+                            parsed = product.color.split(',');
                         }
+                        if (!Array.isArray(parsed)) parsed = [parsed];
+
+                        let badges = parsed.filter(c => c.trim() !== '').map(c =>
+                            `<span class="badge bg-light text-dark border">${c.trim()}</span>`);
+                        $('#view_color').html(badges.length ? badges.join('') : '-');
                     } else {
-                        $('#view_color').text('-');
+                        $('#view_color').html('<span class="text-muted">-</span>');
                     }
 
                     // --- Mode & Layout Switching ---

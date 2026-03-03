@@ -371,8 +371,8 @@
                             <input type="text" class="form-control input-readonly" name="Invoice_no" style="width:150px"
                                 value="{{ $nextInvoiceNumber }}" readonly>
                             <!-- <label class="form-label fw-bold mb-0">M. Inv#</label>
-                            <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice"
-                                value="{{ $sale->reference ?? '' }}"> -->
+                                        <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice"
+                                            value="{{ $sale->reference ?? '' }}"> -->
                         </div>
 
                         {{-- Credit Days (Optional) --}}
@@ -433,9 +433,9 @@
                                     <td class="py-0 text-danger fw-bold" id="ci_prev_bal">0.00</td>
                                 </tr>
                                 <!-- <tr>
-                                    <td class="fw-bold text-muted py-0">Credit Limit</td>
-                                    <td class="py-0" id="ci_range_bal">0.00</td>
-                                </tr> -->
+                                                <td class="fw-bold text-muted py-0">Credit Limit</td>
+                                                <td class="py-0" id="ci_range_bal">0.00</td>
+                                            </tr> -->
                             </table>
                         </div>
 
@@ -444,7 +444,7 @@
                             <label class="form-label fw-bold mb-1">Sales Officer</label>
                             <select class="form-select" id="salesOfficerSelect" name="sales_officer_id">
                                 <option value="">-- Select Officer --</option>
-                                @foreach(\App\Models\SalesOfficer::orderBy('name')->get() as $officer)
+                                @foreach (\App\Models\SalesOfficer::orderBy('name')->get() as $officer)
                                     <option value="{{ $officer->id }}">{{ $officer->name }}</option>
                                 @endforeach
                             </select>
@@ -594,18 +594,14 @@
 
                 {{-- Buttons --}}
                 <div class="d-flex flex-wrap gap-2 justify-content-center p-3 mt-3 border-top">
-                    <button type="button" class="btn btn-sm btn-primary" id="btnEdit">Edit</button>
-                    <button type="button" class="btn btn-sm btn-warning" id="btnRevert">Revert</button>
 
                     <button type="button" class="btn btn-sm btn-success" id="btnSave">Save</button>
                     <button type="button" class="btn btn-sm btn-outline-success" id="btnPosted" disabled>Posted</button>
 
-                    <button type="button" class="btn btn-sm btn-secondary" id="btnPrint">Print</button>
-                    <button type="button" class="btn btn-sm btn-secondary" id="btnPrint2">Print-2</button>
-                    <button type="button" class="btn btn-sm btn-secondary" id="btnDCPrint">DC Print</button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="btnPrint">Print Invoice</button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="btnPrint2">Terminal</button>
+                    <button type="button" class="btn btn-sm btn-secondary" id="btnDCPrint">DC Print/Terminal</button>
 
-                    <button type="button" class="btn btn-sm btn-danger" id="btnDelete">Delete</button>
-                    <button type="button" class="btn btn-sm btn-dark" id="btnExit">Exit</button>
                 </div>
             </form>
         </div>
@@ -787,13 +783,13 @@
             $('#btnEdit').on('click', () => alert('Edit mode activated'));
             $('#btnRevert').on('click', () => location.reload());
             $('#btnPrint').on('click', function() {
-                ensureSaved().then(id => window.open('{{ url('booking/print') }}/' + id, '_blank'));
+                postNow('{{ route('sales.invoice', ':id') }}');
             });
             $('#btnPrint2').on('click', function() {
-                ensureSaved().then(id => window.open('{{ url('booking/print2') }}/' + id, '_blank'));
+                postNow('{{ route('sales.receipt', ':id') }}', true);
             });
             $('#btnDCPrint').on('click', function() {
-                ensureSaved().then(id => window.open('{{ url('booking/dc') }}/' + id, '_blank'));
+                postNow('{{ route('sales.dc', ':id') }}', false, '{{ route('sales.receipt', ':id') }}');
             });
             $('#btnExit').on('click', function() {
                 ensureSaved().finally(() => {

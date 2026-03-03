@@ -1,9 +1,6 @@
 @extends('admin_panel.layout.app')
 
 @section('content')
-    <!-- Script for Face API -->
-    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-
     @include('hr.partials.hr-styles')
 
     <div class="main-content">
@@ -169,7 +166,7 @@
                                 <input type="hidden" class="custom_start_time" value="{{ $emp->custom_start_time }}">
                                 <input type="hidden" class="custom_end_time" value="{{ $emp->custom_end_time }}">
                                 <input type="hidden" class="joining_date" value="{{ $emp->joining_date }}">
-                                <input type="hidden" class="basic_salary" value="{{ $emp->basic_salary }}">
+                                <input type="hidden" class="weekly_off" value="{{ $emp->weekly_off }}">
                                 <input type="hidden" class="status" value="{{ $emp->status }}">
                                 <input type="hidden" class="is_docs_submitted" value="{{ $emp->is_docs_submitted }}">
                                 <input type="hidden" class="doc_degree" value="{{ $emp->getDocument('degree') }}">
@@ -180,8 +177,6 @@
                                 <input type="hidden" class="doc_ssc_marksheet"
                                     value="{{ $emp->getDocument('ssc_marksheet') }}">
                                 <input type="hidden" class="doc_cv" value="{{ $emp->getDocument('cv') }}">
-                                <input type="hidden" class="casual_leave_dates"
-                                    value="{{ $emp->leaves->pluck('start_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->implode(',') }}">
                             </div>
                         @empty
                             <div class="empty-state" style="grid-column: 1/-1;">
@@ -207,7 +202,7 @@
                         <i class="fa fa-user-plus"></i>
                         <span>Add Employee</span>
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal"></button>
                 </div>
                 <form id="employeeForm" action="{{ route('hr.employees.store') }}" method="POST"
                     enctype="multipart/form-data" data-ajax-validate="true">
@@ -333,13 +328,7 @@
                                         required>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-group-modern">
-                                    <label class="form-label"><i class="fa fa-money-bill"></i> Basic Salary</label>
-                                    <input type="number" step="0.01" name="basic_salary" id="basic_salary"
-                                        class="form-control" placeholder="Enter basic salary" required>
-                                </div>
-                            </div>
+
                             <div class="col-md-6">
                                 <div class="form-group-modern">
                                     <label class="form-label"><i class="fa fa-toggle-on"></i> Status</label>
@@ -364,45 +353,44 @@
                                 </div>
                             </div>
 
-                            <!-- Casual Leave Days -->
+                            <!-- Weekly Off -->
                             <div class="col-md-12 mb-3">
                                 <div class="form-group-modern">
-                                    <label class="form-label" for="casual_leave_days">
+                                    <label class="form-label" for="weekly_off">
                                         <i class="fa fa-calendar-check me-1"></i>
-                                        Casual Leave Days
+                                        Weekly Off Days
                                     </label>
-                                    <div id="casual_leave_days_container"
+                                    <div id="weekly_off_container"
                                         style="display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0;">
-                                        <span class="casual-day-option badge bg-light text-dark border"
+                                        <span class="weekly-day-option badge bg-light text-dark border"
                                             data-value="Monday"
                                             style="cursor:pointer; padding:8px 16px; font-size:15px;">Monday</span>
-                                        <span class="casual-day-option badge bg-light text-dark border"
+                                        <span class="weekly-day-option badge bg-light text-dark border"
                                             data-value="Tuesday"
                                             style="cursor:pointer; padding:8px 16px; font-size:15px;">Tuesday</span>
-                                        <span class="casual-day-option badge bg-light text-dark border"
+                                        <span class="weekly-day-option badge bg-light text-dark border"
                                             data-value="Wednesday"
                                             style="cursor:pointer; padding:8px 16px; font-size:15px;">Wednesday</span>
-                                        <span class="casual-day-option badge bg-light text-dark border"
+                                        <span class="weekly-day-option badge bg-light text-dark border"
                                             data-value="Thursday"
                                             style="cursor:pointer; padding:8px 16px; font-size:15px;">Thursday</span>
-                                        <span class="casual-day-option badge bg-light text-dark border"
+                                        <span class="weekly-day-option badge bg-light text-dark border"
                                             data-value="Friday"
                                             style="cursor:pointer; padding:8px 16px; font-size:15px;">Friday</span>
-                                        <span class="casual-day-option badge bg-light text-dark border"
+                                        <span class="weekly-day-option badge bg-light text-dark border"
                                             data-value="Saturday"
                                             style="cursor:pointer; padding:8px 16px; font-size:15px;">Saturday</span>
-                                        <span class="casual-day-option badge bg-light text-dark border"
+                                        <span class="weekly-day-option badge bg-light text-dark border"
                                             data-value="Sunday"
                                             style="cursor:pointer; padding:8px 16px; font-size:15px;">Sunday</span>
                                     </div>
-                                    <input type="hidden" name="casual_leave_days" id="casual_leave_days" />
+                                    <input type="hidden" name="weekly_off" id="weekly_off" />
                                     <small class="text-muted d-block mt-1">
                                         <i class="fa fa-info-circle me-1"></i>
-                                        Click to select/deselect casual leave days. Selected days will be highlighted.
+                                        Click to select/deselect weekly off days. Selected days will be highlighted.
                                     </small>
                                 </div>
                             </div>
-
                             <!-- Documents -->
                             <div id="documents_container" class="row" style="display: none;">
                                 <div class="col-12 mb-3">
@@ -444,7 +432,7 @@
                         </div>
                     </div>
                     <div class="modal-footer-modern">
-                        <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">
+                        <button type="button" class="btn btn-cancel" data-dismiss="modal">
                             <i class="fa fa-times me-2"></i>Cancel
                         </button>
                         <button type="submit" class="btn btn-save">
@@ -456,38 +444,41 @@
             </div>
         </div>
     </div>
+@endsection
 
+@section('js')
     <!-- Scripts -->
     <style>
-        .casual-day-option.selected {
+        .weekly-day-option.selected {
             background: #007bff !important;
             color: #fff !important;
             border-color: #007bff !important;
             box-shadow: 0 2px 8px rgba(0, 123, 255, 0.08);
         }
 
-        .casual-day-option:hover {
+        .weekly-day-option:hover {
             background: #e3f0ff !important;
         }
     </style>
     <!-- jQuery and Bootstrap are already loaded in the main layout -->
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{{ asset('vendor/face-api/face-api.min.js') }}"></script>
 
     <script>
-        // Badge click handler for casual leave days
+        // Badge click handler for weekly off days
         $(document).ready(function() {
-            var $container = $('#casual_leave_days_container');
-            var $hiddenInput = $('#casual_leave_days');
+            var $container = $('#weekly_off_container');
+            var $hiddenInput = $('#weekly_off');
 
-            $container.on('click', '.casual-day-option', function() {
+            $container.on('click', '.weekly-day-option', function() {
                 $(this).toggleClass('selected');
                 var selected = [];
-                $container.find('.casual-day-option.selected').each(function() {
+                $container.find('.weekly-day-option.selected').each(function() {
                     selected.push($(this).data('value'));
                 });
                 $hiddenInput.val(selected.join(','));
-                console.log('Selected days:', selected);
+                console.log('Selected off days:', selected);
             });
         });
 
@@ -529,9 +520,9 @@
                     .html('');
                 $('#modalLabel').html('<i class="fa fa-user-plus"></i><span>Add Employee</span>');
 
-                // Clear casual leave day selections
-                $('#casual_leave_days_container .casual-day-option').removeClass('selected');
-                $('#casual_leave_days').val('');
+                // Clear weekly off selections
+                $('#weekly_off_container .weekly-day-option').removeClass('selected');
+                $('#weekly_off').val('');
 
                 console.log('About to show modal...');
                 $('#employeeModal').modal('show');
@@ -563,7 +554,6 @@
                 }
 
                 $('#joining_date').val(card.find('.joining_date').val());
-                $('#basic_salary').val(card.find('.basic_salary').val());
                 $('#status').val(card.find('.status').val());
 
 
@@ -591,17 +581,17 @@
                 setLink('link_cv', card.find('.doc_cv').val());
 
 
-                // Load casual leave days (badges)
-                const leaveDays = card.find('.casual_leave_dates').val();
-                $('#casual_leave_days_container .casual-day-option').removeClass('selected');
+                // Load weekly off days (badges)
+                const leaveDays = card.find('.weekly_off').val();
+                $('#weekly_off_container .weekly-day-option').removeClass('selected');
                 if (leaveDays) {
                     const daysArray = leaveDays.split(',').filter(d => d.trim() !== '');
                     daysArray.forEach(function(day) {
-                        $('#casual_leave_days_container .casual-day-option[data-value="' + day +
+                        $('#weekly_off_container .weekly-day-option[data-value="' + day +
                             '"]').addClass('selected');
                     });
-                    $('#casual_leave_days').val(leaveDays);
-                    console.log('Loaded leave days:', daysArray);
+                    $('#weekly_off').val(leaveDays);
+                    console.log('Loaded weekly off days:', daysArray);
                 }
 
                 $('#modalLabel').html('<i class="fa fa-pen"></i><span>Edit Employee</span>');
@@ -758,7 +748,7 @@
                         $('#face_status').html(
                             '<div class="d-inline-block px-3 py-1 rounded-pill bg-info bg-opacity-10 text-info border border-info border-opacity-25"><i class="fa fa-spinner fa-spin me-1"></i> Loading AI Models...</div>'
                         );
-                        const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+                        const MODEL_URL = '{{ asset('vendor/face-api/models') }}';
                         await Promise.all([
                             faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                             faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
@@ -834,37 +824,16 @@
                     context.drawImage(videoEl, 0, 0);
                     const image = canvasEl.toDataURL('image/jpeg');
 
+                    // Store descriptor and image for potential retry with override
+                    window.lastFaceData = {
+                        descriptor: Array.from(detections.descriptor),
+                        image: image,
+                        employee_id: $('#face_employee_id').val()
+                    };
+
                     // Send to Server
-                    $.ajax({
-                        url: '{{ route('hr.employees.face-register') }}',
-                        type: 'POST',
-                        data: {
-                            _token: '{{ csrf_token() }}',
-                            employee_id: $('#face_employee_id').val(),
-                            descriptor: Array.from(detections
-                                .descriptor), // Send array directly, Laravel casts to array
-                            image: image
-                        },
-                        success: function(res) {
-                            $('#face_status').html(
-                                '<div class="d-inline-block px-3 py-1 rounded-pill bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="fa fa-check-circle me-1"></i> ' +
-                                res.success + '</div>');
-                            setTimeout(() => {
-                                $('#faceModal').modal('hide');
-                                location.reload();
-                            }, 1000);
-                        },
-                        error: function(err) {
-                            let msg = err.responseJSON && err.responseJSON.errors ? Object
-                                .values(err.responseJSON.errors)[0][0] :
-                                'Error saving face.';
-                            $('#face_status').html(
-                                '<div class="d-inline-block px-3 py-1 rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"><i class="fa fa-exclamation-circle me-1"></i> ' +
-                                msg + '</div>');
-                            btn.prop('disabled', false).html(
-                                '<i class="fa fa-camera"></i> Capture & Save');
-                        }
-                    });
+                    sendFaceRegistration(false); // false = no override initially
+
                 } catch (err) {
                     console.error(err);
                     $('#face_status').html(
@@ -874,6 +843,97 @@
                         '<i class="fa fa-camera"></i> Capture & Save');
                 }
             });
+
+            // Function to send face registration (with or without override)
+            function sendFaceRegistration(forceOverride = false) {
+                const btn = $('#btn-capture-face');
+
+                $.ajax({
+                    url: '{{ route('hr.employees.face-register') }}',
+                    type: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}',
+                        employee_id: window.lastFaceData.employee_id,
+                        descriptor: window.lastFaceData.descriptor,
+                        image: window.lastFaceData.image,
+                        force_override: forceOverride ? 1 : 0
+                    },
+                    success: function(res) {
+                        let message = res.success;
+                        if (res.was_override) {
+                            message += ' (Admin Override)';
+                        }
+
+                        $('#face_status').html(
+                            '<div class="d-inline-block px-3 py-1 rounded-pill bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="fa fa-check-circle me-1"></i> ' +
+                            message + '</div>');
+                        setTimeout(() => {
+                            $('#faceModal').modal('hide');
+                            location.reload();
+                        }, 1500);
+                    },
+                    error: function(err) {
+                        // Handle duplicate face error
+                        if (err.status === 409 && err.responseJSON && err.responseJSON.error ===
+                            'duplicate_face') {
+                            const data = err.responseJSON;
+                            const similarEmp = data.similar_employee;
+
+                            let errorHtml = `
+                                <div class="alert alert-warning mb-0">
+                                    <h6 class="alert-heading"><i class="fa fa-exclamation-triangle me-2"></i>Duplicate Face Detected</h6>
+                                    <p class="mb-2">${data.message}</p>
+                                    <div class="border-top pt-2 mt-2">
+                                        <strong>Registered Employee:</strong><br>
+                                        <small>
+                                            <i class="fa fa-user me-1"></i> ${similarEmp.name}<br>
+                                            <i class="fa fa-building me-1"></i> ${similarEmp.department}<br>
+                                            <i class="fa fa-briefcase me-1"></i> ${similarEmp.designation}
+                                        </small>
+                                    </div>
+                            `;
+
+                            if (data.can_override) {
+                                errorHtml += `
+                                    <div class="mt-3">
+                                        <button class="btn btn-sm btn-danger" id="btn-override-face">
+                                            <i class="fa fa-shield-alt me-1"></i> Override & Register Anyway
+                                        </button>
+                                        <small class="text-muted d-block mt-1">
+                                            <i class="fa fa-info-circle"></i> Admin permission required
+                                        </small>
+                                    </div>
+                                `;
+                            }
+
+                            errorHtml += '</div>';
+
+                            $('#face_status').html(errorHtml);
+
+                            // Handle override button click
+                            $('#btn-override-face').on('click', function() {
+                                $(this).prop('disabled', true).html(
+                                    '<i class="fa fa-spinner fa-spin"></i> Overriding...');
+                                sendFaceRegistration(true); // Retry with override
+                            });
+
+                        } else {
+                            // Handle other errors
+                            let msg = err.responseJSON && err.responseJSON.error ? err.responseJSON
+                                .error :
+                                (err.responseJSON && err.responseJSON.errors ? Object.values(err
+                                        .responseJSON.errors)[0][0] :
+                                    'Error saving face.');
+                            $('#face_status').html(
+                                '<div class="d-inline-block px-3 py-1 rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"><i class="fa fa-exclamation-circle me-1"></i> ' +
+                                msg + '</div>');
+                        }
+
+                        btn.prop('disabled', false).html('<i class="fa fa-camera"></i> Capture & Save');
+                    }
+                });
+            }
+
 
             // Stop Camera on Close
             $('#faceModal').on('hidden.bs.modal', function() {
@@ -982,206 +1042,5 @@
             </div>
         </div>
     </div>
-    <!-- Isolated Face Logic -->
-    <script>
-        $(document).ready(function() {
-            // Unbind any previous handlers
-            $(document).off('click', '.register-face-btn');
-            $('#btn-capture-face').off('click');
-            $('#faceModal').off('hidden.bs.modal');
-
-            // Global variables
-            let faceStream = null;
-            let isModelsLoaded = false;
-
-            // UI Helper
-            function setStatus(state) {
-                const indicator = $('#status-indicator');
-                indicator.removeClass('yellow green red');
-
-                if (state === 'loading' || state === 'detecting') {
-                    indicator.addClass('yellow');
-                } else if (state === 'ready' || state === 'success') {
-                    indicator.addClass('green');
-                } else if (state === 'error') {
-                    indicator.addClass('red');
-                }
-            }
-
-            // Preload Models
-            const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
-            (async function loadModels() {
-                try {
-                    setStatus('loading');
-                    await Promise.all([
-                        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-                    ]);
-                    isModelsLoaded = true;
-                    console.log("FaceAPI Models Pre-loaded");
-                    setStatus('ready'); // Or reset
-                    setTimeout(() => setStatus('reset'), 1000); // Hide after load
-                } catch (err) {
-                    console.error("Failed to load FaceAPI models", err);
-                    setStatus('error');
-                }
-            })();
-
-            // Open Modal
-            $(document).on('click', '.register-face-btn', function(e) {
-                e.preventDefault();
-                const id = $(this).data('id');
-                const name = $(this).data('name');
-
-                $('#face_employee_id').val(id);
-                $('#faceModalLabel').text('Register Face: ' + name);
-
-                setStatus('loading');
-                $('#faceModal').modal('show');
-
-                startFaceCamera();
-            });
-
-            // Start Camera
-            window.startFaceCamera = async function() {
-                try {
-                    setStatus('loading');
-                    if (typeof faceapi === 'undefined') {
-                        throw new Error("Face API library not loaded!");
-                    }
-
-                    // Check if models are loaded
-                    if (!isModelsLoaded) {
-                        await Promise.all([
-                            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-                        ]);
-                        isModelsLoaded = true;
-                    }
-
-                    if (faceStream) {
-                        faceStream.getTracks().forEach(track => track.stop());
-                    }
-
-                    faceStream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            width: 640,
-                            height: 480,
-                            facingMode: 'user'
-                        }
-                    });
-
-                    const videoEl = document.getElementById('face-video');
-                    if (videoEl) {
-                        videoEl.srcObject = faceStream;
-                        setStatus('ready');
-                        $('#btn-capture-face').prop('disabled', false);
-                    }
-
-                } catch (err) {
-                    let msg = err.message;
-                    if (msg.includes('Permission denied')) msg = "Camera permission denied.";
-
-                    $('#face_status').html(
-                        '<div class="d-inline-block px-3 py-1 rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"><i class="fa fa-exclamation-circle me-1"></i> Error: ' +
-                        msg + '</div>');
-                    setStatus('error');
-                    console.error(err);
-                }
-            };
-
-            // Capture & Save
-            $('#btn-capture-face').on('click', async function() {
-                const btn = $(this);
-                const videoEl = document.getElementById('face-video');
-                const canvasEl = document.getElementById('face-canvas');
-
-                if (!videoEl || !canvasEl) return;
-
-                btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Processing...');
-                setStatus('detecting');
-
-                try {
-                    const detections = await faceapi.detectSingleFace(videoEl, new faceapi
-                            .TinyFaceDetectorOptions())
-                        .withFaceLandmarks()
-                        .withFaceDescriptor();
-
-                    if (!detections) {
-                        $('#face_status').html(
-                            '<div class="d-inline-block px-3 py-1 rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"><i class="fa fa-times-circle me-1"></i> No face detected! Please try again.</div>'
-                        );
-                        setStatus('error');
-                        // Optional: Shake effect or red flash?
-                        setTimeout(() => setStatus('ready'), 1000);
-
-                        btn.prop('disabled', false).html('<i class="fa fa-camera"></i> Capture & Save');
-                        return;
-                    }
-
-                    const context = canvasEl.getContext('2d');
-                    canvasEl.width = videoEl.videoWidth;
-                    canvasEl.height = videoEl.videoHeight;
-                    context.drawImage(videoEl, 0, 0);
-                    const image = canvasEl.toDataURL('image/jpeg');
-
-                    $.ajax({
-                        url: '{{ route('hr.employees.face-register') }}',
-                        type: 'POST',
-                        data: {
-                            _token: '{{ csrf_token() }}',
-                            employee_id: $('#face_employee_id').val(),
-                            descriptor: Array.from(detections
-                                .descriptor),
-                            image: image
-                        },
-                        success: function(res) {
-                            $('#face_status').html(
-                                '<div class="d-inline-block px-3 py-1 rounded-pill bg-success bg-opacity-10 text-success border border-success border-opacity-25"><i class="fa fa-check-circle me-1"></i> ' +
-                                res.success + '</div>');
-                            setStatus('success');
-                            btn.html('<i class="fa fa-check"></i> Saved');
-                            setTimeout(() => {
-                                $('#faceModal').modal('hide');
-                                location.reload();
-                            }, 1000);
-                        },
-                        error: function(err) {
-                            let msg = err.responseJSON && err.responseJSON.errors ? Object
-                                .values(err.responseJSON.errors)[0][0] :
-                                'Error saving face.';
-                            $('#face_status').html(
-                                '<div class="d-inline-block px-3 py-1 rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"><i class="fa fa-exclamation-circle me-1"></i> ' +
-                                msg + '</div>');
-                            setStatus('error');
-                            btn.prop('disabled', false).html(
-                                '<i class="fa fa-camera"></i> Capture & Save');
-                        }
-                    });
-                } catch (err) {
-                    console.error(err);
-                    $('#face_status').html(
-                        '<div class="d-inline-block px-3 py-1 rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"><i class="fa fa-exclamation-circle me-1"></i> Detection Error: ' +
-                        err.message + '</div>');
-                    setStatus('error');
-                    btn.prop('disabled', false).html(
-                        '<i class="fa fa-camera"></i> Capture & Save');
-                }
-            });
-
-            // Stop Camera on Close
-            document.getElementById('faceModal').addEventListener('hidden.bs.modal', function() {
-                if (faceStream) {
-                    faceStream.getTracks().forEach(track => track.stop());
-                    faceStream = null;
-                }
-                setStatus('reset');
-                $('#face_status').empty();
-                $('#btn-capture-face').prop('disabled', true).html(
-                    '<i class="fa fa-camera"></i> Capture & Save');
-            });
-        });
-    </script>
+    <!-- End Face Logic -->
 @endsection

@@ -50,7 +50,7 @@ class SalaryStructureAssignmentController extends Controller
 
         try {
             // Restore functionality with safer query
-            $query = Employee::with(['department', 'designation', 'activeSalaryStructure.salaryStructure']);
+            $query = Employee::with(['department', 'designation', 'activeSalaryStructure']);
             
             // Apply filters
             if ($request->filter_type === 'department') {
@@ -61,6 +61,11 @@ class SalaryStructureAssignmentController extends Controller
 
             $employees = $query->orderBy('first_name')->get();
 
+            \Log::info('Salary Structure Assign - Fetch Employees Query Result:', [
+                'count' => $employees->count(),
+                'first_employee' => $employees->first()
+            ]);
+
             // Add assignment status for this salary structure
             $salaryStructure = SalaryStructure::find($request->salary_structure_id);
             if (!$salaryStructure) {
@@ -70,7 +75,7 @@ class SalaryStructureAssignmentController extends Controller
             // Simplify pluck to avoid potential ambiguity or join issues
             // Fetch validation of assignment via collection to be safe
             // Use relations properly
-            $assignedEmployeeIds = $salaryStructure->assignedEmployees->pluck('id')->toArray();
+            $assignedEmployeeIds = $salaryStructure->assignedEmployees->pluck('employee_id')->toArray();
 
             $employees = $employees->map(function ($employee) use ($assignedEmployeeIds, $request) {
                 // Check if employee is strictly assigned to THIS structure
@@ -79,7 +84,7 @@ class SalaryStructureAssignmentController extends Controller
                 // Check if has another active structure
                 $activeStruct = $employee->activeSalaryStructure;
                 $employee->has_other_structure = $activeStruct && 
-                                                 $activeStruct->salary_structure_id != $request->salary_structure_id;
+                                                 $activeStruct->parent_structure_id != $request->salary_structure_id;
                 
                 return $employee;
             });
@@ -134,12 +139,10 @@ class SalaryStructureAssignmentController extends Controller
                     continue;
                 }
 
-                // Check if already assigned to THIS structure
-                $existingAssignment = EmployeeSalaryStructure::where('employee_id', $employeeId)
-                    ->where('salary_structure_id', $salaryStructure->id)
-                    ->where('is_active', true)
-                    ->whereNull('end_date')
-                    ->first();
+                // Check if already assigned to THIS structure (via child copy)
+                $existingAssignment = SalaryStructure::where('employee_id', $employeeId)
+                    ->where('parent_structure_id', $salaryStructure->id)
+                    ->exists();
 
                 if ($existingAssignment) {
                     $skipped[] = [
@@ -150,27 +153,20 @@ class SalaryStructureAssignmentController extends Controller
                     continue;
                 }
 
-                // End any other active salary structure assignments
-                $otherActiveAssignments = EmployeeSalaryStructure::where('employee_id', $employeeId)
-                    ->where('salary_structure_id', '!=', $salaryStructure->id)
-                    ->where('is_active', true)
-                    ->whereNull('end_date')
-                    ->get();
-
-                foreach ($otherActiveAssignments as $oldAssignment) {
-                    $oldAssignment->endAssignment(Carbon::parse($startDate)->subDay()->toDateString());
-                    $replaced++;
-                }
-
-                // Create new assignment
-                EmployeeSalaryStructure::create([
-                    'employee_id' => $employeeId,
-                    'salary_structure_id' => $salaryStructure->id,
-                    'start_date' => $startDate,
-                    'is_active' => true,
-                    'assigned_by' => auth()->id(),
-                    'notes' => $request->notes,
-                ]);
+                // Create new assignment (Clone Structure)
+                $newStructureData = $salaryStructure->toArray();
+                // Remove ID and timestamps to create clean copy
+                unset($newStructureData['id'], $newStructureData['created_at'], $newStructureData['updated_at']);
+                
+                $newStructureData['employee_id'] = $employeeId;
+                $newStructureData['parent_structure_id'] = $salaryStructure->id;
+                $newStructureData['effective_date'] = $startDate; // Set effective date from request or today
+                
+                // Ensure arrays are preserved (toArray might rely on casts, create expects arrays if cast)
+                // Since casting happens on retrieval, $salaryStructure->allowances is Array. 
+                // SalaryStructure::create expects Array because of casts. Correct.
+                
+                SalaryStructure::create($newStructureData);
 
                 $assigned++;
             }
@@ -212,12 +208,13 @@ class SalaryStructureAssignmentController extends Controller
         }
 
         // Include assignments from Child (Custom) structures
-        $structureIds = $salaryStructure->children()->pluck('id')->push($salaryStructure->id);
-
-        $assignments = EmployeeSalaryStructure::whereIn('salary_structure_id', $structureIds)
-            ->with(['employee.department', 'employee.designation', 'assignedBy', 'salaryStructure'])
-            ->orderBy('is_active', 'desc')
-            ->orderBy('start_date', 'desc')
+        // We look for direct children (assignments) of this structure. 
+        // We also want children of children? No, assignments are direct copies usually.
+        // Actually, assignedEmployees() returns children.
+        
+        $assignments = $salaryStructure->children()
+            ->with(['employee.department', 'employee.designation'])
+            ->orderBy('created_at', 'desc')
             ->paginate(15);
 
         return view('hr.salary-structure.view-assigned', compact('salaryStructure', 'assignments'));
@@ -240,17 +237,17 @@ class SalaryStructureAssignmentController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $assignment = EmployeeSalaryStructure::where('employee_id', $employee->id)
-            ->where('salary_structure_id', $salaryStructure->id)
-            ->where('is_active', true)
-            ->whereNull('end_date')
+        // Find the specific child structure for this employee and delete/detach it
+        $assignment = SalaryStructure::where('employee_id', $employee->id)
+            ->where('parent_structure_id', $salaryStructure->id)
             ->first();
 
         if (!$assignment) {
             return response()->json(['error' => 'Active assignment not found.'], 404);
         }
 
-        $assignment->endAssignment($request->end_date);
+        // Technically we should delete the structure copy
+        $assignment->delete();
 
         return response()->json([
             'success' => 'Salary structure assignment ended successfully.',
@@ -269,9 +266,13 @@ class SalaryStructureAssignmentController extends Controller
         // Get IDs of this structure and all its custom children
         $structureIds = $salaryStructure->children()->pluck('id')->push($salaryStructure->id);
 
-        // Fetch employees who have an ACTIVE assignment to any of these structures
+        // Fetch employees who have an ACTIVE assignment to any of these structures (Children)
+        // Since activeSalaryStructure returns the Child Structure directly, we check if that structure's parent is THIS structure
+        // OR if the structure itself is in the list.
+        
         $assignments = Employee::whereHas('activeSalaryStructure', function($q) use ($structureIds) {
-                $q->whereIn('salary_structure_id', $structureIds);
+                // If the active structure's ID is one of the children (or self)
+                $q->whereIn('id', $structureIds);
             })
             ->with(['department', 'designation', 'activeSalaryStructure'])
             ->orderBy('first_name')
@@ -296,7 +297,7 @@ class SalaryStructureAssignmentController extends Controller
             return redirect()->back()->with('error', 'Employee does not have an active salary structure.');
         }
         
-        $salaryStructure = $currentAssignment->salaryStructure;
+        $salaryStructure = $currentAssignment; // activeSalaryStructure already returns SalaryStructure model
         
         // Prepare view data similar to create/edit
         $readOnly = false;
@@ -401,28 +402,19 @@ class SalaryStructureAssignmentController extends Controller
                 'attendance_deduction_policy' => $attendancePolicy, 
                 'leave_salary_per_day' => $request->leave_salary_per_day,
                 'carry_forward_deductions' => $request->has('carry_forward_deductions') || $request->carry_forward_deductions == '1',
+                'effective_date' => $request->effective_date, // Save effective date
             ]);
 
-            // 3. End Current Active Assignment
+            // 3. Delete Previous Active Structure (Maintenance)
+            // If we are overriding, we can delete the old custom structure if it exists
             if ($activeAssignment) {
-                $endDate = $effectiveDate->copy()->subDay();
-                $activeAssignment->update([
-                    'end_date' => $endDate,
-                    'is_active' => false
-                ]);
+                 // Optional: Delete old one to prevent clutter?
+                 // Or keep logic simple. Active is Latest. Creating new one makes it latest.
+                 // Nothing to do for "End Date".
             }
 
-            // 4. Create New Assignment
-            EmployeeSalaryStructure::create([
-                'employee_id' => $employee->id,
-                'salary_structure_id' => $newStructure->id,
-                'start_date' => $effectiveDate,
-                'is_active' => true,
-                'is_custom' => true,
-                'assigned_by' => auth()->id(),
-                'updated_by' => auth()->id(),
-                'notes' => 'Individual Update: ' . ($request->notes ?? ''),
-            ]);
+            // 4. Create New Assignment (Pivot) - REMOVED
+            // Auto-handled by creating SalaryStructure with employee_id.
 
             DB::commit();
 

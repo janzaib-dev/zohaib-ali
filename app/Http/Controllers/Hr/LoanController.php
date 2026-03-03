@@ -13,8 +13,11 @@ class LoanController extends Controller
 {
     public function index()
     {
-        $loans = Loan::with('employee')->latest()->paginate(12);
-        $employees = Employee::where('status', 'active')->get();
+        $loans = Loan::with('employee.department', 'employee.designation')->latest()->paginate(12);
+        $employees = Employee::where('status', 'active')
+            ->with('department', 'designation')
+            ->orderBy('first_name')
+            ->get();
 
         return view('hr.loans.index', compact('loans', 'employees'));
     }

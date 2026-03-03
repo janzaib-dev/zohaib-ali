@@ -363,7 +363,7 @@
                     },
                     success: function(response) {
                         $('#deviceModal').modal('hide');
-                        Swal.fire('Success!', response.message, 'success').then(() => location
+                        Swal.fire('Success!', response.success, 'success').then(() => location
                             .reload());
                     },
                     error: function(xhr) {
@@ -477,7 +477,7 @@
                                 _token: '{{ csrf_token() }}'
                             },
                             success: function(response) {
-                                Swal.fire('Deleted!', response.message, 'success').then(
+                                Swal.fire('Deleted!', response.success, 'success').then(
                                     () => location.reload());
                             },
                             error: function() {

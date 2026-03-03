@@ -121,6 +121,15 @@ class VoucherService
                 $includeParty = false;
             }
 
+            // Also exclude Party from Income/Expense accounts so it only applies to AR/AP
+            $account = \App\Models\Account::with('head')->find($detail->account_id);
+            if ($account && $account->head) {
+                $headName = strtolower($account->head->name);
+                if (in_array($headName, ['income', 'expenses', 'expense'])) {
+                    $includeParty = false;
+                }
+            }
+
             $this->journalService->recordEntry(
                 $voucher,
                 $detail->account_id,

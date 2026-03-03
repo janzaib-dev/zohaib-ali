@@ -25,7 +25,7 @@
                             class="btn btn-outline-secondary d-flex align-items-center gap-2">
                             <i class="bi bi-cash-stack"></i> Payments
                         </a>
-                        <a href="{{ url('vendor/bilties') }}"
+                        <a href="{{ url('vendors/bilties') }}"
                             class="btn btn-outline-secondary d-flex align-items-center gap-2">
                             <i class="bi bi-truck"></i> Bilty
                         </a>
@@ -82,7 +82,7 @@
                                             <td class="text-center pe-3">
                                                 @include('admin_panel.partials.action_buttons', [
                                                     'editRoute' => 'javascript:void(0)',
-                                                    'deleteRoute' => url('vendor/delete/' . $v->id),
+                                                    'deleteRoute' => url('vendors/delete/' . $v->id),
                                                     'editIsLink' => false,
                                                     'permissions' => [
                                                         'edit' => 'vendors.edit',
@@ -113,7 +113,7 @@
     <div class="modal fade" id="vendorModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg rounded-4">
-                <form action="{{ url('vendor/store') }}" method="POST" id="vendorForm">@csrf
+                <form action="{{ url('vendors/store') }}" method="POST" id="vendorForm">@csrf
                     <input type="hidden" id="vendor_id" name="id">
 
                     <div class="modal-header border-bottom-0 pb-0">

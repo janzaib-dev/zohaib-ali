@@ -27,6 +27,7 @@ class SalaryStructure extends Model
         'attendance_deduction_policy',
         'carry_forward_deductions',
         'leave_salary_per_day',
+        'effective_date',
     ];
 
     protected $casts = [
@@ -36,6 +37,7 @@ class SalaryStructure extends Model
         'deductions' => 'array',
         'attendance_deduction_policy' => 'array',
         'commission_tiers' => 'array',
+        'effective_date' => 'date',
     ];
 
     /**
@@ -50,37 +52,30 @@ class SalaryStructure extends Model
     /**
      * Many-to-many: All employee assignments (history)
      */
-    public function employees()
-    {
-        return $this->belongsToMany(
-            Employee::class,
-            'employee_salary_structures'
-        )->withPivot(['start_date', 'end_date', 'is_active', 'assigned_by', 'notes'])
-         ->withTimestamps()
-         ->using(EmployeeSalaryStructure::class);
-    }
+    // public function employees()
+    // {
+    //     // Pivot table does not exist
+    // }
 
     /**
      * Get only currently assigned employees
      */
+    /**
+     * Get assigned count via child structures (Since pivot table is removed)
+     * For a Template, "Assigned Employees" are equivalent to Child Structures created for employees.
+     */
     public function assignedEmployees()
     {
-        return $this->belongsToMany(
-            Employee::class,
-            'employee_salary_structures'
-        )->wherePivot('is_active', true)
-         ->wherePivotNull('end_date')
-         ->withPivot(['start_date', 'end_date', 'is_active', 'assigned_by', 'notes'])
-         ->withTimestamps();
+        return $this->children();
     }
 
     /**
      * Get all assignment records
      */
-    public function assignments()
-    {
-        return $this->hasMany(EmployeeSalaryStructure::class);
-    }
+    // public function assignments()
+    // {
+    //     return $this->hasMany(EmployeeSalaryStructure::class);
+    // }
 
     /**
      * Get count of currently assigned employees

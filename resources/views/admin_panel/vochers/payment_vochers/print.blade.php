@@ -147,9 +147,10 @@
 
         <header>
             <div class="brand">
-                <h1>Al–Madina Traders</h1>
-                <p>Shop# 2, United Hotel, Qazi Qayoom Road, Hyderabad</p>
-                <p>Mobile / Whatsapp: 0312-0252899; Tel: 022-2780942</p>
+                <h1>Zohaib Ali</h1>
+                <p>SADAR BAZAR, HYDERABAD SINDH
+                    2026</p>
+                <p> </p>
             </div>
             <div class="logo" style="text-align:right;">
                 <img src="{{ asset('amt-logo.png') }}" alt="AMT Logo" style="max-width:200px;"

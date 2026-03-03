@@ -44,12 +44,21 @@
                         </div>
                         <div class="col-md-4">
                             <label>Zone:</label>
-                            <select class="form-control" name="zone">
-                                <option value="Hyderabad" {{ $customer->zone == 'Hyderabad' ? 'selected' : '' }}>Hyderabad
-                                </option>
-                                <option value="Karachi" {{ $customer->zone == 'Karachi' ? 'selected' : '' }}>Karachi
-                                </option>
-                            </select>
+                            <div class="d-flex w-100 gap-1">
+                                <select class="form-control" name="zone" id="zone_select" style="flex: 1;">
+                                    <option value="">-- Select Zone --</option>
+                                    @foreach ($zones as $z)
+                                        <option value="{{ $z->zone }}"
+                                            {{ $customer->zone == $z->zone ? 'selected' : '' }}>{{ $z->zone }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <button type="button"
+                                    class="btn btn-primary d-flex align-items-center justify-content-center"
+                                    style="margin-left: 5px;" onclick="$('#zoneModal').modal('show')">
+                                    <i class="fa fa-plus"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -113,4 +122,62 @@
         </div>
     </div>
     </div>
+
+    <!-- Zone Modal -->
+    <div class="modal fade" id="zoneModal" tabindex="-1" aria-labelledby="zoneModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="zoneForm">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="zoneModalLabel">Add New Zone</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                            onclick="$('#zoneModal').modal('hide')"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Zone Name</label>
+                            <input type="text" name="zone" class="form-control" id="new_zone_name" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
+                            onclick="$('#zoneModal').modal('hide')">Close</button>
+                        <button type="submit" class="btn btn-primary">Save Zone</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#zoneForm').submit(function(e) {
+                e.preventDefault();
+                let newZone = $('#new_zone_name').val();
+                if (!newZone) return;
+
+                $.ajax({
+                    url: "{{ route('zone.store') }}",
+                    type: "POST",
+                    data: $(this).serialize(),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            // Append new zone to select and select it
+                            $('#zone_select').append('<option value="' + newZone +
+                                '" selected>' + newZone + '</option>');
+                            $('#zoneModal').modal('hide');
+                            $('#zoneForm')[0].reset();
+                            alert("Zone added successfully!");
+                        }
+                    },
+                    error: function(err) {
+                        alert("Error adding zone. Make sure it isn't empty.");
+                        console.error(err);
+                    }
+                });
+            });
+        });
+    </script>
 @endsection

@@ -54,9 +54,21 @@
                             </p>
                         </div>
                         <div class="text-end">
-                            <h3 class="{{ $account->current_balance >= 0 ? 'balance-positive' : 'balance-negative' }}">
-                                {{ number_format(abs($account->current_balance), 2) }}
-                                <small class="fs-6 text-muted">{{ $account->current_balance >= 0 ? 'Dr' : 'Cr' }}</small>
+                            @php
+                                $bal = $account->calculated_balance;
+                                $isNegative = $bal < 0;
+                                $displaySuffix =
+                                    $account->type === 'Debit'
+                                        ? ($isNegative
+                                            ? 'Cr'
+                                            : 'Dr')
+                                        : ($isNegative
+                                            ? 'Dr'
+                                            : 'Cr');
+                            @endphp
+                            <h3 class="{{ $isNegative ? 'balance-negative' : 'balance-positive' }}">
+                                {{ number_format(abs($bal), 2) }}
+                                <small class="fs-6 text-muted">{{ $displaySuffix }}</small>
                             </h3>
                             <span class="badge bg-secondary">Current Balance</span>
                         </div>
@@ -109,20 +121,38 @@
                                         // For now, assume full load or straight calculation.
                                     @endphp
 
-                                    {{-- Opening Balance Row --}}
                                     <tr class="bg-light">
                                         <td colspan="5" class="text-end fw-bold">Opening Balance</td>
-                                        <td class="text-end fw-bold">{{ number_format($runningBalance, 2) }}</td>
+                                        <td class="text-end fw-bold">
+                                            @php
+                                                $isNegOp = $runningBalance < 0;
+                                                $sufOp =
+                                                    $account->type === 'Debit'
+                                                        ? ($isNegOp
+                                                            ? 'Cr'
+                                                            : 'Dr')
+                                                        : ($isNegOp
+                                                            ? 'Dr'
+                                                            : 'Cr');
+                                            @endphp
+                                            {{ number_format(abs($runningBalance), 2) }}
+                                            <small class="text-muted">{{ $sufOp }}</small>
+                                        </td>
                                     </tr>
 
                                     @foreach ($entries as $entry)
                                         @php
                                             $debit = $entry->debit ?? 0;
                                             $credit = $entry->credit ?? 0;
-                                            // Standard Logic: Asset/Expense (Debit normal) -> Bal + Dr - Cr.
-                                            // Liability/Income (Credit normal) -> Bal + Cr - Dr.
-                                            // Or Simplified: Balance = Balance + Debit - Credit (and interpret sign).
-                                            $runningBalance = $runningBalance + $debit - $credit;
+
+                                            // Handle balance calculation based on account type
+                                            if ($account->type === 'Credit') {
+                                                // Liability/Income/Equity -> Bal + Cr - Dr.
+                                                $runningBalance = $runningBalance + $credit - $debit;
+                                            } else {
+                                                // Asset/Expense (Debit normal) -> Bal + Dr - Cr.
+                                                $runningBalance = $runningBalance + $debit - $credit;
+                                            }
 
                                             $voucherNo = '-';
                                             if ($entry->source && $entry->source->voucher_no) {
@@ -148,8 +178,19 @@
                                             <td class="text-end text-danger">
                                                 {{ $credit > 0 ? number_format($credit, 2) : '-' }}</td>
                                             <td class="text-end fw-bold">
+                                                @php
+                                                    $isNeg = $runningBalance < 0;
+                                                    $suf =
+                                                        $account->type === 'Debit'
+                                                            ? ($isNeg
+                                                                ? 'Cr'
+                                                                : 'Dr')
+                                                            : ($isNeg
+                                                                ? 'Dr'
+                                                                : 'Cr');
+                                                @endphp
                                                 {{ number_format(abs($runningBalance), 2) }}
-                                                <small class="text-muted">{{ $runningBalance >= 0 ? 'Dr' : 'Cr' }}</small>
+                                                <small class="text-muted">{{ $suf }}</small>
                                             </td>
                                         </tr>
                                     @endforeach
@@ -159,7 +200,21 @@
                                         <td colspan="3" class="text-end">Total Period</td>
                                         <td class="text-end">{{ number_format($entries->sum('debit'), 2) }}</td>
                                         <td class="text-end">{{ number_format($entries->sum('credit'), 2) }}</td>
-                                        <td class="text-end">{{ number_format(abs($runningBalance), 2) }}</td>
+                                        <td class="text-end">
+                                            @php
+                                                $isNegFin = $runningBalance < 0;
+                                                $sufFin =
+                                                    $account->type === 'Debit'
+                                                        ? ($isNegFin
+                                                            ? 'Cr'
+                                                            : 'Dr')
+                                                        : ($isNegFin
+                                                            ? 'Dr'
+                                                            : 'Cr');
+                                            @endphp
+                                            {{ number_format(abs($runningBalance), 2) }}
+                                            <small class="text-muted">{{ $sufFin }}</small>
+                                        </td>
                                     </tr>
                                 </tfoot>
                             </table>

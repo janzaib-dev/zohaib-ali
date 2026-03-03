@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BiometricDevice;
 use App\Services\BiometricDeviceService;
 use App\Services\BiometricSyncService;
+use App\Jobs\Hr\SyncBiometricDataJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 
@@ -56,16 +57,16 @@ class BiometricDeviceController extends Controller
 
         if ($testResult['success']) {
             return response()->json([
-                'success' => true,
-                'message' => 'Device added and connection verified successfully!',
-                'device' => $device,
+                'success' => 'Device added and connection verified successfully!',
+                'reload' => true,
             ]);
         } else {
+            // Return as 200 but with warning message in success (since device IS created)
+            // Or ideally we should probably use a warning type, but for now success with detailed msg
             return response()->json([
-                'success' => false,
-                'message' => 'Device added but connection failed: ' . $testResult['message'],
-                'device' => $device,
-            ], 422);
+                'success' => 'Device added but connection failed: ' . $testResult['message'],
+                'reload' => true,
+            ]);
         }
     }
 
@@ -95,9 +96,8 @@ class BiometricDeviceController extends Controller
         $device->update($validated);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Device updated successfully!',
-            'device' => $device,
+            'success' => 'Device updated successfully!',
+            'reload' => true,
         ]);
     }
 
@@ -109,8 +109,8 @@ class BiometricDeviceController extends Controller
         $device->delete();
 
         return response()->json([
-            'success' => true,
-            'message' => 'Device deleted successfully!',
+            'success' => 'Device deleted successfully!',
+            'reload' => true,
         ]);
     }
 
@@ -151,6 +151,32 @@ class BiometricDeviceController extends Controller
             'message' => $result['message'],
             'created' => $result['created'] ?? 0,
             'skipped' => $result['skipped'] ?? 0,
+        ]);
+    }
+
+    /**
+     * Pull attendance logs from device in background
+     */
+    public function pullAttendanceBackground(BiometricDevice $device)
+    {
+        SyncBiometricDataJob::dispatch($device->id, auth()->id(), 'attendance');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Attendance sync started in background. You will be notified when completed.',
+        ]);
+    }
+
+    /**
+     * Sync all employees to device in background
+     */
+    public function syncEmployeesBackground(BiometricDevice $device)
+    {
+        SyncBiometricDataJob::dispatch($device->id, auth()->id(), 'employees');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Employee sync started in background. You will be notified when completed.',
         ]);
     }
 }

@@ -143,16 +143,16 @@ Route::middleware('auth')->group(function () {
     Route::delete('/customer-payments/{id}', [CustomerController::class, 'destroy_payment'])->name('customer.payments.destroy');
 
     // Vendor Routes
-    Route::get('/vendor', [VendorController::class, 'index'])->middleware('permission:vendors.view')->name('vendors.index');
-    Route::post('/vendor/store', [VendorController::class, 'store'])->name('vendors.store.ajax')->middleware('permission:vendors.create|vendors.edit');
-    Route::get('/vendor/delete/{id}', [VendorController::class, 'delete'])->middleware('permission:vendors.delete');
+    Route::get('/vendors', [VendorController::class, 'index'])->middleware('permission:vendors.view')->name('vendors.index');
+    Route::post('/vendors/store', [VendorController::class, 'store'])->name('vendors.store.ajax')->middleware('permission:vendors.create|vendors.edit');
+    Route::get('/vendors/delete/{id}', [VendorController::class, 'delete'])->middleware('permission:vendors.delete');
     Route::get('/vendors-ledger', [VendorController::class, 'vendors_ledger'])->middleware('permission:vendors.view')->name('vendors-ledger');
-    Route::get('/vendor/payments', [VendorController::class, 'vendor_payments'])->middleware('permission:vendors.view')->name('vendor.payments');
-    Route::post('/vendor/payments', [VendorController::class, 'store_vendor_payment'])->middleware('permission:vendors.create')->name('vendor.payments.store');
-    Route::get('/vendor/bilties', [VendorController::class, 'vendor_bilties'])->middleware('permission:vendors.view')->name('vendor.bilties');
-    Route::post('/vendor/bilties', [VendorController::class, 'store_vendor_bilty'])->middleware('permission:vendors.create')->name('vendor.bilties.store');
-    Route::get('/vendor/{vendor}/ledger', [VendorController::class, 'ledger'])->middleware('permission:vendors.view')->name('vendor.ledger');
-    Route::get('/vendor/{vendor}/balance', [VendorController::class, 'getVendorBalance'])->name('vendor.balance');
+    Route::get('/vendors/payments', [VendorController::class, 'vendor_payments'])->middleware('permission:vendors.view')->name('vendor.payments');
+    Route::post('/vendors/payments', [VendorController::class, 'store_vendor_payment'])->middleware('permission:vendors.create')->name('vendor.payments.store');
+    Route::get('/vendors/bilties', [VendorController::class, 'vendor_bilties'])->middleware('permission:vendors.view')->name('vendor.bilties');
+    Route::post('/vendors/bilties', [VendorController::class, 'store_vendor_bilty'])->middleware('permission:vendors.create')->name('vendor.bilties.store');
+    Route::get('/vendors/{vendor}/ledger', [VendorController::class, 'ledger'])->middleware('permission:vendors.view')->name('vendor.ledger');
+    Route::get('/vendors/{vendor}/balance', [VendorController::class, 'getVendorBalance'])->name('vendor.balance');
 
     // Warehouse Routes
     // ///
@@ -362,6 +362,11 @@ Route::middleware('auth')->group(function () {
     Route::get('report/customer-ledger/fetch', [ReportingController::class, 'fetch_customer_ledger'])->middleware('permission:customer.ledger.view')->name('report.customer.ledger.fetch');
 
     Route::get('reports/onhand', [ReportingController::class, 'onhand'])->middleware('permission:inventory.onhand.view')->name('reports.onhand');
+    
+    Route::get('reports/warehouse-stock', [ReportingController::class, 'warehouse_report'])->middleware('permission:item.stock.report.view')->name('report.warehouse');
+    Route::post('reports/warehouse-stock/fetch', [ReportingController::class, 'fetchWarehouseReport'])->middleware('permission:item.stock.report.view')->name('report.warehouse.fetch');
+
+    Route::get('reports/profit-loss', [ReportingController::class, 'profitLoss'])->name('reports.profit_loss');
 
     // Return modules list for permission dropdowns (AJAX)
     Route::get('/modules/list', function () {

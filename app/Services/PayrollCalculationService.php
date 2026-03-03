@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Hr\Attendance;
 use App\Models\Hr\Employee;
-use App\Models\Hr\EmployeeSalaryStructure;
 use App\Models\Hr\Payroll;
 use App\Models\Hr\PayrollDetail;
 use App\Models\Hr\SalaryStructure;
@@ -14,35 +13,17 @@ class PayrollCalculationService
 {
     /**
      * Get the effective salary structure for an employee
-     * Handles custom/edited structures vs template structures
+     * Uses the direct salaryStructure relationship
      */
     public function getEffectiveSalaryStructure(Employee $employee): ?SalaryStructure
     {
-        // Get the active assignment
-        $activeAssignment = EmployeeSalaryStructure::where('employee_id', $employee->id)
-            ->where('is_active', true)
-            ->whereNull('end_date')
-            ->with('salaryStructure')
-            ->latest('start_date')
-            ->first();
-
-        if (! $activeAssignment || ! $activeAssignment->salaryStructure) {
-            // Fallback to legacy relationship
-            return $employee->salaryStructure;
-        }
-
-        $structure = $activeAssignment->salaryStructure;
-
-        // If this is a custom assignment, check if there's a child structure for this employee
-        if ($activeAssignment->is_custom) {
-            // Look for an employee-specific child structure
-            $customStructure = SalaryStructure::where('parent_structure_id', $structure->id)
-                ->where('employee_id', $employee->id)
-                ->first();
-
-            if ($customStructure) {
-                return $customStructure;
-            }
+        // Use the direct salaryStructure relationship
+        // This will use the hasOne relationship defined in Employee model
+        $structure = $employee->salaryStructure()->first();
+        
+        if (!$structure) {
+            // Try the legacy relationship as fallback
+            $structure = SalaryStructure::where('employee_id', $employee->id)->first();
         }
 
         return $structure;
@@ -79,7 +60,7 @@ class PayrollCalculationService
             $details[] = [
                 'name' => $name,
                 'amount' => $amount,
-                'type' => $type,
+                'calculation_type' => $type,
                 'description' => $description,
             ];
         }
@@ -316,8 +297,25 @@ class PayrollCalculationService
         // Add attendance deduction details to deduction details
         $allDeductionDetails = array_merge($fixedDeductionDetails, $attendanceDeductionData['details']);
 
-        // Calculate gross salary
-        $grossSalary = $baseSalary + $activeAllowances;
+        // Calculate commission from sales
+        $commission = 0;
+        if (in_array($structure->salary_type, ['commission', 'both'])) {
+            $commissionData = $this->calculateSalesCommission($employee, $month, $structure);
+            $commission = $commissionData['total'];
+            
+            // Add commission to allowance details
+            if ($commission > 0) {
+                $allowanceDetails[] = [
+                    'name' => 'Sales Commission',
+                    'amount' => $commission,
+                    'type' => 'commission',
+                    'description' => $commissionData['description'] ?? 'Commission from sales',
+                ];
+            }
+        }
+
+        // Calculate gross salary (includes commission)
+        $grossSalary = $baseSalary + $activeAllowances + $commission;
 
         // Calculate total deductions
         $totalDeductions = $activeFixedDeductions + $attendanceDeductions;
@@ -337,6 +335,7 @@ class PayrollCalculationService
             'manual_allowances' => 0,
             'carried_forward_deduction' => 0,
             'bonuses' => 0,
+            'commission' => $commission,
             'net_salary' => $netSalary,
             'auto_generated' => true,
             'status' => 'generated',
@@ -531,7 +530,7 @@ class PayrollCalculationService
         foreach ($allowanceDetails as $detail) {
             PayrollDetail::create([
                 'payroll_id' => $payroll->id,
-                'type' => 'allowance',
+                'type' => $detail['type'] ?? 'allowance',
                 'name' => $detail['name'],
                 'amount' => $detail['amount'],
                 'description' => $detail['description'] ?? null,
@@ -558,5 +557,93 @@ class PayrollCalculationService
         $employee->update([
             'pending_deductions' => $newPendingDeductions,
         ]);
+    }
+
+    /**
+     * Calculate sales commission for an employee for a given month
+     */
+    public function calculateSalesCommission(Employee $employee, string $month, SalaryStructure $structure): array
+    {
+        // Get all sales for this employee in the specified month
+        $sales = \App\Models\Sale::where('employee_id', $employee->id)
+            ->whereYear('created_at', substr($month, 0, 4))
+            ->whereMonth('created_at', substr($month, 5, 2))
+            ->get();
+
+        if ($sales->isEmpty()) {
+            return [
+                'total' => 0,
+                'description' => 'No sales for this month',
+            ];
+        }
+
+        $totalCommission = 0;
+        $totalSales = 0;
+        $salesCount = $sales->count();
+
+        // Check if commission is already calculated and stored in sales
+        $storedCommission = $sales->sum('commission_amount');
+        
+        if ($storedCommission > 0) {
+            // Use pre-calculated commission from sales records
+            $totalCommission = $storedCommission;
+            $totalSales = $sales->sum('total_net');
+        } else {
+            // Calculate commission based on structure
+            $totalSales = $sales->sum('total_net');
+
+            if ($structure->commission_tiers && count($structure->commission_tiers) > 0) {
+                // Tiered commission
+                $totalCommission = $structure->calculateTieredCommission($totalSales);
+            } elseif ($structure->commission_percentage > 0) {
+                // Flat percentage
+                $totalCommission = ($totalSales * $structure->commission_percentage) / 100;
+            }
+        }
+
+        return [
+            'total' => $totalCommission,
+            'description' => sprintf(
+                'Commission from %d sale(s) totaling Rs. %s',
+                $salesCount,
+                number_format($totalSales, 2)
+            ),
+            'sales_count' => $salesCount,
+            'total_sales' => $totalSales,
+        ];
+    }
+    /**
+     * Generate (Calculate and Save) monthly payroll for an employee
+     */
+    public function generateMonthlyPayrollForEmployee(Employee $employee, string $month): ?Payroll
+    {
+        // 1. Check if already exists
+        $exists = Payroll::where('employee_id', $employee->id)
+            ->where('month', $month)
+            ->where('payroll_type', 'monthly') // Assuming 'monthly' is the type or check existing logic
+            ->exists();
+
+        if ($exists) {
+            return null; // Already generated
+        }
+
+        // 2. Calculate
+        $payrollData = $this->calculateMonthlyPayroll($employee, $month);
+
+        // 3. Create Payroll Record
+        $payroll = Payroll::create(array_merge(
+            ['employee_id' => $employee->id],
+            \Illuminate\Support\Arr::except($payrollData, ['allowance_details', 'deduction_details', 'breakdown', 'attendance_breakdown'])
+        ));
+        // Note: allowance_details, deduction_details are stripped. breakdown/attendance_breakdown might also need stripping if not in fillable
+
+        // 4. Save Details
+        $this->savePayrollDetails(
+            $payroll,
+            $payrollData['allowance_details'] ?? [],
+            $payrollData['deduction_details'] ?? []
+        );
+
+        return $payroll;
     }
 }

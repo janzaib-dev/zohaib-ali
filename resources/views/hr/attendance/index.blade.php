@@ -759,6 +759,11 @@
         setInterval(updateCountdowns, 1000);
 
         $(document).ready(function() {
+            console.log('Document ready - jQuery loaded successfully');
+            console.log('Looking for #pullAttendanceBtn...');
+            console.log('Button found:', $('#pullAttendanceBtn').length > 0);
+            console.log('Button element:', $('#pullAttendanceBtn'));
+
             // Initialize state for absent/leave rows on load
             $('.attendance-card.absent, .attendance-card.leave').each(function() {
                 let card = $(this);
@@ -823,21 +828,64 @@
                 });
             });
 
-            // Pull Attendance Button
-            $('#pullAttendanceBtn').click(function() {
+            // Pull Attendance Button - Using event delegation in case button is added dynamically
+            $(document).on('click', '#pullAttendanceBtn', function(e) {
+                e.preventDefault();
+                console.log('Pull Attendance button clicked');
                 let btn = $(this);
+                let originalHtml = btn.html();
+
                 btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Pulling...');
-                $.post("{{ route('hr.attendance.pull') }}", {
+
+                console.log('Sending POST request to:', "{{ route('hr.attendance.pull') }}");
+
+                $.ajax({
+                    url: "{{ route('hr.attendance.pull') }}",
+                    method: 'POST',
+                    data: {
                         _token: "{{ csrf_token() }}"
-                    })
-                    .done(function(res) {
-                        Swal.fire('Success', res.message, 'success').then(() => location.reload());
-                    })
-                    .fail(function(xhr) {
-                        Swal.fire('Error', xhr.responseJSON?.error || 'Failed to pull.', 'error');
-                        btn.prop('disabled', false).html(
-                            '<i class="fa fa-sync me-1"></i> Pull Attendance');
-                    });
+                    },
+                    success: function(res) {
+                        console.log('Pull Attendance Success:', res);
+                        Swal.fire({
+                            title: 'Success!',
+                            text: res.message || 'Attendance pulled successfully',
+                            icon: 'success',
+                            timer: 3000
+                        }).then(() => location.reload());
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Pull Attendance Error:', {
+                            status: xhr.status,
+                            statusText: xhr.statusText,
+                            responseText: xhr.responseText,
+                            error: error
+                        });
+
+                        let errorMessage = 'Failed to pull attendance.';
+
+                        if (xhr.status === 403) {
+                            errorMessage =
+                                'You do not have permission to pull attendance from devices.';
+                        } else if (xhr.status === 500) {
+                            errorMessage = xhr.responseJSON?.error ||
+                                'Server error occurred. Check if biometric devices are configured and accessible.';
+                        } else if (xhr.responseJSON?.error) {
+                            errorMessage = xhr.responseJSON.error;
+                        } else if (xhr.responseJSON?.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+
+                        Swal.fire({
+                            title: 'Error',
+                            text: errorMessage,
+                            icon: 'error',
+                            confirmButtonText: 'OK'
+                        });
+
+                        btn.prop('disabled', false).html(originalHtml);
+                    }
+                });
             });
 
             // Mark Absent Button

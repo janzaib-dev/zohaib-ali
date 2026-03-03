@@ -1,5 +1,3 @@
-
-
 <script>
     /* =========================================
        SHARED SALES LOGIC (Add/Edit)
@@ -92,8 +90,8 @@
         let stock = repo.stock !== undefined ? repo.stock : 0;
         let sku = repo.sku || 'N/A';
         let badgeClass = stock > 0 ? 'bg-success' : 'bg-danger';
-            console.log(repo);
-            
+        console.log(repo);
+
         return $(`
         <div class="clearfix">
             <div class="float-start">
@@ -195,7 +193,7 @@
 
     <!-- Price/Piece -->
     <td class="col-price-p">
-      <input type="text" class="form-control visible-price text-end input-readonly" name="visible_price[]" readonly placeholder="0.00" tabindex="-1">
+      <input type="text" class="form-control visible-price text-end" name="visible_price[]" placeholder="0.00">
       <input type="hidden" class="price-per-piece" name="price_per_piece[]">
       <input type="hidden" class="retail-price"> <!-- Hidden retail/box price storage if needed -->
     </td>
@@ -349,9 +347,9 @@
 
         // Gross Calc
         // Logic: if mode=by_carton, use box price?
-        // Prioritize `price-per-piece` (hidden) if available, or fall back.
-        let unitPrice = toNum($row.find('.price-per-piece').val());
-        if (unitPrice <= 0) unitPrice = visiblePrice; // fallback
+        // Prioritize `.visible-price` which the user can now edit.
+        let unitPrice = visiblePrice;
+        if (unitPrice <= 0) unitPrice = toNum($row.find('.price-per-piece').val()); // fallback
 
         let gross = 0;
 
@@ -522,22 +520,41 @@
         });
     }
 
-    function postNow() {
+    function postNow(returnUrlTemplate = null, openInNewTab = false, dualOpenTemplate = null) {
         let formData = $('#saleForm').serializeArray();
         formData = formData.filter(item => item.name !== '_method');
 
         $.post('{{ route('sales.post_final') }}', $.param(formData))
             .done(function(res) {
                 if (res?.ok) {
-                    window.open(res.invoice_url, '_blank');
                     Swal.fire({
                         title: 'Success!',
-                        text: 'Posted & invoice opened',
+                        text: 'Posted & opening document(s)',
                         icon: 'success',
-                        timer: 2000,
+                        timer: 1500,
                         showConfirmButton: false
                     });
-                    setTimeout(() => window.location.href = "{{ route('sale.index') }}", 2000);
+
+                    let targetUrl = returnUrlTemplate ?
+                        returnUrlTemplate.replace(':id', res.booking_id) :
+                        res.invoice_url;
+
+                    if (dualOpenTemplate) {
+                        let secondUrl = dualOpenTemplate.replace(':id', res.booking_id);
+                        window.open(secondUrl, '_blank');
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 500);
+                    } else if (openInNewTab) {
+                        window.open(targetUrl, '_blank');
+                        setTimeout(() => {
+                            window.location.href = "{{ route('sale.index') }}";
+                        }, 500);
+                    } else {
+                        setTimeout(() => {
+                            window.location.href = targetUrl;
+                        }, 500);
+                    }
                 } else {
                     Swal.fire('Post Failed', res.msg || 'Post failed', 'error');
                 }
@@ -787,13 +804,13 @@
         // ... existing bindings ...
 
         // Inputs -> Calc
-        $(document).on('input', '.sales-qty, .pack-qty, .loose-pieces, .discount-value',
+        $(document).on('input', '.sales-qty, .pack-qty, .loose-pieces, .discount-value, .visible-price',
             function() {
                 if ($(this).hasClass('sales-qty')) {
                     normalizeQtyInput($(this), $(this).closest('tr'));
                 }
 
-                computeRow($(this).closest('tr'));
+                computeRow($(this).closest('tr'), false);
                 updateGrandTotals();
                 refreshPostedState();
             });

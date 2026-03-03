@@ -63,17 +63,18 @@ class PurchaseController extends Controller
         
         // Calculate updated amounts after returns
         $Purchase->each(function ($purchase) {
-            // Calculate total returned amount for this purchase
             $totalReturned = $purchase->returns->sum('net_amount');
-            
-            // Store calculated values as attributes
-            $purchase->total_returned = $totalReturned;
-            $purchase->updated_net_amount = max(0, $purchase->net_amount - $totalReturned);
-            $purchase->updated_due_amount = max(0, $purchase->due_amount - $totalReturned);
-            
-            // Check if fully returned
-            $purchase->is_fully_returned = $totalReturned >= $purchase->net_amount;
-            $purchase->has_partial_return = $totalReturned > 0 && $totalReturned < $purchase->net_amount;
+
+            // Returnable base excludes extra_cost (non-refundable)
+            $returnableBase = max(0, (float)$purchase->net_amount - (float)$purchase->extra_cost);
+
+            $purchase->total_returned       = $totalReturned;
+            $purchase->updated_net_amount   = max(0, $returnableBase - $totalReturned);
+            $purchase->updated_due_amount   = max(0, $purchase->due_amount - $totalReturned);
+
+            // Full / partial based on the returnable base only
+            $purchase->is_fully_returned  = $totalReturned >= $returnableBase;
+            $purchase->has_partial_return = $totalReturned > 0 && $totalReturned < $returnableBase;
         });
 
         return view('admin_panel.purchase.index', compact('Purchase'));
@@ -90,15 +91,14 @@ class PurchaseController extends Controller
 
     public function add_purchase()
     {
-        // $userId = Auth::id();
-        $Purchase = Purchase::get();
-        $Vendor = Vendor::get();
-        $Warehouse = Warehouse::get();
-        // Filter accounts to only show Cash (1) and Bank (2) heads to prevent logic errors
-        $accounts = app(\App\Services\BalanceService::class)->getPaymentAccounts();
+        $Purchase    = Purchase::get();
+        $Vendor      = Vendor::get();
+        $Warehouse   = Warehouse::get();
+        $accounts    = app(\App\Services\BalanceService::class)->getPaymentAccounts();
+        $nextInvoice = Purchase::generateInvoiceNo(); // e.g. PINV-2026-00003
 
-        // Return new V2 view
-        return view('admin_panel.purchase.add_purchase_v2', compact('Vendor', 'Warehouse', 'Purchase', 'accounts'));
+        return view('admin_panel.purchase.add_purchase_v2',
+            compact('Vendor', 'Warehouse', 'Purchase', 'accounts', 'nextInvoice'));
     }
 
     private function approvePurchase(Purchase $purchase)
@@ -254,13 +254,15 @@ class PurchaseController extends Controller
         // Wrap in transaction... to allow returning $purchase outside
         $purchase = DB::transaction(function () use ($validated, $request, $gatepass) {
 
-            // invoice number
-            $lastInvoice = Purchase::latest()->value('invoice_no');
-            $nextInvoice = $lastInvoice
-                ? 'INV-'.str_pad(((int) filter_var($lastInvoice, FILTER_SANITIZE_NUMBER_INT)) + 1, 5, '0', STR_PAD_LEFT)
-                : 'INV-00001';
+            // invoice number — use the centralised PINV-YYYY-XXXXX generator.
+            // If the user typed a custom vendor reference in a different field we honour it;
+            // the readonly system field always echoes back a PINV number so we re-generate
+            // inside the transaction to avoid race-conditions.
+            $invoiceNo = (!empty($validated['invoice_no']) && !str_starts_with($validated['invoice_no'], 'PINV-'))
+                ? $validated['invoice_no']          // genuinely custom/manual ref
+                : Purchase::generateInvoiceNo();    // auto PINV-XXXXX
 
-            $branchId = (int) ($validated['branch_id'] ?? 1);                 // ✅ use real branch
+            $branchId    = (int) ($validated['branch_id'] ?? 1);
             $warehouseId = (int) $validated['warehouse_id'];
 
             // Status Logic
@@ -268,18 +270,18 @@ class PurchaseController extends Controller
 
             // create header
             $purchase = Purchase::create([
-                'branch_id' => $branchId,
-                'warehouse_id' => $warehouseId,
-                'vendor_id' => $validated['vendor_id'] ?? null,
-                'purchase_date' => $validated['purchase_date'] ?? now(),
-                'invoice_no' => $validated['invoice_no'] ?? $nextInvoice,
-                'note' => $validated['note'] ?? null,
-                'subtotal' => 0,
-                'discount' => 0,
-                'extra_cost' => 0,
-                'net_amount' => 0,
-                'paid_amount' => 0,
-                'due_amount' => 0,
+                'branch_id'       => $branchId,
+                'warehouse_id'    => $warehouseId,
+                'vendor_id'       => $validated['vendor_id'] ?? null,
+                'purchase_date'   => $validated['purchase_date'] ?? now(),
+                'invoice_no'      => $invoiceNo,
+                'note'            => $validated['note'] ?? null,
+                'subtotal'        => 0,
+                'discount'        => 0,
+                'extra_cost'      => 0,
+                'net_amount'      => 0,
+                'paid_amount'     => 0,
+                'due_amount'      => 0,
                 'status_purchase' => $status,
             ]);
 
@@ -1118,6 +1120,16 @@ class PurchaseController extends Controller
             'payment_amount' => 'nullable|array',
         ]);
 
+        // Prevent identical duplicate submissions within a short timeframe
+        if (!empty($validated['purchase_id'])) {
+            $duplicate = PurchaseReturn::where('purchase_id', $validated['purchase_id'])
+                ->where('created_at', '>=', now()->subSeconds(15))
+                ->exists();
+            if ($duplicate) {
+                return redirect()->route('purchase.return.index')->with('success', 'Purchase return processed successfully. (Duplicate request ignored)');
+            }
+        }
+
         try {
             DB::beginTransaction();
 
@@ -1271,54 +1283,40 @@ class PurchaseController extends Controller
                 // Let's stick to simple ledger updates for Refund part unless we upgrade Service for Vendor Receipts.
                 // The requested flow: Return -> Reduces Payable. Refund -> Increases Payable (since they paid us back).
                 
+                $voucherService = app(\App\Services\VoucherService::class);
+                $apId = app(\App\Services\BalanceService::class)->getAccountsPayableId();
+
                 foreach ($request->payment_account_id as $idx => $accId) {
                     $amt = (float) ($request->payment_amount[$idx] ?? 0);
                     if ($accId && $amt > 0) {
                         $totalPaid += $amt;
-                        
-                         // Create Receipt Voucher (Cash In)
-                         // We can use a simple wrapper or manual insert if TransactionService specific for Customers.
-                         // Let's use TransactionService->createReceiptFromSale logic but adapted for Vendor Refund? 
-                         // No, let's create a specific Receipt Voucher here for accuracy.
-                         // Dr Cash, Cr Vendor.
-                         
-                        $rv = \App\Models\VoucherMaster::create([
-                            'voucher_type' => \App\Models\VoucherMaster::TYPE_RECEIPT,
-                            'date' => $validated['return_date'],
-                            'status' => 'posted',
-                            'party_type' => \App\Models\Vendor::class,
-                            'party_id' => $validated['vendor_id'],
-                            'total_amount' => $amt,
-                            'remarks' => "Refund for Return #{$nextInvoice}",
-                        ]);
-                        
-                        // Dr Cash
-                        \App\Models\VoucherDetail::create([
-                             'voucher_master_id' => $rv->id,
-                             'account_id' => $accId, 
-                             'debit' => $amt,
-                             'credit' => 0,
-                             'narration' => 'Cash Refund Received'
-                        ]);
-                        
-                        // Cr Vendor (Accounts Payable - Reducing the Debit Note effect on Ledger, or just Record money in)
-                        // Actually, Refund means Vendor gave money. 
-                        // Accounts Payable is Liability (Credit). Debit reduces Liability.
-                        // Return (Debit Note) = Debit AP.
-                        // Refund = Cash Debit, Credit AP (Liability goes back up because they paid us? No.)
-                        // Refund clears the "Debit Balance" we created on Vendor. 
-                        // If we returned goods, Vendor owes us. (Debit Balance).
-                        // They pay us cash. Cash Debit. Vendor Credit (Receivable decreases).
-                        // So yes, Credit Vendor Account.
-                        
-                         $apId = app(\App\Services\BalanceService::class)->getAccountsPayableId();
-                         \App\Models\VoucherDetail::create([
-                             'voucher_master_id' => $rv->id,
-                             'account_id' => $apId, 
-                             'debit' => 0,
-                             'credit' => $amt,
-                             'narration' => 'Refund from Vendor'
-                        ]);
+
+                        $voucherService->createVoucher(
+                            [
+                                'voucher_type' => \App\Models\VoucherMaster::TYPE_RECEIPT,
+                                'date' => $validated['return_date'],
+                                'status' => 'posted',
+                                'party_type' => \App\Models\Vendor::class,
+                                'party_id' => $validated['vendor_id'],
+                                'remarks' => "Refund for Return #{$nextInvoice}",
+                            ],
+                            [
+                                // Dr Cash
+                                [
+                                    'account_id' => $accId,
+                                    'debit' => $amt,
+                                    'credit' => 0,
+                                    'narration' => 'Cash Refund Received'
+                                ],
+                                // Cr Accounts Payable (Vendor)
+                                [
+                                    'account_id' => $apId,
+                                    'debit' => 0,
+                                    'credit' => $amt,
+                                    'narration' => 'Refund from Vendor - Return #' . $nextInvoice
+                                ],
+                            ]
+                        );
                     }
                 }
             }
@@ -1383,19 +1381,23 @@ class PurchaseController extends Controller
         $returns->each(function ($return) {
             if ($return->purchase) {
                 $purchase = $return->purchase;
-                
+
                 // Original Purchase Amounts
                 $return->original_net_amount = $purchase->net_amount;
                 $return->original_paid_amount = $purchase->paid_amount;
-                $return->original_due_amount = $purchase->due_amount;
-                
-                // Calculate total returns for this purchase
+                $return->original_due_amount  = $purchase->due_amount;
+
+                // The returnable base = net_amount minus extra_cost
+                // Extra cost is non-refundable, so it should not appear as outstanding balance
+                $returnableBase = max(0, (float)$purchase->net_amount - (float)$purchase->extra_cost);
+
+                // Calculate total item-value returned for this purchase
                 $totalReturned = \App\Models\PurchaseReturn::where('purchase_id', $purchase->id)
                     ->sum('net_amount');
-                
+
                 // New amounts after return(s)
-                $return->new_net_amount = max(0, $purchase->net_amount - $totalReturned);
-                $return->new_due_amount = max(0, $purchase->due_amount - $return->net_amount);
+                $return->new_net_amount = max(0, $returnableBase - $totalReturned);
+                $return->new_due_amount = $purchase->due_amount - $totalReturned;
                 $return->total_returned = $totalReturned;
             }
         });

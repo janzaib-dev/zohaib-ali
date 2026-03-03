@@ -61,6 +61,11 @@ class DesignationController extends Controller
         if (!auth()->user()->can('hr.designations.delete')) {
             return response()->json(['error' => 'Unauthorized action.'], 403);
         }
+
+        if ($designation->employees()->where('status', 'active')->exists()) {
+            return response()->json(['error' => 'Cannot delete designation. It is assigned to active employees.'], 400);
+        }
+
         $designation->delete();
         return response()->json([
             'success' => 'Designation Deleted Successfully',

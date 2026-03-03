@@ -77,7 +77,11 @@
                                                     $salaryStructure->salary_type === 'both' ||
                                                     $salaryStructure->salary_type === 'monthly_commission'
                                                 ) {
-                                                    $uiType = 'monthly_commission';
+                                                    if ($salaryStructure->use_daily_wages) {
+                                                        $uiType = 'monthly_commission_daily';
+                                                    } else {
+                                                        $uiType = 'monthly_commission';
+                                                    }
                                                 } elseif ($salaryStructure->use_daily_wages) {
                                                     if ($salaryStructure->base_salary > 0) {
                                                         $uiType = 'monthly_daily';
@@ -101,6 +105,10 @@
                                             <option value="monthly_commission"
                                                 {{ $uiType == 'monthly_commission' ? 'selected' : '' }}>Monthly Salary +
                                                 Commission</option>
+                                            <option value="monthly_commission_daily"
+                                                {{ $uiType == 'monthly_commission_daily' ? 'selected' : '' }}>Monthly
+                                                Salary
+                                                + Commission + Daily Wages</option>
                                         </select>
 
                                         <!-- Hidden Inputs for Backend Mapping -->
@@ -792,6 +800,14 @@
                     salaryType = 'both';
                     $('#base_salary_container').show();
                     $('#commission_section').slideDown();
+                } else if (type === 'monthly_commission_daily') {
+                    salaryType = 'both';
+                    $('#base_salary_container').show();
+                    $('#daily_wages_container').show();
+                    $('#attendance_rules_section').slideDown();
+                    $('#commission_section').slideDown();
+                    useDaily = '1';
+                    isDailyChecked = true;
                 }
 
                 // Update Hidden Inputs

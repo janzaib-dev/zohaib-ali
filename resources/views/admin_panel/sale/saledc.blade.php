@@ -179,6 +179,24 @@
                 background: #fff;
                 margin: 0;
                 padding: 0;
+                color: #000 !important;
+            }
+
+            * {
+                color: #000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .badge {
+                border: 1px solid #000 !important;
+                color: #000 !important;
+            }
+
+            .text-muted,
+            .text-danger,
+            .text-success {
+                color: #000 !important;
             }
 
             .invoice-container {
@@ -191,12 +209,36 @@
                 min-height: auto;
             }
 
+            .invoice-table th {
+                background-color: #f0f0f0 !important;
+                color: #000 !important;
+                border: 1px solid #000 !important;
+            }
+
+            .invoice-table td {
+                border: 1px solid #000 !important;
+            }
+
+            .info-box,
+            .info-box-header {
+                border-color: #000 !important;
+                color: #000 !important;
+            }
+
+            .totals-table td,
+            .totals-table .total-row td,
+            .footer-section,
+            .signature-area {
+                border-color: #000 !important;
+                color: #000 !important;
+            }
+
             .print-btn-container {
-                display: none;
+                display: none !important;
             }
 
             .no-print {
-                display: none;
+                display: none !important;
             }
 
             @page {
@@ -367,18 +409,18 @@
 
                         <td class="text-center" style="vertical-align: middle;">
                             @if ($sizeMode == 'by_pieces')
-                            <span class="fw-bold">
-                            Peices
-                        </span> 
+                                <span class="fw-bold">
+                                    Peices
+                                </span>
                             @elseif ($sizeMode == 'by_cartons')
-                            <span class="fw-bold">
-                            Cartons
-                        </span> 
+                                <span class="fw-bold">
+                                    Cartons
+                                </span>
                             @elseif ($sizeMode == 'by_size')
-                            <span class="fw-bold">
+                                <span class="fw-bold">
                                     {{ number_format($totalM2Line, 4) }}
                                 </span> m²
-                                @endif
+                            @endif
                         </td>
                     </tr>
                 @endforeach
