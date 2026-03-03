@@ -18,12 +18,13 @@ class DatabaseSeeder extends Seeder
         // Run other seeders
         $this->call([
             CategorySeeder::class,
-            ProductSeeder::class,
+            // ProductSeeder::class, // REMOVED: Use BinsultDataSeeder for real products
             WarehouseSeeder::class,
             // PermissionRoleUserSeeder::class, // REMOVED: Using new AllModulesPermissionsSeeder
             ModulesTableSeeder::class, 
             AllModulesPermissionsSeeder::class, // NEW: All module permissions (module.view, module.create, etc.)
             SuperAdminSeeder::class, 
+            // BinsultDataSeeder::class, // Run separately: php artisan db:seed --class=BinsultDataSeeder
         ]);
     }
 }

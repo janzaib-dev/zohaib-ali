@@ -306,8 +306,45 @@ class SaleReturnController extends Controller
                 }
             }
 
-            // NOTE: No Journal/Receipt Voucher created on sale return.
-            // A Payment Voucher is only created above if the user entered a payment amount.
+            // ─── Journal Entries for Sale Return (Chart of Accounts) ──────────────
+            // On a sale return:
+            //   Dr Sales Revenue  (revenue decreases — goods came back)
+            //   Cr Accounts Receivable  (customer owes us less)
+            try {
+                $balanceService = app(\App\Services\BalanceService::class);
+                $salesAccountId = $balanceService->getSalesRevenueId();
+                $arAccountId    = $balanceService->getAccountsReceivableId();
+                $returnDate     = $validated['return_date'];
+
+                // Dr Sales Revenue
+                \App\Models\JournalEntry::create([
+                    'source_type' => \App\Models\SaleReturn::class,
+                    'source_id'   => $return->id,
+                    'account_id'  => $salesAccountId,
+                    'entry_date'  => $returnDate,
+                    'debit'       => $netAmount,
+                    'credit'      => 0,
+                    'description' => "Sale Return #{$nextInvoice} — Revenue Reversal",
+                ]);
+
+                // Cr Accounts Receivable
+                \App\Models\JournalEntry::create([
+                    'source_type' => \App\Models\SaleReturn::class,
+                    'source_id'   => $return->id,
+                    'account_id'  => $arAccountId,
+                    'entry_date'  => $returnDate,
+                    'debit'       => 0,
+                    'credit'      => $netAmount,
+                    'description' => "Sale Return #{$nextInvoice} — AR Reduction",
+                    'party_type'  => \App\Models\Customer::class,
+                    'party_id'    => $validated['customer_id'],
+                ]);
+
+                \Log::info("Sale Return Journal Entries created. Sales Rev debited, AR credited by: {$netAmount}");
+            } catch (\Exception $e) {
+                \Log::error('Sale Return Journal Entry Error: ' . $e->getMessage());
+            }
+            // ─────────────────────────────────────────────────────────────────────
 
             // ─── Update Customer Ledger ────────────────────────────────────────
             // Step 1: Sale Return entry — balance reduces by netAmount (customer owes us less)

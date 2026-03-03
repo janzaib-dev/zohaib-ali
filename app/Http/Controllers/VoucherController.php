@@ -453,11 +453,14 @@ class VoucherController extends Controller
 
                 if ($creditAccountId) {
                     $v2Lines = [];
+                    $totalDebitAmt = 0;
+
                     // DEBIT SIDE (Cash/Bank) - From Row Inputs
                     if ($request->row_account_id && $request->amount) {
                         foreach ($request->row_account_id as $idx => $accId) {
                             $amt = (float) ($request->amount[$idx] ?? 0);
                             if ($amt > 0) {
+                                $totalDebitAmt += $amt;
                                 $v2Lines[] = [
                                     'account_id' => $accId,
                                     'debit' => $amt,
@@ -468,16 +471,20 @@ class VoucherController extends Controller
                         }
                     }
 
-                    // CREDIT SIDE (Customer/AR) - Total Amount
-                    $totalAmt = (float) $request->total_amount;
-                    if ($totalAmt > 0) {
+                    // CREDIT SIDE (Customer/AR) - Use actual debit sum (not form total) for guaranteed balance
+                    if ($totalDebitAmt > 0) {
                         $v2Lines[] = [
                             'account_id' => $creditAccountId,
                             'debit' => 0,
-                            'credit' => $totalAmt,
+                            'credit' => $totalDebitAmt,
                             'narration' => 'Receipt from '.$request->vendor_type,
                         ];
                     }
+
+                    // Also use debit sum as canonical total amount for ledger syncing
+                    $totalAmt = $totalDebitAmt > 0 ? $totalDebitAmt : (float) $request->total_amount;
+
+                    \Log::info("V2 Receipt Lines built. Total Debit: $totalDebitAmt, Lines: ".count($v2Lines));
 
                     if (! empty($v2Lines)) {
                         app(\App\Services\VoucherService::class)->createVoucher([
@@ -489,7 +496,7 @@ class VoucherController extends Controller
                             'remarks' => $request->remarks." (Ref: $rvid)",
                         ], $v2Lines, auth()->id());
 
-                        \Log::info('V2 Voucher Created Successfully.');
+                        \Log::info('V2 Voucher Created Successfully. AR account credited by: '.$totalDebitAmt);
                     } else {
                         \Log::warning('V2 Lines Empty. Total Amt: '.$totalAmt);
                     }
@@ -519,6 +526,69 @@ class VoucherController extends Controller
                             ]);
 
                             \Log::info("CustomerLedger Updated. Customer: $partyId, Amount: $totalAmt, New Balance: ".($prevBal - $totalAmt));
+
+                            // -----------------------------------------------------------------------
+                            // DIRECT JOURNAL ENTRIES for Chart of Accounts (AR balance must decrease)
+                            // This is a safety-net in case VoucherService failed silently above.
+                            // We check if journal entries were already created; if not, create them.
+                            // -----------------------------------------------------------------------
+                            try {
+                                $arAccountId = $creditAccountId; // Already resolved above
+                                $receiptDate = $request->receipt_date ?? now()->format('Y-m-d');
+                                $customer = \App\Models\Customer::find($partyId);
+
+                                // Check if the VoucherService already created entries for this receipt
+                                // (It would have created entries on AR account around the same time with same amount)
+                                // We identify by checking if a credit journal entry for AR with this amount was just created
+                                $recentARJournal = \App\Models\JournalEntry::where('account_id', $arAccountId)
+                                    ->where('credit', $totalAmt)
+                                    ->where('entry_date', $receiptDate)
+                                    ->where('created_at', '>=', now()->subMinutes(1))
+                                    ->first();
+
+                                if (! $recentARJournal) {
+                                    // VoucherService failed — create journal entries directly
+                                    \Log::info("VoucherService may have failed. Creating direct journal entries for AR. Amount: $totalAmt");
+
+                                    // Credit Accounts Receivable (AR decreases when customer pays)
+                                    \App\Models\JournalEntry::create([
+                                        'source_type' => \App\Models\ReceiptsVoucher::class,
+                                        'source_id'   => $rec->id,
+                                        'account_id'  => $arAccountId,
+                                        'entry_date'  => $receiptDate,
+                                        'debit'       => 0,
+                                        'credit'      => $totalAmt,
+                                        'description' => 'Receipt Voucher '.$rvid.' — Customer Payment',
+                                        'party_type'  => \App\Models\Customer::class,
+                                        'party_id'    => $partyId,
+                                    ]);
+
+                                    // Debit each Cash/Bank account (money coming in)
+                                    if ($request->row_account_id && $request->amount) {
+                                        foreach ($request->row_account_id as $idx => $accId) {
+                                            $rowAmt = (float) ($request->amount[$idx] ?? 0);
+                                            if ($rowAmt > 0 && $accId) {
+                                                \App\Models\JournalEntry::create([
+                                                    'source_type' => \App\Models\ReceiptsVoucher::class,
+                                                    'source_id'   => $rec->id,
+                                                    'account_id'  => $accId,
+                                                    'entry_date'  => $receiptDate,
+                                                    'debit'       => $rowAmt,
+                                                    'credit'      => 0,
+                                                    'description' => 'Receipt Voucher '.$rvid.' — Cash/Bank In',
+                                                ]);
+                                            }
+                                        }
+                                    }
+
+                                    \Log::info("Direct Journal Entries created for AR account $arAccountId. Amount: $totalAmt");
+                                } else {
+                                    \Log::info("VoucherService had already created AR journal entries. Skipping direct creation.");
+                                }
+                            } catch (\Exception $jeEx) {
+                                \Log::error('Direct JournalEntry creation failed: '.$jeEx->getMessage());
+                            }
+                            // -----------------------------------------------------------------------
 
                         } elseif ($vType === 'vendor') {
                             // Receipt from vendor (e.g. refund) → reduces what we owe them

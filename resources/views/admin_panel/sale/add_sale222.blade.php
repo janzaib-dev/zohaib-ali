@@ -357,7 +357,7 @@
                     <div class="d-flex align-items-center gap-2">
                         <small class="text-secondary me-2" id="entryDate">Date: --</small>
                         <button type="button" class="btn btn-sm btn-light border" id="btnHeaderPosted"
-                            disabled>Posted</button>
+                            disabled>Post</button>
                     </div>
                 </div>
 
@@ -371,8 +371,8 @@
                             <input type="text" class="form-control input-readonly" name="Invoice_no" style="width:150px"
                                 value="{{ $nextInvoiceNumber }}" readonly>
                             <!-- <label class="form-label fw-bold mb-0">M. Inv#</label>
-                                        <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice"
-                                            value="{{ $sale->reference ?? '' }}"> -->
+                                                <input type="text" class="form-control" name="Invoice_main" placeholder="Manual invoice"
+                                                    value="{{ $sale->reference ?? '' }}"> -->
                         </div>
 
                         {{-- Credit Days (Optional) --}}
@@ -433,9 +433,9 @@
                                     <td class="py-0 text-danger fw-bold" id="ci_prev_bal">0.00</td>
                                 </tr>
                                 <!-- <tr>
-                                                <td class="fw-bold text-muted py-0">Credit Limit</td>
-                                                <td class="py-0" id="ci_range_bal">0.00</td>
-                                            </tr> -->
+                                                        <td class="fw-bold text-muted py-0">Credit Limit</td>
+                                                        <td class="py-0" id="ci_range_bal">0.00</td>
+                                                    </tr> -->
                             </table>
                         </div>
 
@@ -596,7 +596,7 @@
                 <div class="d-flex flex-wrap gap-2 justify-content-center p-3 mt-3 border-top">
 
                     <button type="button" class="btn btn-sm btn-success" id="btnSave">Save</button>
-                    <button type="button" class="btn btn-sm btn-outline-success" id="btnPosted" disabled>Posted</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="btnPosted" disabled>Post</button>
 
                     <button type="button" class="btn btn-sm btn-secondary" id="btnPrint">Print Invoice</button>
                     <button type="button" class="btn btn-sm btn-secondary" id="btnPrint2">Terminal</button>

@@ -483,7 +483,7 @@
         $('#btnPosted, #btnHeaderPosted').prop('disabled', !state);
     }
 
-    function ensureSaved() {
+    function ensureSaved(silent = false) {
         return new Promise(function(resolve, reject) {
             const existing = $('#booking_id').val();
             let url = '{{ route('sales.store') }}';
@@ -504,7 +504,9 @@
                     if (res?.ok) {
                         const bid = res.booking_id || existing;
                         $('#booking_id').val(bid);
-                        Swal.fire('Saved', 'Sale saved successfully', 'success');
+                        if (!silent) {
+                            Swal.fire('Saved', 'Sale saved successfully', 'success');
+                        }
                         resolve(bid);
                     } else {
                         Swal.fire('Error', res.msg || 'Save failed', 'error');
@@ -543,7 +545,7 @@
                         let secondUrl = dualOpenTemplate.replace(':id', res.booking_id);
                         window.open(secondUrl, '_blank');
                         setTimeout(() => {
-                            window.location.href = targetUrl;
+                            window.location.href = "{{ route('sale.index') }}";
                         }, 500);
                     } else if (openInNewTab) {
                         window.open(targetUrl, '_blank');
@@ -552,7 +554,12 @@
                         }, 500);
                     } else {
                         setTimeout(() => {
-                            window.location.href = targetUrl;
+                            // If no template was provided (meaning it was the raw 'Post' button), go to index
+                            if (!returnUrlTemplate) {
+                                window.location.href = "{{ route('sale.index') }}";
+                            } else {
+                                window.location.href = targetUrl;
+                            }
                         }, 500);
                     }
                 } else {
@@ -933,7 +940,7 @@
                 return;
             }
 
-            ensureSaved().then(postNow);
+            ensureSaved(true).then(postNow);
         });
 
         // Receipts Logic
