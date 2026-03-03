@@ -83,7 +83,7 @@ class PermissionRoleUserSeeder extends Seeder
             // Create sample users
             $sampleUsers = [
                 // admin with superAdmin role and specified secure password
-                ['name' => 'Admin User', 'email' => 'admin@admin.com', 'role' => 'superAdmin', 'password' => '11223344'],
+                ['name' => 'Admin User', 'email' => 'admin@admin.com', 'role' => 'superAdmin', 'password' => '808080'],
                 ['name' => 'Manager User', 'email' => 'manager@example.com', 'role' => 'manager', 'password' => 'password'],
                 ['name' => 'Staff User', 'email' => 'staff@example.com', 'role' => 'staff', 'password' => 'password'],
             ];

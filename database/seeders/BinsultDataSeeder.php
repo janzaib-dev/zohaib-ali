@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class BinsultDataSeeder extends Seeder
 {
@@ -142,13 +142,13 @@ class BinsultDataSeeder extends Seeder
             [348, '8', '37', 2, 'PORTT01HD410',     'HD410 White Table Top (   )',             3921.64,  6730.18],
             [349, '8', '37', 2, 'PORTT01HD081',     'HD081 White ART Vanity',                  512.13,   662.81],
             [350, '8', '37', 2, 'PORTT01HD091',     'HD091 White ART Vanity',                 3337.56,  4400.16],
-            [351, '8', '37', 2, 'PORTT01HD102.SHOP','HD102 White ART Vanity  Shop',           1800.12,  2400.91],
+            [351, '8', '37', 2, 'PORTT01HD102.SHOP', 'HD102 White ART Vanity  Shop',           1800.12,  2400.91],
             [352, '8', '37', 2, 'PORTT01HD102',     'HD102 White ART Vanity',                  949.02,  1152.40],
             [353, '8', '37', 2, 'PORTT01HD103',     'HD103 White ART Vanity',                 3047.39,  4538.42],
             [354, '8', '37', 2, 'PORTT01HD1035',    'HD1035 White ART Vanity',                2782.32,  4615.93],
             [355, '8', '37', 2, 'PORTT01HD105',     'HD105 White ART Vanity',                 4745.69,  5837.15],
             [356, '8', '37', 2, 'PORTT01HD1050',    'HD1050 White ART Vanity',                4771.15,  8548.32],
-            [357, '8', '37', 2, 'PORTT01HD1050SHOP','HD1050 White ART Vanity Shop',           1369.51,  1840.41],
+            [357, '8', '37', 2, 'PORTT01HD1050SHOP', 'HD1050 White ART Vanity Shop',           1369.51,  1840.41],
             [358, '8', '37', 2, 'PORTT01HD1055',    'HD1055 White ART Vanity',                2762.07,  4216.03],
             [359, '8', '37', 2, 'PORTT01HD106',     'HD106 White ART Vanity',                 3628.97,  5647.14],
             [360, '8', '37', 2, 'PORTT01HD107',     'HD107 White ART Vanity',                 4312.15,  6995.22],
@@ -169,40 +169,40 @@ class BinsultDataSeeder extends Seeder
             DB::table('products')->updateOrInsert(
                 ['id' => $id],
                 [
-                    'id'                         => $id,
-                    'creater_id'                 => null,
-                    'category_id'                => $catId,
-                    'sub_category_id'            => $subCatId,
-                    'brand_id'                   => $brandId,
-                    'is_part'                    => 0,
-                    'is_assembled'               => 0,
-                    'item_code'                  => $itemCode,
-                    'unit_id'                    => null,
-                    'item_name'                  => $itemName,
-                    'size_mode'                  => 'by_piece',
-                    'height'                     => null,
-                    'width'                      => null,
-                    'pieces_per_box'             => 0,
-                    'pieces_per_m2'              => 0.00,
-                    'total_m2'                   => 0.00,
-                    'price_per_m2'               => 0.00,
-                    'sale_price_per_box'         => 0.00,
-                    'purchase_price_per_piece'   => $purchasePrice,
-                    'purchase_price_per_box'     => 0.00,
-                    'sale_price_per_piece'       => $salePrice,
-                    'purchase_price_per_m2'      => 0.00,
-                    'color'                      => null,
-                    'barcode_path'               => null,
-                    'image'                      => null,
-                    'model'                      => null,
-                    'hs_code'                    => null,
-                    'boxes_quantity'             => 0,
-                    'loose_pieces'               => 0,
-                    'piece_quantity'             => 0,
-                    'total_stock_qty'            => 0.00,
-                    'created_at'                 => $productCreatedAt,
-                    'updated_at'                 => $productCreatedAt,
-                    'deleted_at'                 => null,
+                    'id' => $id,
+                    'creater_id' => null,
+                    'category_id' => $catId,
+                    'sub_category_id' => $subCatId,
+                    'brand_id' => $brandId,
+                    'is_part' => 0,
+                    'is_assembled' => 0,
+                    'item_code' => $itemCode,
+                    'unit_id' => null,
+                    'item_name' => $itemName,
+                    'size_mode' => 'by_pieces',
+                    'height' => null,
+                    'width' => null,
+                    'pieces_per_box' => 1,
+                    'pieces_per_m2' => 0.00,
+                    'total_m2' => 0.00,
+                    'price_per_m2' => 0.00,
+                    'sale_price_per_box' => 0.00,
+                    'purchase_price_per_piece' => $purchasePrice,
+                    'purchase_price_per_box' => 0.00,
+                    'sale_price_per_piece' => $salePrice,
+                    'purchase_price_per_m2' => 0.00,
+                    'color' => null,
+                    'barcode_path' => null,
+                    'image' => null,
+                    'model' => null,
+                    'hs_code' => null,
+                    'boxes_quantity' => 0,
+                    'loose_pieces' => 0,
+                    'piece_quantity' => 0,
+                    'total_stock_qty' => 0.00,
+                    'created_at' => $productCreatedAt,
+                    'updated_at' => $productCreatedAt,
+                    'deleted_at' => null,
                 ]
             );
         }
@@ -311,22 +311,22 @@ class BinsultDataSeeder extends Seeder
             DB::table('warehouse_stocks')->updateOrInsert(
                 ['id' => $stockId],
                 [
-                    'id'           => $stockId,
+                    'id' => $stockId,
                     'warehouse_id' => $warehouseId,
-                    'product_id'   => $productId,
-                    'quantity'     => $quantity,
+                    'product_id' => $productId,
+                    'quantity' => $quantity,
                     'total_pieces' => $totalPieces,
-                    'remarks'      => null,
-                    'created_at'   => $productCreatedAt,
-                    'updated_at'   => $productCreatedAt,
+                    'remarks' => null,
+                    'created_at' => $productCreatedAt,
+                    'updated_at' => $productCreatedAt,
                 ]
             );
         }
 
         $this->command->info('✅ BinsultDataSeeder completed successfully!');
-        $this->command->info('   - ' . count($categories)  . ' categories seeded');
-        $this->command->info('   - ' . count($warehouses)  . ' warehouses seeded');
-        $this->command->info('   - ' . count($products)    . ' products seeded (Porta sanitary range)');
-        $this->command->info('   - ' . count($stocks)      . ' warehouse stock entries seeded');
+        $this->command->info('   - '.count($categories).' categories seeded');
+        $this->command->info('   - '.count($warehouses).' warehouses seeded');
+        $this->command->info('   - '.count($products).' products seeded (Porta sanitary range)');
+        $this->command->info('   - '.count($stocks).' warehouse stock entries seeded');
     }
 }

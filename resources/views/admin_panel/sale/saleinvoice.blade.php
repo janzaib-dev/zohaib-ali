@@ -358,7 +358,8 @@
 
                         // Calculate m² per piece and per box
                         $m2PerPiece = $height > 0 && $width > 0 ? ($height * $width) / 10000 : 0;
-                        $piecesPerBox = (int) ($item['pieces_per_box'] ?? 1);
+                        $piecesPerBoxRaw = (int) ($item['pieces_per_box'] ?? 1);
+                        $piecesPerBox = $piecesPerBoxRaw > 0 ? $piecesPerBoxRaw : 1;
                         $m2PerBox = $m2PerPiece * $piecesPerBox;
 
                         // Calculate boxes and loose pieces
