@@ -1407,7 +1407,7 @@ class PurchaseController extends Controller
 
     public function viewReturn($id)
     {
-        $return = \App\Models\PurchaseReturn::with(['vendor', 'warehouse', 'items.product'])->findOrFail($id);
+        $return = \App\Models\PurchaseReturn::with(['vendor', 'warehouse', 'items.product.brand', 'items.product.category_relation'])->findOrFail($id);
         return view('admin_panel.purchase.purchase_return.show', compact('return'));
     }
 }

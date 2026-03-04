@@ -436,7 +436,7 @@ class SaleReturnController extends Controller
      */
     public function viewReturn($id)
     {
-        $return = SaleReturn::with(['customer', 'sale', 'items.product'])->findOrFail($id);
+        $return = SaleReturn::with(['customer', 'warehouse', 'sale', 'items.product.brand', 'items.product.category_relation'])->findOrFail($id);
 
         return view('admin_panel.sale.sale_return.show', compact('return'));
     }

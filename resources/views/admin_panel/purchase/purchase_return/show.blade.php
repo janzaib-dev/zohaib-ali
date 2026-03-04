@@ -263,7 +263,11 @@
                     <tr>
                         <td class="text-start">
                             <div style="font-weight: bold; font-size: 12px;">{{ $product->item_name ?? 'Item' }}</div>
-                            <small class="text-muted">{{ $product->item_code ?? '' }}</small>
+                            <small class="text-muted">
+                                Code: {{ $product->item_code ?? '' }} |
+                                Brand: {{ $product->brand->name ?? 'N/A' }} |
+                                Cat: {{ $product->category_relation->name ?? 'N/A' }}
+                            </small>
                         </td>
 
                         <td class="text-center">

@@ -271,8 +271,8 @@
                                     style="font-size: 0.7rem;"></i>customer</label>
                             {{-- Read-Only customer Name --}}
                             <input type="text" class="form-control form-control-sm"
-                                value="{{ optional($sale->customer)->name ?? 'Unknown customer' }}" readonly
-                                style="background-color: #e9ecef; border-color: #dee2e6;">
+                                value="{{ optional($sale->customer_relation)->customer_name ?? 'Unknown Customer' }}"
+                                readonly style="background-color: #e9ecef; border-color: #dee2e6;">
                             {{-- Hidden ID for Form Submission --}}
                             <input type="hidden" name="customer_id" value="{{ $sale->customer_id }}">
                         </div>

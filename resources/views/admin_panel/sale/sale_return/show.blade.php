@@ -35,7 +35,7 @@
                                     </tr>
                                     <tr>
                                         <td class="fw-bold">Customer:</td>
-                                        <td>{{ $return->customer->name ?? 'N/A' }}</td>
+                                        <td>{{ $return->customer->customer_name ?? 'N/A' }}</td>
                                     </tr>
                                     <tr>
                                         <td class="fw-bold">Warehouse:</td>
@@ -100,8 +100,12 @@
                                         <tr>
                                             <td>{{ $index + 1 }}</td>
                                             <td>
-                                                <strong>{{ $item->product->product_name ?? 'N/A' }}</strong><br>
-                                                <small class="text-muted">{{ $item->product->product_code ?? '' }}</small>
+                                                <strong>{{ $item->product->item_name ?? 'N/A' }}</strong><br>
+                                                <small class="text-muted">
+                                                    Code: {{ $item->product->item_code ?? '' }} |
+                                                    Brand: {{ $item->product->brand->name ?? 'N/A' }} |
+                                                    Cat: {{ $item->product->category_relation->name ?? 'N/A' }}
+                                                </small>
                                             </td>
                                             <td class="text-center">{{ number_format($item->boxes, 2) }}</td>
                                             <td class="text-center">{{ $item->loose_pieces }}</td>
